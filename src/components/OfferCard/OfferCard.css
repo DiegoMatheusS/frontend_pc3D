@@ -1,0 +1,113 @@
+.offer-card {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.offer-card__visual {
+  min-height: 108px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--color-primary-dark);
+  background:
+    radial-gradient(circle at 65% 25%, color-mix(in srgb, var(--color-primary) 26%, transparent), transparent 34%),
+    var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+}
+
+.offer-card__visual span {
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.offer-card__content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.offer-card__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-text-soft);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.offer-card__topline strong {
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 10%, transparent);
+}
+
+.offer-card small {
+  color: var(--color-text-soft);
+}
+
+.offer-card h3 {
+  margin: 2px 0 0;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.offer-card__prices del,
+.offer-card__prices strong,
+.offer-card__prices span {
+  display: block;
+}
+
+.offer-card__prices del {
+  color: var(--color-text-soft);
+  font-size: 11px;
+}
+
+.offer-card__prices strong {
+  margin-top: 1px;
+  font-size: 17px;
+}
+
+.offer-card__prices span {
+  margin-top: 3px;
+  color: var(--color-text-soft);
+  font-size: 11px;
+}
+
+.offer-card .button {
+  align-self: flex-start;
+  min-height: 34px;
+  padding-inline: 11px;
+  font-size: 12px;
+}
+
+@media (max-width: 430px) {
+  .offer-card {
+    grid-template-columns: 1fr;
+  }
+
+  .offer-card__visual {
+    min-height: 88px;
+  }
+}
+
+.offer-card__context {
+  margin: -2px 0 0;
+  color: var(--color-text-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}

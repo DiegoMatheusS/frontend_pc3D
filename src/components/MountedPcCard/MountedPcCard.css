@@ -1,0 +1,227 @@
+.mounted-card {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.mounted-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+  box-shadow: var(--shadow-md);
+}
+
+.mounted-card__visual {
+  position: relative;
+  min-height: 174px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 76% 24%, color-mix(in srgb, var(--color-primary) 22%, transparent), transparent 30%),
+    linear-gradient(150deg, var(--color-surface-soft), color-mix(in srgb, var(--color-primary) 7%, var(--color-surface)));
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mounted-card__chip {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-soft);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mounted-card__case {
+  position: relative;
+  width: 126px;
+  height: 128px;
+  border: 2px solid color-mix(in srgb, var(--color-text) 36%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-surface) 64%, transparent);
+  box-shadow: inset 0 0 0 6px color-mix(in srgb, var(--color-surface) 55%, transparent), 18px 14px 36px rgba(15, 23, 42, 0.12);
+  transform: perspective(420px) rotateY(-12deg);
+}
+
+.mounted-card__case::after {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  border-radius: 5px;
+}
+
+.mounted-card__fan {
+  position: absolute;
+  right: 15px;
+  width: 31px;
+  height: 31px;
+  border: 4px solid color-mix(in srgb, var(--color-primary) 48%, var(--color-border));
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 5px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.mounted-card__fan--one { top: 23px; }
+.mounted-card__fan--two { top: 62px; }
+
+.mounted-card__gpu {
+  position: absolute;
+  left: 17px;
+  bottom: 24px;
+  width: 76px;
+  height: 18px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-primary) 55%, var(--color-text));
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
+.mounted-card__content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 13px;
+  padding: 19px;
+}
+
+.mounted-card__category {
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.mounted-card h3 {
+  margin: -4px 0 0;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.mounted-card__specs {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.mounted-card__specs div {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.mounted-card__specs dt {
+  color: var(--color-text-soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mounted-card__specs dd {
+  overflow: hidden;
+  margin: 0;
+  color: var(--color-text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mounted-card__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-soft);
+  font-size: 12px;
+}
+
+.mounted-card__rating {
+  color: var(--color-star);
+  font-weight: 750;
+}
+
+.mounted-card__rating small {
+  color: var(--color-text-soft);
+  font-weight: 600;
+}
+
+.mounted-card__price span,
+.mounted-card__price strong {
+  display: block;
+}
+
+.mounted-card__price span {
+  color: var(--color-text-soft);
+  font-size: 11px;
+}
+
+.mounted-card__price strong {
+  margin-top: 2px;
+  font-size: 20px;
+}
+
+.mounted-card__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: auto;
+}
+
+@media (max-width: 430px) {
+  .mounted-card__actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mounted-card--selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 14%, transparent), var(--shadow-md);
+}
+
+.mounted-card--selected .mounted-card__actions .button--secondary {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+}
+
+.mounted-card--compact .mounted-card__visual {
+  min-height: 150px;
+}
+
+/* Três ações sem esmagar os botões em cards estreitos. */
+.mounted-card__actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mounted-card__actions .mounted-card__compare {
+  grid-column: 1 / -1;
+}
+
+.mounted-card--compact .mounted-card__actions {
+  grid-template-columns: 1fr 1fr;
+}
+
+.mounted-card--compact .mounted-card__actions .mounted-card__compare {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 430px) {
+  .mounted-card__actions,
+  .mounted-card--compact .mounted-card__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .mounted-card__actions .mounted-card__compare,
+  .mounted-card--compact .mounted-card__actions .mounted-card__compare {
+    grid-column: auto;
+  }
+}

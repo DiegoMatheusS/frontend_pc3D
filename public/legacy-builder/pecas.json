@@ -1,0 +1,497 @@
+{
+  "pecas": [
+    {
+      "id": "gabinete-cooler-master-nr200",
+      "categoria": "gabinete",
+      "nome": "Gabinete Mini-ITX Cooler Master NR200",
+      "marca": "Cooler Master",
+      "descricao": "Gabinete compacto Mini-ITX com excelente circulação de ar.",
+      "preco": "R$ 699,90",
+      "loja": "Pichau",
+      "imagem": "imagens/pecas/cooler-master-nr200.jpg",
+      "formato": "compacto",
+      "watts": 0
+    },
+    {
+      "id": "gabinete-corsair-4000d",
+      "categoria": "gabinete",
+      "nome": "Gabinete Corsair 4000D Airflow",
+      "marca": "Corsair",
+      "descricao": "Gabinete Mid-Tower com painel frontal otimizado para fluxo de ar.",
+      "preco": "R$ 749,90",
+      "loja": "KaBuM!",
+      "imagem": "imagens/pecas/corsair-4000d.jpg",
+      "formato": "mid-tower",
+      "watts": 0
+    },
+    {
+      "id": "placa-mae-asus-b550m",
+      "categoria": "placa-mae",
+      "nome": "Placa-Mãe ASUS TUF Gaming B550M-Plus",
+      "marca": "ASUS",
+      "descricao": "Placa-mãe Micro-ATX soquete AM4 com suporte a PCIe 4.0.",
+      "preco": "R$ 999,90",
+      "loja": "Pichau",
+      "imagem": "imagens/pecas/asus-b550m.jpg",
+      "modelo3D": "modelos/placa.glb",
+      "formato": "matx",
+      "soquete": "am4",
+      "tipoRam": "ddr4",
+      "transform3D": {
+        "posicao": [
+          0,
+          0.3,
+          -0.4
+        ],
+        "rotacao": [
+          0,
+          90,
+          0
+        ],
+        "escala": 0.9
+      },
+      "watts": 40
+    },
+    {
+      "id": "Intel I7",
+      "categoria": "processador",
+      "nome": "Processador Intel 7° 12700F",
+      "marca": "Intel",
+      "descricao": "Processador com 12 núcleos, 20 threads e soquete LGA 1200.",
+      "preco": "R$ 1500,00",
+      "loja": "Terabyte",
+      "imagem": "imagens/pecas/intel_i7.jpg",
+      "modelo3D": "modelos/processador.glb",
+      "soquete": "lga1200",
+      "transform3D": {
+        "posicao": [
+          0.05,
+          0.05,
+          -0.08
+        ],
+        "rotacao": [
+          -90,
+          0,
+          -90
+        ],
+        "escala": 1.0
+      },
+      "watts": 65
+    },
+    {
+      "id": "processador-ryzen-7-5700x3d",
+      "categoria": "processador",
+      "nome": "Processador AMD Ryzen 7 5700X3D",
+      "marca": "AMD",
+      "descricao": "Processador gamer de alto desempenho com 3D V-Cache.",
+      "preco": "R$ 1.499,90",
+      "loja": "KaBuM!",
+      "imagem": "imagens/pecas/ryzen-7-5700x3d.jpg",
+      "modelo3D": "modelos/ryzen_7_5700x3d.glb",
+      "soquete": "am4",
+      "transform3D": {
+        "posicao": [
+          -1.05,
+          3.4,
+          1.0
+        ],
+        "rotacao": [
+          0,
+          0,
+          0
+        ],
+        "escala": 1.0,
+        "modoPosicao": "absoluta"
+      },
+      "watts": 105
+    },
+    {
+      "id": "processador-ryzen-9-5900x",
+      "categoria": "processador",
+      "nome": "Processador AMD Ryzen 9 5900X",
+      "marca": "AMD",
+      "descricao": "Processador entusiasta com 12 núcleos e 24 threads.",
+      "preco": "R$ 2.199,90",
+      "loja": "Pichau",
+      "imagem": "imagens/pecas/ryzen-9-5900x.jpg",
+      "modelo3D": "modelos/ryzen9_5900x.glb",
+      "soquete": "am4",
+      "transform3D": {
+        "posicao": [
+          -1.05,
+          3.4,
+          1.0
+        ],
+        "rotacao": [
+          0,
+          0,
+          0
+        ],
+        "escala": 1.0,
+        "modoPosicao": "absoluta"
+      },
+      "watts": 105
+    },
+    {
+      "id": "cooler-deepcool-ak400",
+      "categoria": "cooler",
+      "nome": "Cooler CPU DeepCool AK400",
+      "marca": "DeepCool",
+      "descricao": "Air Cooler de torre com excelente desempenho de refrigeração.",
+      "preco": "R$ 159,90",
+      "loja": "Terabyte",
+      "imagem": "imagens/pecas/ak400.jpg",
+      "modelo3D": "modelos/aircooler.glb",
+      "tipo": "aircooler",
+      "transform3D": {
+        "posicao": [
+          -0.7,
+          3.4,
+          1.0
+        ],
+        "rotacao": [
+          0,
+          0,
+          0
+        ],
+        "escala": 1.0,
+        "modoPosicao": "absoluta"
+      },
+      "watts": 3
+    },
+    {
+      "id": "memoria-kingston-fury-16gb",
+      "categoria": "memoria",
+      "nome": "Memória RAM Kingston Fury Beast 16GB",
+      "marca": "Kingston",
+      "descricao": "Módulo de memória DDR4 de 16GB com frequência de 3200MHz.",
+      "preco": "R$ 289,90",
+      "loja": "Pichau",
+      "imagem": "imagens/pecas/kingston-fury-16gb.jpg",
+      "modelo3D": "modelos/ram.glb",
+      "tipoRam": "ddr4",
+      "frequencia": 3200,
+      "quantidade": 1,
+      "transform3D": {
+        "posicao": [
+          -0.3,
+          -0.5,
+          0.3
+        ],
+        "rotacao": [
+          -90,
+          -180,
+          0
+        ],
+        "escala": 0.3
+      },
+      "watts": 4
+    },
+    {
+      "id": "gpu-rtx-4060-8gb",
+      "categoria": "placa-video",
+      "nome": "Placa de Vídeo NVIDIA GeForce RTX 4060 8GB",
+      "marca": "NVIDIA",
+      "descricao": "Placa de vídeo compacta indicada para jogos em 1080p.",
+      "preco": "R$ 2.099,90",
+      "loja": "KaBuM!",
+      "imagem": "imagens/pecas/rtx-4060.jpg",
+      "modelo3D": "modelos/placavideo.glb",
+      "transform3D": {
+        "posicao": [
+          -0.4,
+          2.2,
+          0.5
+        ],
+        "rotacao": [
+          0,
+          90,
+          0
+        ],
+        "escala": 0.34,
+        "modoPosicao": "absoluta",
+        "centralizarNoPonto": true
+      },
+      "watts": 115
+    },
+    {
+      "id": "gpu-rx-7700-xt",
+      "categoria": "placa-video",
+      "nome": "Placa de Vídeo AMD Radeon RX 7700 XT 12GB",
+      "marca": "AMD",
+      "descricao": "Placa de vídeo de alto desempenho para jogos em 1440p.",
+      "preco": "R$ 3.299,90",
+      "loja": "Terabyte",
+      "imagem": "imagens/pecas/rx-7700-xt.jpg",
+      "modelo3D": "modelos/placavideo1.glb",
+      "transform3D": {
+        "posicao": [
+          -0.4,
+          2.2,
+          0.5
+        ],
+        "rotacao": [
+          0,
+          90,
+          0
+        ],
+        "escala": 0.25,
+        "modoPosicao": "absoluta",
+        "centralizarNoPonto": true
+      },
+      "watts": 245
+    },
+    {
+      "id": "gpu-rtx-3090",
+      "categoria": "placa-video",
+      "nome": "Placa de Vídeo NVIDIA GeForce RTX 3090 24GB",
+      "marca": "NVIDIA",
+      "descricao": "Placa de vídeo de altíssimo desempenho para jogos pesados e renderização.",
+      "preco": "R$ 6.499,90",
+      "loja": "Pichau",
+      "imagem": "imagens/pecas/rtx-3090.jpg",
+      "modelo3D": "modelos/rtx3090.glb",
+      "transform3D": {
+        "posicao": [
+          -0.4,
+          2.2,
+          0.5
+        ],
+        "rotacao": [
+          0,
+          90,
+          0
+        ],
+        "escala": 0.56,
+        "modoPosicao": "absoluta",
+        "centralizarNoPonto": true
+      },
+      "watts": 350
+    },
+    {
+      "id": "ssd-kingston-nv2",
+      "categoria": "armazenamento",
+      "nome": "SSD NVMe M.2 Kingston NV2 1TB",
+      "marca": "Kingston",
+      "descricao": "SSD M.2 NVMe de alta velocidade para carregamento rápido.",
+      "preco": "R$ 429,90",
+      "loja": "KaBuM!",
+      "imagem": "imagens/pecas/kingston-nv2.jpg",
+      "modelo3D": "modelos/nvme.glb",
+      "tipoArmazenamento": "m2",
+      "quantidade": 1,
+      "transform3D": {
+        "posicao": [
+          -1.05,
+          2.6,
+          1.0
+        ],
+        "rotacao": [
+          0,
+          0,
+          0
+        ],
+        "escala": 1.0,
+        "modoPosicao": "absoluta"
+      },
+      "watts": 5
+    },
+    {
+      "id": "ssd-sata-crucial",
+      "categoria": "armazenamento",
+      "nome": "SSD SATA Crucial BX500 1TB",
+      "marca": "Crucial",
+      "descricao": "SSD SATA tradicional para armazenamento seguro e espaçoso.",
+      "preco": "R$ 379,90",
+      "loja": "Terabyte",
+      "imagem": "imagens/pecas/ssd-crucial.jpg",
+      "modelo3D": "modelos/ssd.glb",
+      "tipoArmazenamento": "sata",
+      "quantidade": 1,
+      "transform3D": {
+        "posicao": [
+          -1.35,
+          2.5,
+          1.0
+        ],
+        "rotacao": [
+          0,
+          0,
+          0
+        ],
+        "escala": 1.0,
+        "modoPosicao": "absoluta"
+      },
+      "watts": 4
+    },
+    {
+      "id": "fonte-corsair-rm850x",
+      "categoria": "fonte",
+      "nome": "Fonte Corsair RM850x 850W 80 Plus Gold",
+      "marca": "Corsair",
+      "descricao": "Fonte modular de 850W com certificação 80 Plus Gold.",
+      "preco": "R$ 899,90",
+      "loja": "KaBuM!",
+      "imagem": "imagens/pecas/corsair-rm850x.jpg",
+      "modelo3D": "modelos/fonte.glb",
+      "transform3D": {
+        "posicao": [
+          -0.4,
+          0.6,
+          1.42
+        ],
+        "rotacao": [
+          0,
+          0,
+          0
+        ],
+        "escala": 1.0,
+        "modoPosicao": "absoluta"
+      },
+      "watts": 850
+    },
+    {
+      "id": "fan-arctic-p12",
+      "categoria": "ventoinhas",
+      "nome": "Ventoinha 120mm Arctic P12 Pro",
+      "marca": "Arctic",
+      "descricao": "Escolha no montador se a ventoinha será usada como entrada ou saída de ar.",
+      "preco": "R$ 69,90",
+      "loja": "Pichau",
+      "imagem": "imagens/pecas/arctic-p12.jpg",
+      "modelo3D": "modelos/fan.glb",
+      "fluxo": "in",
+      "quantidade": 1,
+      "transform3D": {
+        "posicao": [
+          0,
+          0,
+          0
+        ],
+        "rotacao": [
+          0,
+          90,
+          0
+        ],
+        "rotacaoSaida": [
+          0,
+          180,
+          0
+        ],
+        "escala": 1.0
+      },
+      "watts": 3
+    },
+    {
+      "id": "processador-ryzen-7-7800x3d",
+      "categoria": "processador",
+      "nome": "Processador AMD Ryzen 7 7800X3D",
+      "marca": "AMD",
+      "descricao": "Processador AM5 com 3D V-Cache para builds DDR5.",
+      "preco": "R$ 2.499,00",
+      "loja": "",
+      "imagem": "imagens/pecas/ryzen-7-5700x3d.jpg",
+      "modelo3D": "modelos/ryzen_7_5700x3d.glb",
+      "soquete": "am5",
+      "transform3D": {
+        "posicao": [
+          -1.05,
+          3.4,
+          1.0
+        ],
+        "rotacao": [
+          0,
+          0,
+          0
+        ],
+        "escala": 1.0,
+        "modoPosicao": "absoluta"
+      },
+      "watts": 120
+    },
+    {
+      "id": "placa-mae-b650e-atx-ddr5",
+      "categoria": "placa-mae",
+      "nome": "Placa-mãe B650E ATX DDR5",
+      "marca": "",
+      "descricao": "Placa-mãe ATX para processadores AMD AM5 e memória DDR5.",
+      "preco": "",
+      "loja": "",
+      "imagem": "",
+      "modelo3D": "modelos/placa.glb",
+      "formato": "atx",
+      "soquete": "am5",
+      "tipoRam": "ddr5",
+      "transform3D": {
+        "posicao": [
+          0,
+          0.3,
+          -0.4
+        ],
+        "rotacao": [
+          0,
+          90,
+          0
+        ],
+        "escala": 0.9
+      },
+      "watts": 45
+    },
+    {
+      "id": "placa-mae-b650i-mini-itx-ddr5",
+      "categoria": "placa-mae",
+      "nome": "Placa-mãe B650I Mini-ITX DDR5",
+      "marca": "",
+      "descricao": "Placa-mãe Mini-ITX para processadores AMD AM5 e memória DDR5.",
+      "preco": "",
+      "loja": "",
+      "imagem": "",
+      "modelo3D": "modelos/placa.glb",
+      "formato": "mini-itx",
+      "soquete": "am5",
+      "tipoRam": "ddr5",
+      "transform3D": {
+        "posicao": [
+          0,
+          0.3,
+          -0.4
+        ],
+        "rotacao": [
+          0,
+          90,
+          0
+        ],
+        "escala": 0.9
+      },
+      "watts": 40
+    },
+    {
+      "id": "memoria-ddr5-16gb-6000",
+      "categoria": "memoria",
+      "nome": "Memória DDR5 16GB 6000MHz",
+      "marca": "Kingston",
+      "descricao": "Módulo DDR5 de 16GB a 6000MHz para plataformas AM5/DDR5.",
+      "preco": "",
+      "loja": "",
+      "imagem": "imagens/pecas/kingston-fury-16gb.jpg",
+      "modelo3D": "modelos/ram.glb",
+      "tipoRam": "ddr5",
+      "frequencia": 6000,
+      "quantidade": 1,
+      "transform3D": {
+        "posicao": [
+          -0.3,
+          -0.5,
+          0.3
+        ],
+        "rotacao": [
+          -90,
+          -180,
+          0
+        ],
+        "escala": 0.3
+      },
+      "watts": 5
+    }
+  ]
+}

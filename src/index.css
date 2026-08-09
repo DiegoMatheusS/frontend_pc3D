@@ -1,0 +1,283 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-bg);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+body,
+button,
+input,
+textarea,
+select {
+  font-family: var(--font-sans);
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+  outline-offset: 2px;
+}
+
+#root,
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
+}
+
+.page-container {
+  width: min(var(--content-width), calc(100% - 32px));
+  margin-inline: auto;
+}
+
+.eyebrow {
+  display: inline-flex;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.button {
+  min-height: 42px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  padding: 0 15px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 750;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+}
+
+.button--primary {
+  color: #ffffff;
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.button--primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.button--secondary {
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+.button--secondary:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+::selection {
+  color: #fff;
+  background: #2563eb;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Mantém o cabeçalho e os containers na mesma posição entre páginas
+   com e sem rolagem vertical. */
+html {
+  scrollbar-gutter: stable;
+}
+
+.app-shell,
+.app-main {
+  width: 100%;
+  min-width: 0;
+}
+
+/* =========================================================
+   v17 — identidade visual herdada do CriaByte anterior
+========================================================= */
+body {
+  color: var(--color-text);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, .035), transparent 28%),
+    var(--color-bg);
+}
+
+:is(.build-card, .mounted-pc-card, .notebook-card, .offer-card, .product-card, .account-card) {
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+
+:is(.build-card, .mounted-pc-card, .notebook-card, .offer-card, .product-card, .account-card):hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+}
+
+.button {
+  transition: transform .2s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease;
+}
+.button--primary { box-shadow: 0 8px 20px rgba(37, 99, 235, .18); }
+.button--primary:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(37, 99, 235, .24); }
+.button--secondary:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .app-main > * { animation: pcbuilder-page-in .22s ease both; }
+  @keyframes pcbuilder-page-in { from { opacity: .72; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+}
+
+/* =========================================================
+   v20 — POLIMENTO VISUAL GLOBAL
+   Mantém a identidade do HTML original sem transformar a migração em redesign.
+========================================================= */
+html { scroll-behavior: smooth; }
+
+body,
+.site-header,
+.button,
+input,
+select,
+textarea {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: .18s;
+  transition-timing-function: ease;
+}
+
+input,
+select,
+textarea {
+  accent-color: var(--color-primary);
+}
+
+.button {
+  position: relative;
+  overflow: hidden;
+}
+
+.button:active:not(:disabled) {
+  transform: translateY(0) scale(.985);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+  box-shadow: none;
+  transform: none;
+}
+
+:is(.build-card, .mounted-pc-card, .notebook-card, .offer-card, .product-card, .account-card, .detail-panel) {
+  will-change: transform;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :is(.build-card, .mounted-pc-card, .notebook-card, .offer-card, .product-card, .account-card):hover {
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  :is(.build-card, .mounted-pc-card, .notebook-card, .offer-card, .product-card, .account-card, .detail-panel) { will-change: auto; }
+}
+
+/* v27 — fallback leve entre chunks carregados sob demanda. */
+.route-loading {
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--color-text-soft);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.route-loading__spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid color-mix(in srgb, var(--color-primary) 18%, var(--color-border));
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: route-loading-spin .7s linear infinite;
+}
+
+@keyframes route-loading-spin { to { transform: rotate(360deg); } }
+
+/* v30 — navegação por teclado; invisível durante o uso normal. */
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 10000;
+  padding: 10px 14px;
+  border-radius: 9px;
+  color: #fff;
+  background: #1d4ed8;
+  font-weight: 800;
+  text-decoration: none;
+  transform: translateY(-150%);
+  transition: transform .15s ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}

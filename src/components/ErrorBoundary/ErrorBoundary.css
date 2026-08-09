@@ -1,0 +1,22 @@
+.app-error-boundary {
+  min-height: 60vh;
+  display: grid;
+  place-items: center;
+  padding: 40px 20px;
+}
+.app-error-boundary > div {
+  width: min(720px, 100%);
+  padding: 28px;
+  border: 1px solid var(--color-border, #dbe2ea);
+  border-radius: 18px;
+  background: var(--color-surface, #fff);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, .08);
+}
+.app-error-boundary span { color: #2563eb; font-weight: 800; }
+.app-error-boundary h1 { margin: 8px 0 10px; }
+.app-error-boundary p { color: var(--color-text-soft, #64748b); line-height: 1.65; }
+.app-error-boundary pre { overflow: auto; padding: 12px; background: rgba(148, 163, 184, .12); border-radius: 10px; white-space: pre-wrap; }
+.app-error-boundary__actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.app-error-boundary button, .app-error-boundary a { border: 0; border-radius: 10px; padding: 10px 14px; font: inherit; font-weight: 800; cursor: pointer; text-decoration: none; }
+.app-error-boundary button { color: #fff; background: #2563eb; }
+.app-error-boundary a { color: #1e3a8a; background: #eff6ff; }

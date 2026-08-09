@@ -1,0 +1,21 @@
+.account-edit-page { padding: 48px 0 78px; }
+.account-edit-layout { max-width: 940px; }
+.account-edit-back { display:inline-flex; margin-bottom:24px; color:var(--color-primary); font-weight:750; text-decoration:none; }
+.account-edit-heading { margin-bottom:26px; }
+.account-edit-heading h1 { margin:8px 0 10px; font-size:clamp(32px,5vw,48px); letter-spacing:-.04em; }
+.account-edit-heading p { margin:0; max-width:700px; color:var(--color-text-soft); line-height:1.65; }
+.account-edit-panel { padding:26px; margin-bottom:18px; border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-surface); box-shadow:var(--shadow-sm); }
+.account-edit-panel__heading { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; margin-bottom:22px; padding-bottom:18px; border-bottom:1px solid var(--color-border); }
+.account-edit-panel__heading h2 { margin:5px 0 0; font-size:21px; }
+.account-edit-panel__heading p { max-width:380px; margin:0; color:var(--color-text-soft); font-size:13px; line-height:1.55; text-align:right; }
+.account-edit-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+.account-edit-form--password { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.account-edit-form label { min-width:0; display:grid; gap:7px; }
+.account-edit-form label span { font-size:13px; font-weight:750; }
+.account-edit-form input { width:100%; min-width:0; min-height:44px; padding:10px 12px; border:1px solid var(--color-border); border-radius:9px; color:var(--color-text); background:var(--color-surface); font:inherit; }
+.account-edit-form small { grid-column:1/-1; color:var(--color-text-soft); }
+.account-edit-actions { grid-column:1/-1; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.account-edit-message { font-size:13px; font-weight:700; }
+.account-edit-message.is-success { color:var(--color-success); }
+.account-edit-message.is-error { color:var(--color-danger); }
+@media (max-width:760px) { .account-edit-form,.account-edit-form--password{grid-template-columns:1fr}.account-edit-panel__heading{display:grid}.account-edit-panel__heading p{text-align:left}.account-edit-panel{padding:20px}.account-edit-page{padding-top:28px} }
