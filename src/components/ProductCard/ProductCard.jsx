@@ -14,6 +14,7 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
   const offers = asArray(product.offers)
   const tags = asArray(product.tags)
   const href = productHref(product)
+  const hoverImage = product.hoverImage && product.hoverImage !== product.image ? product.hoverImage : null
   const discount = previousPrice > price && price > 0
     ? Math.round((1 - price / previousPrice) * 100)
     : 0
@@ -42,7 +43,24 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
       <Link className="product-card__visual" to={href} aria-label={`Ver ${name}`}>
         {discount > 0 && <span className="product-card__discount">-{discount}%</span>}
         {product.image ? (
-          <img className="product-card__image" src={product.image} alt="" loading="lazy" decoding="async" />
+          <>
+            <img
+              className={`product-card__image product-card__image--primary ${hoverImage ? 'product-card__image--has-hover' : ''}`}
+              src={product.image}
+              alt=""
+              loading="lazy"
+              decoding="async"
+            />
+            {hoverImage && (
+              <img
+                className="product-card__image product-card__image--hover"
+                src={hoverImage}
+                alt=""
+                loading="lazy"
+                decoding="async"
+              />
+            )}
+          </>
         ) : (
           <div className={`product-card__symbol product-card__symbol--${asText(product.group, 'hardwares')}`} aria-hidden="true">
             <span>{category.slice(0, 2).toUpperCase()}</span>

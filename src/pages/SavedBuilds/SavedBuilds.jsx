@@ -9,7 +9,7 @@ import './SavedBuilds.css'
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 2, maximumFractionDigits: 2,
 }).format(Number(value) || 0)
 
 const formatDate = (value, onlyDate = false) => {

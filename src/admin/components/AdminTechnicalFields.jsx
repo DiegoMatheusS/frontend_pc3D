@@ -1,4 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
+const POSICOES_REFRIGERACAO = ['FRENTE', 'TOPO', 'TRASEIRA', 'INFERIOR', 'LATERAL']
+
 const HARDWARE_SCHEMAS = {
   PROCESSADOR: {
     key: 'especificacaoProcessador',
@@ -25,14 +27,34 @@ const HARDWARE_SCHEMAS = {
       ['socket', 'Socket', 'text', true], ['chipset', 'Chipset', 'text', true],
       ['formato', 'Formato', 'select', true, ['E_ATX','ATX','MICRO_ATX','MINI_ITX']],
       ['revisao', 'Revisão', 'text'], ['biosInicial', 'BIOS inicial', 'text'], ['biosMinima', 'BIOS mínima', 'text'],
-      ['tiposMemoriaSuportados', 'Memórias suportadas', 'csv', true, 'Ex.: DDR4, DDR5'],
+      ['tiposMemoriaSuportados', 'Tipos de memória suportados', 'csv', true, 'Ex.: DDR4, DDR5'],
+      ['formatosMemoriaSuportados', 'Formatos de memória suportados', 'csv', false, 'Ex.: DIMM, SO_DIMM'],
       ['frequenciasMemoriaJedecMhz', 'Frequências JEDEC (MHz)', 'csvNumber', true, 'Ex.: 3200, 4800'],
       ['frequenciasMemoriaOverclockMhz', 'Frequências OC (MHz)', 'csvNumber', true, 'Ex.: 3600, 6000'],
       ['slotsMemoria', 'Slots de memória', 'number', true], ['capacidadeMaximaMemoriaGb', 'Capacidade máxima (GB)', 'number'],
       ['capacidadeMaximaPorSlotGb', 'Máximo por slot (GB)', 'number'], ['saidasVideo', 'Saídas de vídeo', 'csv', true, 'Ex.: HDMI, DisplayPort'],
       ['portasSata', 'Portas SATA', 'number'], ['versaoPcie', 'Versão PCIe', 'text'], ['ethernet', 'Ethernet', 'text'],
       ['suportaXmp', 'Suporta XMP', 'boolean'], ['suportaExpo', 'Suporta EXPO', 'boolean'], ['suportaEcc', 'Suporta ECC', 'boolean'],
+      ['suportaMemoriaRegistrada', 'Suporta memória registrada', 'boolean'],
       ['wifi', 'Wi-Fi', 'boolean'], ['bluetooth', 'Bluetooth', 'boolean'], ['biosFlashback', 'BIOS Flashback', 'boolean'],
+    ],
+    repeaters: [
+      {
+        key: 'slotsM2', title: 'Slots M.2', singular: 'slot M.2',
+        help: 'Cadastre cada slot físico. Estes dados são usados pelo backend para validar interface, chave, tamanho, geração PCIe e compartilhamentos.',
+        create: { codigo: '', interfacesSuportadas: [], chavesSuportadas: [], tamanhosSuportadosMm: [], geracaoPcieMaxima: '', pistasPcie: '', compartilhaCom: '', observacao: '', ativo: true },
+        fields: [
+          ['codigo', 'Código / identificação', 'text', true, 'Ex.: M2_1'],
+          ['interfacesSuportadas', 'Interfaces suportadas', 'csv', true, 'Ex.: NVME_PCIE, SATA'],
+          ['chavesSuportadas', 'Chaves suportadas', 'csv', true, 'Ex.: M, B_M'],
+          ['tamanhosSuportadosMm', 'Tamanhos suportados (mm)', 'csvNumber', true, 'Ex.: 42, 60, 80, 110'],
+          ['geracaoPcieMaxima', 'Geração PCIe máxima', 'number'],
+          ['pistasPcie', 'Pistas PCIe', 'number'],
+          ['compartilhaCom', 'Compartilha recursos com', 'text', false, 'Ex.: SATA_5_6 ou PCIEX16_2'],
+          ['observacao', 'Observação', 'textarea'],
+          ['ativo', 'Slot ativo', 'boolean'],
+        ],
+      },
     ],
   },
   MEMORIA_RAM: {
@@ -56,6 +78,31 @@ const HARDWARE_SCHEMAS = {
       ['slotsMaximosGpu', 'Slots máximos GPU', 'number'], ['alturaMaximaCoolerCpuMm', 'Cooler CPU máximo (mm)', 'number'],
       ['baias25', 'Baias 2.5"', 'number'], ['baias35', 'Baias 3.5"', 'number'], ['slotsTraseiros', 'Slots traseiros', 'number'],
       ['espacoGerenciamentoCabosMm', 'Espaço para cabos (mm)', 'number'], ['suportaGpuVertical', 'GPU vertical', 'boolean'],
+    ],
+    repeaters: [
+      {
+        key: 'suportesFans', title: 'Suportes de ventoinhas', singular: 'suporte de ventoinha',
+        help: 'Informe as posições e capacidades reais do gabinete para o motor de refrigeração/compatibilidade.',
+        create: { posicao: 'FRENTE', tamanhoMm: '', quantidadeMaxima: '', espessuraMaximaMm: '', observacao: '' },
+        fields: [
+          ['posicao', 'Posição', 'select', true, POSICOES_REFRIGERACAO],
+          ['tamanhoMm', 'Tamanho da ventoinha (mm)', 'number', true],
+          ['quantidadeMaxima', 'Quantidade máxima', 'number', true],
+          ['espessuraMaximaMm', 'Espessura máxima (mm)', 'number'],
+          ['observacao', 'Observação', 'textarea'],
+        ],
+      },
+      {
+        key: 'suportesRadiador', title: 'Suportes de radiador', singular: 'suporte de radiador',
+        help: 'Cadastre cada posição de radiador aceita pelo gabinete, incluindo limite de espessura do conjunto.',
+        create: { posicao: 'FRENTE', tamanhoMm: '', espessuraConjuntoMaximaMm: '', observacao: '' },
+        fields: [
+          ['posicao', 'Posição', 'select', true, POSICOES_REFRIGERACAO],
+          ['tamanhoMm', 'Tamanho do radiador (mm)', 'number', true],
+          ['espessuraConjuntoMaximaMm', 'Espessura máxima do conjunto (mm)', 'number'],
+          ['observacao', 'Observação', 'textarea'],
+        ],
+      },
     ],
   },
   FONTE: {
@@ -108,7 +155,9 @@ const HARDWARE_SCHEMAS = {
       ['tipo', 'Tipo', 'select', true, ['SSD','HDD']], ['formato', 'Formato', 'select', true, ['POLEGADAS_2_5','POLEGADAS_3_5','M2','PLACA_PCIE']],
       ['interface', 'Interface', 'select', true, ['SATA','NVME_PCIE','SAS']], ['capacidadeGb', 'Capacidade (GB)', 'number', true],
       ['tamanhoM2Mm', 'Tamanho M.2 (mm)', 'number'], ['chaveM2', 'Chave M.2', 'select', false, ['B','M','B_M']], ['geracaoPcie', 'Geração PCIe', 'number'], ['pistasPcie', 'Pistas PCIe', 'number'],
-      ['leituraSequencialMbps', 'Leitura (MB/s)', 'number'], ['escritaSequencialMbps', 'Escrita (MB/s)', 'number'], ['alturaMm', 'Altura (mm)', 'number'], ['larguraMm', 'Largura (mm)', 'number'], ['profundidadeMm', 'Profundidade (mm)', 'number'],
+      ['leituraSequencialMbps', 'Leitura sequencial (MB/s)', 'number'], ['escritaSequencialMbps', 'Escrita sequencial (MB/s)', 'number'],
+      ['alturaMm', 'Altura (mm)', 'number'], ['larguraMm', 'Largura (mm)', 'number'], ['profundidadeMm', 'Profundidade (mm)', 'number'], ['espessuraMm', 'Espessura (mm)', 'number'],
+      ['consumoWatts', 'Consumo (W)', 'number'], ['possuiDissipador', 'Possui dissipador', 'boolean'],
     ],
   },
 }
@@ -155,62 +204,100 @@ export function readSpec(item, schema) {
   return { ...(item[schema.key] || {}) }
 }
 
+function normalizeValue(type, raw) {
+  if (type === 'boolean') return typeof raw === 'boolean' ? raw : undefined
+  if (raw === '' || raw === null || raw === undefined) return undefined
+  if (type === 'number') {
+    const number = Number(raw)
+    return Number.isFinite(number) ? number : undefined
+  }
+  if (type === 'csvNumber') return [...new Set((Array.isArray(raw) ? raw : String(raw).split(',')).map((v) => Number(String(v).trim())).filter(Number.isFinite))]
+  if (type === 'csv') return [...new Set((Array.isArray(raw) ? raw : String(raw).split(',')).map((v) => String(v).trim()).filter(Boolean))]
+  return String(raw).trim()
+}
+
 export function normalizeSpec(schema, values) {
   if (!schema) return null
   const output = {}
   schema.fields.forEach(([key, , type]) => {
-    const raw = values?.[key]
-    if (type === 'boolean') {
-      if (typeof raw === 'boolean') output[key] = raw
-      return
-    }
-    if (raw === '' || raw === null || raw === undefined) return
-    if (type === 'number') {
-      const number = Number(raw)
-      if (Number.isFinite(number)) output[key] = number
-      return
-    }
-    if (type === 'csvNumber') {
-      const list = String(raw).split(',').map((v) => Number(v.trim())).filter(Number.isFinite)
-      output[key] = [...new Set(list)]
-      return
-    }
-    if (type === 'csv') {
-      output[key] = [...new Set(String(raw).split(',').map((v) => v.trim()).filter(Boolean))]
-      return
-    }
-    output[key] = String(raw).trim()
+    const value = normalizeValue(type, values?.[key])
+    if (value !== undefined) output[key] = value
+  })
+  ;(schema.repeaters || []).forEach((repeater) => {
+    const rows = values?.[repeater.key]
+    if (!Array.isArray(rows)) return
+    output[repeater.key] = rows.map((row) => {
+      const clean = {}
+      repeater.fields.forEach(([key, , type]) => {
+        const value = normalizeValue(type, row?.[key])
+        if (value !== undefined) clean[key] = value
+      })
+      return clean
+    })
   })
   return output
 }
 
 function displayValue(type, value) {
   if ((type === 'csv' || type === 'csvNumber') && Array.isArray(value)) return value.join(', ')
+  if (type === 'date' && value) return String(value).slice(0, 10)
   return value ?? ''
 }
 
-export function AdminTechnicalFields({ schema, values, onChange }) {
-  if (!schema) return <div className="admin-technical-empty">Esta categoria ainda não possui ficha estruturada no backend. Use os metadados/especificações adicionais para dados extras.</div>
+function FieldControl({ field, value, onChange, idPrefix }) {
+  const [key, label, type, required = false, optionsOrPlaceholder] = field
+  const display = displayValue(type, value)
+  const id = `${idPrefix}-${key}`
 
+  if (type === 'boolean') {
+    return <div className="admin-field admin-field--boolean"><label className="admin-switch"><input type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} /> {label}</label></div>
+  }
+  if (type === 'select') {
+    const options = Array.isArray(optionsOrPlaceholder) ? optionsOrPlaceholder : []
+    return <div className="admin-field"><label htmlFor={id}>{label}{required ? ' *' : ''}</label><select id={id} className="admin-select" required={required} value={display} onChange={(e) => onChange(e.target.value)}><option value="">Selecione</option>{options.map((option) => <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>)}</select></div>
+  }
+  if (type === 'textarea') {
+    return <div className="admin-field full"><label htmlFor={id}>{label}{required ? ' *' : ''}</label><textarea id={id} className="admin-textarea admin-textarea--compact" required={required} value={display} onChange={(e) => onChange(e.target.value)} placeholder={typeof optionsOrPlaceholder === 'string' ? optionsOrPlaceholder : undefined} /></div>
+  }
+  return <div className="admin-field"><label htmlFor={id}>{label}{required ? ' *' : ''}</label><input id={id} className="admin-input" type={type === 'number' ? 'number' : type === 'date' ? 'date' : 'text'} step={type === 'number' ? 'any' : undefined} min={type === 'number' ? '0' : undefined} required={required} value={display} onChange={(e) => onChange(e.target.value)} placeholder={typeof optionsOrPlaceholder === 'string' ? optionsOrPlaceholder : undefined} /></div>
+}
+
+function RepeaterEditor({ definition, rows = [], onChange }) {
+  const safeRows = Array.isArray(rows) ? rows : []
+  const add = () => onChange([...safeRows, { ...definition.create }])
+  const remove = (index) => onChange(safeRows.filter((_, rowIndex) => rowIndex !== index))
+  const change = (index, key, value) => onChange(safeRows.map((row, rowIndex) => rowIndex === index ? { ...row, [key]: value } : row))
+
+  return <section className="admin-tech-repeater">
+    <div className="admin-tech-repeater-head">
+      <div><h3>{definition.title}</h3>{definition.help && <p>{definition.help}</p>}</div>
+      <button className="btn btn-secundario btn-pequeno" type="button" onClick={add}>+ Adicionar {definition.singular}</button>
+    </div>
+    {!safeRows.length ? <div className="admin-tech-repeater-empty">Nenhum {definition.singular} cadastrado.</div> : <div className="admin-tech-repeater-list">
+      {safeRows.map((row, index) => <article className="admin-tech-repeater-item" key={`${definition.key}-${index}`}>
+        <header><strong>{definition.singular} {index + 1}</strong><button className="admin-tech-remove" type="button" onClick={() => remove(index)}>Remover</button></header>
+        <div className="admin-form-grid">
+          {definition.fields.map((field) => <FieldControl key={field[0]} field={field} value={row?.[field[0]]} onChange={(value) => change(index, field[0], value)} idPrefix={`admin-tech-${definition.key}-${index}`} />)}
+        </div>
+      </article>)}
+    </div>}
+  </section>
+}
+
+export function AdminTechnicalFields({ schema, values, onChange }) {
+  if (!schema) return <div className="admin-technical-empty">Esta categoria não possui ficha técnica estruturada no DTO atual do backend. Use os dados adicionais apenas para informações que realmente não possuem campo oficial.</div>
+
+  const fieldCount = schema.fields.length + (schema.repeaters || []).reduce((sum, repeater) => sum + repeater.fields.length, 0)
   return (
     <div className="admin-technical-fields">
       <div className="admin-section-heading">
-        <div><h2>Ficha técnica — {schema.title}</h2><p>Campos alinhados ao DTO atual do backend.</p></div>
-        <span className="admin-import-badge">Estruturado</span>
+        <div><h2>Ficha técnica completa — {schema.title}</h2><p>Campos mapeados diretamente dos DTOs atuais do backend. Preencha o máximo possível para melhorar compatibilidade, filtros, IA e comparação.</p></div>
+        <span className="admin-import-badge">{fieldCount} campos</span>
       </div>
       <div className="admin-form-grid">
-        {schema.fields.map(([key, label, type, required = false, optionsOrPlaceholder]) => {
-          const value = displayValue(type, values?.[key])
-          if (type === 'boolean') {
-            return <div className="admin-field admin-field--boolean" key={key}><label className="admin-switch"><input type="checkbox" checked={Boolean(values?.[key])} onChange={(e) => onChange(key, e.target.checked)} /> {label}</label></div>
-          }
-          if (type === 'select') {
-            const options = Array.isArray(optionsOrPlaceholder) ? optionsOrPlaceholder : []
-            return <div className="admin-field" key={key}><label htmlFor={`admin-tech-${key}`}>{label}{required ? ' *' : ''}</label><select id={`admin-tech-${key}`} className="admin-select" required={required} value={value} onChange={(e) => onChange(key, e.target.value)}><option value="">Selecione</option>{options.map((option) => <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>)}</select></div>
-          }
-          return <div className="admin-field" key={key}><label htmlFor={`admin-tech-${key}`}>{label}{required ? ' *' : ''}</label><input id={`admin-tech-${key}`} className="admin-input" type={type === 'number' ? 'number' : type === 'date' ? 'date' : 'text'} step={type === 'number' ? 'any' : undefined} min={type === 'number' ? '0' : undefined} required={required} value={value} onChange={(e) => onChange(key, e.target.value)} placeholder={typeof optionsOrPlaceholder === 'string' ? optionsOrPlaceholder : undefined} /></div>
-        })}
+        {schema.fields.map((field) => <FieldControl key={field[0]} field={field} value={values?.[field[0]]} onChange={(value) => onChange(field[0], value)} idPrefix="admin-tech" />)}
       </div>
+      {(schema.repeaters || []).map((repeater) => <RepeaterEditor key={repeater.key} definition={repeater} rows={values?.[repeater.key]} onChange={(rows) => onChange(repeater.key, rows)} />)}
     </div>
   )
 }

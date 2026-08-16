@@ -44,6 +44,15 @@ const unitFor = (key) => ({
   baseClockGhz: ' GHz', boostClockGhz: ' GHz', cacheL3Mb: ' MB', tdpWatts: ' W', vramGb: ' GB', memoryBusBits: ' bits', boostClockMhz: ' MHz', tgpWatts: ' W', recommendedPsuWatts: ' W', lengthMm: ' mm', maxRamGb: ' GB', capacityGb: ' GB', frequencyMhz: ' MHz', readMbps: ' MB/s', writeMbps: ' MB/s', powerWatts: ' W', fanMm: ' mm', pollingRateHz: ' Hz', weightGrams: ' g', driverMm: ' mm', sizeInches: '”', refreshRateHz: ' Hz', responseTimeMs: ' ms', ramGb: ' GB', storageGb: ' GB', screenInches: '”', weightKg: ' kg', maxWeightKg: ' kg', widthMm: ' mm', heightMm: ' mm', thicknessMm: ' mm',
 }[key] ?? '')
 
+
+function isInternalSpecKey(key) {
+  const normalized = String(key || '').replace(/[^a-z0-9]/gi, '').toLowerCase()
+  return [
+    'id', 'produtoid', 'hardwareid', 'categoriaid', 'parceiroid',
+    'modelo3did', 'hardwareid3d', 'criadoem', 'atualizadoem',
+  ].includes(normalized)
+}
+
 export default function ProductDetails() {
   const { id } = useParams()
   const [product, setProduct] = useState(undefined)
@@ -54,7 +63,7 @@ export default function ProductDetails() {
     return () => { active = false }
   }, [id])
 
-  const specs = useMemo(() => product ? Object.entries(product.specs || {}) : [], [product])
+  const specs = useMemo(() => product ? Object.entries(product.specs || {}).filter(([key]) => !isInternalSpecKey(key)) : [], [product])
   useEffect(() => {
     if (!product) return
     setDocumentMeta({
@@ -71,7 +80,20 @@ export default function ProductDetails() {
   return (
     <div className="product-detail-page">
       <section className="page-container product-detail-hero">
-        <div className={`product-detail-visual product-detail-visual--${asText(product.group, 'hardwares')}`} aria-hidden="true"><span>{asText(product.category, 'Produto').slice(0, 2).toUpperCase()}</span></div>
+        <div className={`product-detail-visual product-detail-visual--${asText(product.group, 'hardwares')}`}>
+          {product.image
+            ? <>
+                <img
+                  className={`product-detail-visual__image product-detail-visual__image--primary ${product.hoverImage && product.hoverImage !== product.image ? 'product-detail-visual__image--has-hover' : ''}`}
+                  src={product.image}
+                  alt={product.name}
+                />
+                {product.hoverImage && product.hoverImage !== product.image && (
+                  <img className="product-detail-visual__image product-detail-visual__image--hover" src={product.hoverImage} alt="" />
+                )}
+              </>
+            : <span aria-hidden="true">{asText(product.category, 'Produto').slice(0, 2).toUpperCase()}</span>}
+        </div>
         <div className="product-detail-summary">
           <div className="product-detail-breadcrumb"><Link to={section.to}>{section.label}</Link><span>/</span><span>{asText(product.category, 'Produto')}</span></div>
           <span className="eyebrow">{asText(product.brand)}</span>

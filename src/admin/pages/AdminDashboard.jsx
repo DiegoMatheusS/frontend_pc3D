@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { adminService } from '../services/adminService'
 import { AdminError, AdminLoading, AdminPageHeader } from '../components/AdminCommon'
+import { useAdminPermissions } from '../components/AdminAccess'
 
 function percent(part, total) {
   if (!total) return 100
@@ -13,25 +14,45 @@ function hasImage(item) {
 }
 
 export default function AdminDashboard() {
+  const { canWriteCatalog, canCreateHardware, isAdmin } = useAdminPermissions()
+  const location = useLocation()
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     let active = true
-    adminService.dashboard.load().then((result) => active && setData(result)).catch((err) => active && setError(err))
-    return () => { active = false }
-  }, [])
+
+    const load = () => adminService.dashboard.load({ includeUsers: isAdmin })
+      .then((result) => {
+        if (!active) return
+        setData(result)
+        setError(null)
+      })
+      .catch((err) => active && setError(err))
+
+    void load()
+    const refreshOnFocus = () => { if (document.visibilityState !== 'hidden') void load() }
+    window.addEventListener('focus', refreshOnFocus)
+    document.addEventListener('visibilitychange', refreshOnFocus)
+
+    return () => {
+      active = false
+      window.removeEventListener('focus', refreshOnFocus)
+      document.removeEventListener('visibilitychange', refreshOnFocus)
+    }
+  }, [isAdmin, location.key])
 
   const stats = useMemo(() => {
     if (!data) return []
     const publishedProducts = data.produtos.filter((item) => item.publicado !== false && item.ativo !== false).length
     const publishedHardware = data.hardwares.filter((item) => item.publicado !== false && item.ativo !== false).length
-    const activeOffers = data.ofertas.filter((item) => item.ativo !== false).length
+    const activeOffers = data.ofertas.filter((item) => String(item.status || 'ATIVA').toUpperCase() === 'ATIVA').length
+    const discontinuedOffers = data.ofertas.filter((item) => String(item.status || '').toUpperCase() === 'DESCONTINUADA').length
     const partners = data.parceiros.filter((item) => item.ativo !== false).length
     return [
       ['Produtos', data.produtos.length, `${publishedProducts} publicados`, '▣', '/admin/produtos'],
       ['Hardwares', data.hardwares.length, `${publishedHardware} publicados`, 'CPU', '/admin/hardwares'],
-      ['Ofertas ativas', activeOffers, `${data.ofertas.length} cadastradas`, 'R$', '/admin/ofertas'],
+      ['Ofertas ativas', activeOffers, discontinuedOffers ? `${discontinuedOffers} descontinuada${discontinuedOffers === 1 ? '' : 's'} no histórico` : 'Nenhuma descontinuada', 'R$', '/admin/ofertas'],
       ['Parceiros', partners, `${data.parceiros.length} cadastrados`, '◇', '/admin/parceiros'],
     ]
   }, [data])
@@ -40,7 +61,8 @@ export default function AdminDashboard() {
     if (!data) return []
     const productsWithImage = data.produtos.filter(hasImage).length
     const publishedHardware = data.hardwares.filter((item) => item.publicado !== false && item.ativo !== false).length
-    const validOffers = data.ofertas.filter((item) => item.ativo !== false && Number(item.precoAtual || item.preco || 0) > 0 && Boolean(item.urlAfiliado || item.urlOriginal)).length
+    const activeOffers = data.ofertas.filter((item) => String(item.status || 'ATIVA').toUpperCase() === 'ATIVA')
+    const validOffers = activeOffers.filter((item) => Number(item.precoAtual || item.preco || 0) > 0 && Boolean(item.urlAfiliado || item.urlOriginal)).length
     const publishedNotebooks = data.notebooks.filter((item) => item.publicado !== false && item.ativo !== false).length
     const publishedBuilds = data.builds.filter((item) => item.publicado !== false && item.ativo !== false).length
     return [
@@ -58,8 +80,8 @@ export default function AdminDashboard() {
   const pending = [
     { title: 'Produtos sem imagem', count: data.produtos.filter((p) => !hasImage(p)).length, to: '/admin/produtos', icon: 'IMG' },
     { title: 'Hardwares em rascunho', count: data.hardwares.filter((p) => p.publicado === false).length, to: '/admin/hardwares', icon: 'TEC' },
-    { title: 'Ofertas sem validade', count: data.ofertas.filter((o) => !o.validoAte).length, to: '/admin/ofertas', icon: 'R$' },
-    { title: 'Notebooks não publicados', count: data.notebooks.filter((n) => n.publicado === false).length, to: '/admin/notebooks', icon: 'NB' },
+    { title: 'Ofertas ativas sem validade', count: data.ofertas.filter((o) => String(o.status || 'ATIVA').toUpperCase() === 'ATIVA' && !o.validoAte).length, to: '/admin/ofertas', icon: 'R$' },
+    { title: 'Notebooks não publicados', count: data.notebooks.filter((n) => n.ativo !== false && n.publicado === false).length, to: '/admin/notebooks', icon: 'NB' },
   ].filter((item) => item.count > 0)
 
   const sources = data.sources || []
@@ -68,8 +90,7 @@ export default function AdminDashboard() {
   return (
     <>
       <AdminPageHeader title="Visão geral" description="Acompanhe o catálogo, ofertas e itens que precisam de atenção.">
-        <Link className="btn btn-secundario" to="/admin/ofertas/novo">+ Oferta rápida</Link>
-        <Link className="btn btn-primario" to="/admin/produtos/novo">+ Novo produto</Link>
+        {canWriteCatalog && <Link className="btn btn-primario" to="/admin/produtos/novo">+ Novo produto</Link>}
       </AdminPageHeader>
 
       <section className="admin-grid-stats">
@@ -108,17 +129,16 @@ export default function AdminDashboard() {
         <article className="admin-card">
           <header className="admin-card-header"><h2>Catálogo atual</h2><Link to="/admin/produtos">Ver catálogo</Link></header>
           <div className="admin-card-body admin-activity-list">
-            <div className="admin-activity-item"><span className="admin-activity-dot" /><div><p>{data.notebooks.length} notebook(s) no catálogo técnico.</p><time>Catálogo atual</time></div></div>
-            <div className="admin-activity-item"><span className="admin-activity-dot" /><div><p>{data.builds.length} PC(s) montado(s) cadastrados.</p><time>Catálogo atual</time></div></div>
-            <div className="admin-activity-item"><span className="admin-activity-dot" /><div><p>{data.usuarios.length} usuário(s) cadastrados.</p><time>Catálogo atual</time></div></div>
+            <div className="admin-activity-item"><span className="admin-activity-dot" /><div><p>{data.notebooks.filter((item) => item.ativo !== false).length} notebook(s) ativo(s) · {data.notebooks.filter((item) => item.ativo === false).length} arquivado(s).</p><time>Catálogo atual</time></div></div>
+            <div className="admin-activity-item"><span className="admin-activity-dot" /><div><p>{data.builds.filter((item) => item.ativo !== false).length} PC(s) montado(s) ativo(s) · {data.builds.filter((item) => item.ativo === false).length} arquivado(s).</p><time>Catálogo atual</time></div></div>
+            {isAdmin && <div className="admin-activity-item"><span className="admin-activity-dot" /><div><p>{data.usuarios.length} usuário(s) cadastrados.</p><time>Catálogo atual</time></div></div>}
           </div>
         </article>
         <article className="admin-card">
           <header className="admin-card-header"><h2>Ações rápidas</h2></header>
           <div className="admin-card-body admin-quick-grid">
-            <Link className="admin-quick-action" to="/admin/produtos/novo"><strong>Novo produto</strong><small>Monitores, periféricos e itens comerciais.</small></Link>
-            <Link className="admin-quick-action" to="/admin/hardwares/novo"><strong>Novo hardware</strong><small>Peça técnica usada pelo montador.</small></Link>
-            <Link className="admin-quick-action" to="/admin/ofertas/novo"><strong>Nova oferta</strong><small>Preço e link afiliado.</small></Link>
+            {canWriteCatalog && <Link className="admin-quick-action" to="/admin/produtos/novo"><strong>Novo produto</strong><small>Produto comercial + oferta afiliada no mesmo fluxo.</small></Link>}
+            {canCreateHardware && <Link className="admin-quick-action" to="/admin/hardwares/novo"><strong>Novo hardware</strong><small>Peça técnica usada pelo montador.</small></Link>}
             <Link className="admin-quick-action" to="/admin/modelos-3d"><strong>Modelo 3D</strong><small>Arquivo e transformação por hardware.</small></Link>
           </div>
         </article>

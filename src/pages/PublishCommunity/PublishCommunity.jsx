@@ -18,7 +18,7 @@ const purposeLabel = {
 const resolutionLabel = { NAO_APLICAVEL: 'Não aplicável', '1080P': '1080p', '1440P': '1440p', '4K': '4K' }
 
 function money(value) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(value || 0))
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0))
 }
 
 const PENDING_PUBLICATION_KEY = 'pcBuilderPublicacaoPendente'

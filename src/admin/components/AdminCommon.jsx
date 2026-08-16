@@ -12,6 +12,7 @@ export function AdminPageHeader({ title, description, children }) {
 
 export function AdminStatus({ value, active, published }) {
   let label = value
+  if (!label && active === false) label = 'INATIVO'
   if (!label && published !== undefined) label = published ? 'PUBLICADO' : 'RASCUNHO'
   if (!label && active !== undefined) label = active ? 'ATIVO' : 'INATIVO'
   label = String(label || '—').toUpperCase()

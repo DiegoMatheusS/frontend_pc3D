@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout/Layout'
 import RequireAuth from './components/Layout/RequireAuth'
+import RequireRole from './components/Layout/RequireRole'
 import Home from './pages/Home/Home'
 
 const Offers = lazy(() => import('./pages/Offers/Offers'))
@@ -18,6 +19,7 @@ const Login = lazy(() => import('./pages/Login/Login'))
 const Register = lazy(() => import('./pages/Register/Register'))
 const Account = lazy(() => import('./pages/Account/Account'))
 const AccountEdit = lazy(() => import('./pages/AccountEdit/AccountEdit'))
+const AffiliateOffers = lazy(() => import('./pages/AffiliateOffers/AffiliateOffers'))
 const Institutional = lazy(() => import('./pages/Institutional/Institutional'))
 const SavedBuilds = lazy(() => import('./pages/SavedBuilds/SavedBuilds'))
 const SavedBuildDetails = lazy(() => import('./pages/SavedBuildDetails/SavedBuildDetails'))
@@ -97,6 +99,14 @@ export default function App() {
           )}
         />
         <Route
+          path="/busca-ofertas"
+          element={(
+            <RequireRole roles={['ADMIN', 'EDITOR']}>
+              <Lazy><AffiliateOffers /></Lazy>
+            </RequireRole>
+          )}
+        />
+        <Route
           path="/conta/editar"
           element={(
             <RequireAuth>
@@ -114,19 +124,20 @@ export default function App() {
       <Route path="/admin" element={<Lazy><AdminLayout /></Lazy>}>
         <Route index element={<Lazy><AdminDashboard /></Lazy>} />
         <Route path="produtos" element={<Lazy><AdminProducts /></Lazy>} />
-        <Route path="produtos/:id" element={<Lazy><AdminProductForm /></Lazy>} />
+        <Route path="produtos/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminProductForm /></AdminAccess></Lazy>} />
         <Route path="hardwares" element={<Lazy><AdminHardwares /></Lazy>} />
-        <Route path="hardwares/:id" element={<Lazy><AdminHardwareForm /></Lazy>} />
+        <Route path="hardwares/novo" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminHardwareForm /></AdminAccess></Lazy>} />
+        <Route path="hardwares/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminHardwareForm /></AdminAccess></Lazy>} />
         <Route path="ofertas" element={<Lazy><AdminOffers /></Lazy>} />
-        <Route path="ofertas/:id" element={<Lazy><AdminOfferForm /></Lazy>} />
-        <Route path="parceiros" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminPartners /></AdminAccess></Lazy>} />
+        <Route path="ofertas/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminOfferForm /></AdminAccess></Lazy>} />
+        <Route path="parceiros" element={<Lazy><AdminPartners /></Lazy>} />
         <Route path="modelos-3d" element={<Lazy><AdminModels3D /></Lazy>} />
         <Route path="compatibilidade" element={<Lazy><AdminCompatibility /></Lazy>} />
         <Route path="encaixes" element={<Lazy><AdminMountPoints /></Lazy>} />
         <Route path="notebooks" element={<Lazy><AdminNotebooks /></Lazy>} />
-        <Route path="notebooks/:id" element={<Lazy><AdminNotebookForm /></Lazy>} />
+        <Route path="notebooks/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminNotebookForm /></AdminAccess></Lazy>} />
         <Route path="montados" element={<Lazy><AdminMounted /></Lazy>} />
-        <Route path="montados/:id" element={<Lazy><AdminMountedForm /></Lazy>} />
+        <Route path="montados/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminMountedForm /></AdminAccess></Lazy>} />
         <Route path="usuarios" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminUsers /></AdminAccess></Lazy>} />
         <Route path="auditoria" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminAudit /></AdminAccess></Lazy>} />
       </Route>

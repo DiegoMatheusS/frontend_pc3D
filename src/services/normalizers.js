@@ -32,10 +32,13 @@ const CATEGORY_ALIASES = {
   COOLERS: 'COOLER',
   COOLER: 'COOLER',
   PLACAS_MAE: 'PLACA_MAE',
+  PLACAS_MAE_: 'PLACA_MAE',
   PLACA_MAE: 'PLACA_MAE',
   MEMORIAS_RAM: 'MEMORIA_RAM',
+  MEMORIAS: 'MEMORIA_RAM',
   MEMORIA_RAM: 'MEMORIA_RAM',
   PLACAS_VIDEO: 'PLACA_VIDEO',
+  PLACAS_DE_VIDEO: 'PLACA_VIDEO',
   PLACA_VIDEO: 'PLACA_VIDEO',
   ARMAZENAMENTOS: 'ARMAZENAMENTO',
   ARMAZENAMENTO: 'ARMAZENAMENTO',
@@ -309,7 +312,8 @@ function normalizeSpecs(item, category) {
 }
 
 export function normalizeProduct(item) {
-  const rawCategory = item.categoria ?? item.category ?? ''
+  const hardware = item?.hardware && typeof item.hardware === 'object' ? item.hardware : null
+  const rawCategory = hardware?.categoria ?? item.categoria ?? item.category ?? ''
   const enumCategory = categoryCode(rawCategory)
   const [knownGroup, knownCategory, knownCategoryKey] = CATEGORY_META[enumCategory] || []
   const rawGroup = typeof rawCategory === 'object' && rawCategory ? rawCategory.grupo : undefined
@@ -329,9 +333,10 @@ export function normalizeProduct(item) {
     category,
     categoryKey,
     name: text(item.nome ?? item.name, `${text(item.marca, '')} ${text(item.modelo, '')}`.trim() || 'Produto'),
-    brand: text(item.marca ?? item.brand),
-    description: item.descricao || item.description || '',
-    image: item.imagemUrl || item.imagem || item.image || null,
+    brand: text(item.marca ?? item.brand ?? hardware?.marca),
+    description: item.descricao || item.description || hardware?.descricao || '',
+    image: item.imagemUrl || item.imagem || item.image || hardware?.imagemUrl || null,
+    hoverImage: item.imagemHoverUrl || item.hoverImage || item.imageHover || hardware?.imagemHoverUrl || null,
     rating: number(item.mediaAvaliacoes ?? item.avaliacao?.media ?? item.rating),
     reviewsCount: number(item.quantidadeAvaliacoes ?? item.avaliacao?.quantidade ?? item.reviewsCount),
     builderCompatible: item.builderCompatible === true || has3d,
@@ -339,7 +344,7 @@ export function normalizeProduct(item) {
     price,
     previousPrice,
     tags: Array.isArray(item.tags) ? item.tags : [],
-    specs: normalizeSpecs(item, enumCategory),
+    specs: normalizeSpecs(hardware ? { ...item, ...hardware, especificacoes: item.especificacoes ?? hardware.especificacoes } : item, enumCategory),
     offers,
   }
 }
@@ -559,6 +564,7 @@ export function normalizeOfferItem(item) {
     category,
     name: product.nome || product.name || item.nome || item.name || 'Produto',
     brand: text(product.marca ?? product.brand ?? item.marca ?? item.brand),
+    image: product.imagemUrl || product.image || item.imagemUrl || item.image || null,
     price: number(price),
     previousPrice: previousPrice == null ? null : number(previousPrice),
     offersCount: number(item.quantidadeOfertasAtivas ?? item.quantidadeOfertas ?? item.offersCount, offers.length),

@@ -7,6 +7,8 @@ export class ApiError extends Error {
     this.status = status
     this.data = data
     this.url = url
+    this.code = typeof data?.codigo === 'string' ? data.codigo : ''
+    this.details = data?.detalhes ?? null
   }
 }
 
@@ -32,6 +34,9 @@ function getErrorMessage(data, status) {
   if (status === 401) return 'E-mail ou senha incorretos, ou sua sessão expirou.'
   if (status === 403) return 'Você não tem permissão para realizar esta ação.'
   if (status === 409) return 'Já existe um cadastro com estes dados.'
+  if (status === 413) return 'Os dados enviados são maiores do que o servidor permite.'
+  if (status === 429) return 'Muitas solicitações em pouco tempo. Aguarde um momento e tente novamente.'
+  if (status === 503) return 'O serviço está temporariamente indisponível. Tente novamente em instantes.'
   if (status >= 500) return 'O servidor encontrou um problema. Tente novamente.'
   return 'Não foi possível concluir a solicitação.'
 }
@@ -39,6 +44,7 @@ function getErrorMessage(data, status) {
 export async function apiRequest(path, options = {}) {
   const url = buildUrl(path)
   const hasBody = options.body !== undefined && options.body !== null
+  const method = String(options.method || 'GET').toUpperCase()
 
   let response
   try {
@@ -50,6 +56,10 @@ export async function apiRequest(path, options = {}) {
         ...(options.headers || {}),
       },
       ...options,
+      method,
+      // Dados do Admin mudam com frequência (arquivar, publicar, descontinuar etc.).
+      // Evita que uma navegação de volta reaproveite uma resposta GET antiga.
+      cache: options.cache ?? (method === 'GET' ? 'no-store' : undefined),
       body: hasBody && typeof options.body !== 'string'
         ? JSON.stringify(options.body)
         : options.body,

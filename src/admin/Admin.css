@@ -685,3 +685,163 @@
 .admin-import-preview-list.missing { border-left: 3px solid #64748b; }
 .admin-import-preview-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 560px) { .admin-import-preview-fields { grid-template-columns: 1fr; } .admin-import-preview-actions > .btn { flex: 1 1 100%; } }
+
+/* =========================================================
+   v40 — fichas técnicas completas do backend
+========================================================= */
+.admin-tech-repeater { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--admin-border); }
+.admin-tech-repeater-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.admin-tech-repeater-head h3 { margin: 0 0 4px; font-size: 14px; }
+.admin-tech-repeater-head p { margin: 0; max-width: 760px; color: var(--admin-muted); font-size: 12px; line-height: 1.5; }
+.admin-tech-repeater-list { display: grid; gap: 12px; }
+.admin-tech-repeater-item { padding: 14px; border: 1px solid var(--admin-border); border-radius: 12px; background: var(--admin-surface-2); }
+.admin-tech-repeater-item > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.admin-tech-repeater-item > header strong { font-size: 13px; }
+.admin-tech-remove { min-height: 30px; padding: 4px 9px; border: 1px solid color-mix(in srgb, var(--admin-danger) 35%, var(--admin-border)); border-radius: 8px; color: var(--admin-danger); background: transparent; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.admin-tech-remove:hover { background: var(--admin-danger-soft); }
+.admin-tech-repeater-empty { padding: 14px; border: 1px dashed var(--admin-border); border-radius: 10px; color: var(--admin-muted); background: var(--admin-surface-2); font-size: 12px; text-align: center; }
+.admin-textarea--compact { min-height: 84px; }
+@media (max-width: 640px) {
+  .admin-tech-repeater-head { align-items: stretch; flex-direction: column; }
+  .admin-tech-repeater-head .btn { width: 100%; }
+}
+
+/* v40.1 — acabamento do Admin */
+.admin-root .btn.btn-primario,
+.admin-root a.btn.btn-primario,
+.admin-root button.btn.btn-primario {
+  color: #fff !important;
+  background: #2563eb;
+  border-color: #2563eb;
+  text-shadow: none;
+}
+.admin-root .btn.btn-primario:hover {
+  color: #fff !important;
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  filter: none;
+}
+[data-theme="dark"] .admin-root .btn.btn-primario,
+[data-theme="dark"] .admin-root a.btn.btn-primario,
+[data-theme="dark"] .admin-root button.btn.btn-primario {
+  color: #fff !important;
+  background: #2563eb;
+  border-color: #3b82f6;
+}
+.admin-toolbar--single { grid-template-columns: minmax(260px, 680px); }
+.admin-list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  color: var(--admin-muted);
+  border-top: 1px solid var(--admin-border);
+  font-size: 12px;
+}
+.admin-list-footer .btn { margin-left: auto; }
+.admin-toast-region { z-index: 300; }
+.admin-toast {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 28px;
+  align-items: start;
+  gap: 11px;
+  min-height: 66px;
+  padding: 13px 12px;
+  color: var(--admin-text);
+  background: color-mix(in srgb, var(--admin-surface) 97%, transparent);
+  border: 1px solid var(--admin-border);
+  border-left-width: 1px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, .18);
+  backdrop-filter: blur(14px);
+}
+.admin-toast-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  font-weight: 900;
+  background: var(--admin-primary-soft);
+  color: var(--admin-primary);
+}
+.admin-toast-copy { min-width: 0; display: grid; gap: 3px; }
+.admin-toast-copy strong { color: var(--admin-text); font-size: 13px; }
+.admin-toast-copy > span { color: var(--admin-muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.admin-toast-close { width: 28px; height: 28px; border: 0; border-radius: 8px; color: var(--admin-muted); background: transparent; font-size: 20px; line-height: 1; }
+.admin-toast-close:hover { color: var(--admin-text); background: var(--admin-surface-2); }
+.admin-toast.sucesso .admin-toast-icon { color: var(--admin-success); background: var(--admin-success-soft); }
+.admin-toast.erro .admin-toast-icon { color: var(--admin-danger); background: var(--admin-danger-soft); }
+.admin-toast.alerta .admin-toast-icon { color: var(--admin-warning); background: var(--admin-warning-soft); }
+.admin-toast.info .admin-toast-icon { color: var(--admin-primary); background: var(--admin-primary-soft); }
+.admin-import-section .admin-section-heading p::after {
+  content: " Ao analisar, os campos encontrados são preenchidos automaticamente; revise antes de salvar.";
+}
+@media (max-width: 620px) {
+  .admin-list-footer { align-items: stretch; flex-direction: column; }
+  .admin-list-footer .btn { width: 100%; margin-left: 0; }
+  .admin-toolbar--single { grid-template-columns: 1fr; }
+}
+
+/* Oferta: ações de ciclo de vida */
+.admin-action-button--success {
+  border-color: color-mix(in srgb, #16a34a 45%, var(--admin-border));
+  color: #15803d;
+  background: color-mix(in srgb, #22c55e 10%, var(--admin-surface));
+}
+.admin-action-button--success:hover { border-color:#16a34a; color:#166534; }
+.admin-form-footer--offer { flex-wrap:wrap; }
+.admin-offer-status-help { flex-basis:100%; color:var(--admin-muted); line-height:1.45; margin-top:4px; }
+[data-admin-theme='dark'] .admin-action-button--success, .admin-root[data-theme='dark'] .admin-action-button--success { color:#86efac; background:rgba(34,197,94,.10); }
+
+/* v40.2 — seletor de Hardware no cadastro de Produto */
+.admin-hardware-picker-results {
+  display: grid;
+  gap: 6px;
+  max-height: 310px;
+  margin-top: 9px;
+  padding: 6px;
+  overflow: auto;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  background: var(--admin-surface-2);
+}
+.admin-hardware-picker-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(150px, .75fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 11px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.admin-hardware-picker-item:hover,
+.admin-hardware-picker-item.is-selected {
+  border-color: var(--admin-primary);
+  background: var(--admin-primary-soft);
+}
+.admin-hardware-picker-item > span { min-width: 0; display: grid; gap: 3px; }
+.admin-hardware-picker-item strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-hardware-picker-item small { overflow: hidden; color: var(--admin-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-hardware-picker-empty { padding: 12px; color: var(--admin-muted); font-size: 12px; text-align: center; }
+@media (max-width: 640px) {
+  .admin-hardware-picker-item { grid-template-columns: 1fr; }
+}
+
+
+/* Produto: múltiplas ofertas no mesmo cadastro */
+.admin-offer-heading-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+.admin-offer-editors { display:grid; gap:14px; }
+.admin-offer-editor { padding:16px; border:1px solid var(--admin-border); border-radius:12px; background:var(--admin-surface-2); }
+.admin-offer-editor-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.admin-offer-editor-head > div { display:grid; gap:2px; }
+.admin-offer-editor-head strong { font-size:13px; color:var(--admin-text); }
+.admin-offer-editor-head small { color:var(--admin-muted); font-size:10px; }
+@media (max-width:620px) { .admin-offer-heading-actions { justify-content:flex-start; } .admin-offer-editor-head { align-items:flex-start; } }

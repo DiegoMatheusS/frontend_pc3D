@@ -296,6 +296,7 @@ export default function AIAssistant() {
         acao: action,
         etapaAtual: guidedFlow.etapa,
         componentes: (guidedFlow.componentes || []).map(guidedComponentForBackend),
+        ...(Number.isInteger(Number(guidedFlow.pagina)) ? { pagina: Number(guidedFlow.pagina) } : {}),
         ...(guidedMeta.orcamento ? { orcamento: guidedMeta.orcamento } : {}),
         ...(guidedMeta.uso ? { uso: guidedMeta.uso } : {}),
         ...extra,

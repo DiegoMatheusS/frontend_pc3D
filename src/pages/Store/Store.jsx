@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import ProductCard from '../../components/ProductCard/ProductCard'
 import CatalogState from '../../components/CatalogState/CatalogState'
@@ -7,7 +8,7 @@ import useAccessibleDialog from '../../hooks/useAccessibleDialog'
 import './Store.css'
 
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', {
-  style: 'currency', currency: 'BRL', maximumFractionDigits: 0,
+  style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2,
 }).format(value)
 
 const normalize = (value) => String(value ?? '')
@@ -111,6 +112,7 @@ export default function Store({ defaultGroup = 'todos' }) {
   const [brand, setBrand] = useState('todos')
   const [maxPrice, setMaxPrice] = useState('todos')
   const [sortBy, setSortBy] = useState('relevancia')
+  const [visibleCount, setVisibleCount] = useState(20)
   const [compare, setCompare] = useState([])
   const [comparisonItems, setComparisonItems] = useState([])
   const [comparisonOpen, setComparisonOpen] = useState(false)
@@ -130,15 +132,21 @@ export default function Store({ defaultGroup = 'todos' }) {
       const safeProducts = Array.isArray(productItems) ? productItems : []
       setGroups(safeGroups)
       setProducts(safeProducts)
+      setVisibleCount(20)
       const requestedSearch = searchParams.get('busca')
       setQuery(requestedSearch || '')
       const requestedGroup = searchParams.get('grupo')
       if (requestedGroup && safeGroups.some((item) => item.id === requestedGroup)) setGroup(requestedGroup)
+      else setGroup(defaultGroup)
       const requestedCategory = searchParams.get('categoria')
       if (requestedCategory) {
         const foundCategory = safeProducts.find((item) => item.categoryKey === requestedCategory)?.category
-        if (foundCategory) setCategory(foundCategory)
+        setCategory(foundCategory || 'todos')
+      } else {
+        setCategory('todos')
       }
+      setBrand('todos')
+      setMaxPrice('todos')
       const requestedCompare = searchParams.get('comparar')
       if (requestedCompare) {
         const found = safeProducts.find((item) => String(item.id) === String(requestedCompare) || String(item.slug) === String(requestedCompare))
@@ -157,7 +165,7 @@ export default function Store({ defaultGroup = 'todos' }) {
       setLoadError(error?.message || 'Não foi possível consultar o catálogo agora.')
     }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [reloadKey, searchParams, setSearchParams])
+  }, [defaultGroup, reloadKey, searchParams, setSearchParams])
 
 
   const visiblePool = useMemo(() => products.filter((product) => group === 'todos' || product.group === group), [products, group])
@@ -186,7 +194,11 @@ export default function Store({ defaultGroup = 'todos' }) {
     })
   }, [products, query, group, category, brand, maxPrice, sortBy])
 
+  const visibleProducts = filtered.slice(0, visibleCount)
+  const remainingProducts = Math.max(0, filtered.length - visibleProducts.length)
+
   const changeGroup = (nextGroup) => {
+    setVisibleCount(20)
     setGroup(nextGroup)
     setCategory('todos')
     setBrand('todos')
@@ -207,7 +219,10 @@ export default function Store({ defaultGroup = 'todos' }) {
         return current.filter((item) => String(item.id) !== String(product.id))
       }
 
-      if (current.length && current[0].categoryKey !== product.categoryKey) {
+      const sameCategory = !current.length
+        || current[0].categoryKey === product.categoryKey
+        || normalize(current[0].category) === normalize(product.category)
+      if (!sameCategory) {
         setCompareMessage(`Para uma comparação técnica correta, escolha outro produto da categoria ${current[0].category}.`)
         return current
       }
@@ -225,13 +240,24 @@ export default function Store({ defaultGroup = 'todos' }) {
     try {
       const detailed = await Promise.all(compare.map(async (product) => {
         try {
-          return await getProductById(product.slug || product.id) || product
+          const detail = await getProductById(product.slug || product.id)
+          if (!detail) return product
+          return {
+            ...product,
+            ...detail,
+            category: detail.categoryKey && detail.categoryKey !== 'produto' ? detail.category : product.category,
+            categoryKey: detail.categoryKey && detail.categoryKey !== 'produto' ? detail.categoryKey : product.categoryKey,
+            specs: Object.keys(detail.specs || {}).length ? detail.specs : product.specs,
+            offers: detail.offers?.length ? detail.offers : product.offers,
+          }
         } catch {
           return product
         }
       }))
 
-      if (detailed[0].categoryKey !== detailed[1].categoryKey) {
+      const sameCategory = detailed[0].categoryKey === detailed[1].categoryKey
+        || normalize(detailed[0].category) === normalize(detailed[1].category)
+      if (!sameCategory) {
         setCompareMessage('Os dois produtos precisam pertencer à mesma categoria para comparar a ficha técnica.')
         return
       }
@@ -252,6 +278,7 @@ export default function Store({ defaultGroup = 'todos' }) {
     setBrand('todos')
     setMaxPrice('todos')
     setSortBy('relevancia')
+    setVisibleCount(20)
     setCompare([])
     setComparisonItems([])
     setComparisonOpen(false)
@@ -312,12 +339,12 @@ export default function Store({ defaultGroup = 'todos' }) {
 
           <label className="store-field">
             <span>Pesquisar</span>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Produto, marca, categoria..." />
+            <input value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(20) }} placeholder="Produto, marca, categoria..." />
           </label>
 
           <label className="store-field">
             <span>Categoria</span>
-            <select value={category} onChange={(event) => setCategory(event.target.value)}>
+            <select value={category} onChange={(event) => { setCategory(event.target.value); setVisibleCount(20) }}>
               <option value="todos">Todas</option>
               {categories.map((item) => <option key={item}>{item}</option>)}
             </select>
@@ -325,7 +352,7 @@ export default function Store({ defaultGroup = 'todos' }) {
 
           <label className="store-field">
             <span>Marca</span>
-            <select value={brand} onChange={(event) => setBrand(event.target.value)}>
+            <select value={brand} onChange={(event) => { setBrand(event.target.value); setVisibleCount(20) }}>
               <option value="todos">Todas</option>
               {brands.map((item) => <option key={item}>{item}</option>)}
             </select>
@@ -333,7 +360,7 @@ export default function Store({ defaultGroup = 'todos' }) {
 
           <label className="store-field">
             <span>Preço máximo</span>
-            <select value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)}>
+            <select value={maxPrice} onChange={(event) => { setMaxPrice(event.target.value); setVisibleCount(20) }}>
               <option value="todos">Qualquer preço</option>
               <option value="300">Até R$ 300</option>
               <option value="500">Até R$ 500</option>
@@ -351,7 +378,7 @@ export default function Store({ defaultGroup = 'todos' }) {
               <strong>{filtered.length} produto{filtered.length === 1 ? '' : 's'}</strong>
               <span>Compare especificações, avaliações e ofertas disponíveis.</span>
             </div>
-            <select aria-label="Ordenar produtos" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+            <select aria-label="Ordenar produtos" value={sortBy} onChange={(event) => { setSortBy(event.target.value); setVisibleCount(20) }}>
               <option value="relevancia">Relevância</option>
               <option value="avaliacao">Melhor avaliação</option>
               <option value="ofertas">Mais ofertas</option>
@@ -364,65 +391,113 @@ export default function Store({ defaultGroup = 'todos' }) {
           {loading || loadError ? (
             <CatalogState loading={loading} error={loadError} label="produtos" onRetry={() => { setLoading(true); setLoadError(''); setReloadKey((value) => value + 1) }} />
           ) : filtered.length ? (
-            <div className="store-results__grid">
-              {filtered.map((product) => (
-                <ProductCard key={product.id} product={product} onCompare={toggleCompare} selected={compare.some((item) => String(item.id) === String(product.id))} />
-              ))}
-            </div>
+            <>
+              <div className="store-results__grid">
+                {visibleProducts.map((product) => (
+                  <ProductCard key={product.id} product={product} onCompare={toggleCompare} selected={compare.some((item) => String(item.id) === String(product.id))} />
+                ))}
+              </div>
+              {remainingProducts > 0 && (
+                <div className="store-results__more">
+                  <button className="button button--secondary" type="button" onClick={() => setVisibleCount((count) => count + 20)}>
+                    Ver mais <span>({remainingProducts} restante{remainingProducts === 1 ? '' : 's'})</span>
+                  </button>
+                  <small>Exibindo {visibleProducts.length} de {filtered.length} produtos.</small>
+                </div>
+              )}
+            </>
           ) : (
             <div className="store-empty"><strong>Nenhum produto encontrado.</strong><p>Altere a busca ou remova algum filtro.</p><button className="button button--secondary" type="button" onClick={clearFilters}>Limpar filtros</button></div>
           )}
         </main>
       </section>
 
-      {compare.length > 0 && (
-        <div className="store-compare-bar">
-          <div className="page-container store-compare-bar__inner">
+      {typeof document !== 'undefined' && compare.length > 0 && createPortal(
+        <aside className="store-compare-dock" aria-label="Hardwares selecionados para comparação">
+          <div className="store-compare-dock__heading">
             <div>
-              <strong>{compare.length}/2 selecionado{compare.length === 1 ? '' : 's'}</strong>
-              <span>{compare.map((item) => item.name).join(' × ')} · compare somente produtos da mesma categoria</span>
+              <strong>Comparar hardwares</strong>
+              <span>{compare.length}/2 selecionado{compare.length === 1 ? '' : 's'}</span>
             </div>
-            <div>
-              <button className="button button--secondary" type="button" onClick={() => { setCompare([]); setComparisonItems([]); setComparisonOpen(false); setCompareMessage('') }}>Limpar</button>
-              <button className="button button--primary" type="button" disabled={compare.length !== 2 || comparisonLoading} onClick={openComparison}>{comparisonLoading ? 'Carregando…' : 'Comparar agora'}</button>
-            </div>
+            <button className="store-compare-dock__clear" type="button" onClick={() => { setCompare([]); setComparisonItems([]); setComparisonOpen(false); setCompareMessage('') }}>Limpar</button>
           </div>
-          {compareMessage && <p className="store-compare-bar__message" role="status">{compareMessage}</p>}
-        </div>
+
+          <div className="store-compare-dock__slots">
+            {[0, 1].map((slot) => {
+              const item = compare[slot]
+              return item ? (
+                <div className="store-compare-dock__item" key={String(item.id)}>
+                  <div className="store-compare-dock__thumb">
+                    {item.image ? <img src={item.image} alt="" /> : <span>{String(item.category || 'HW').slice(0, 2).toUpperCase()}</span>}
+                  </div>
+                  <div className="store-compare-dock__item-copy">
+                    <small>{item.category}</small>
+                    <strong>{item.name}</strong>
+                  </div>
+                  <button type="button" className="store-compare-dock__remove" aria-label={`Remover ${item.name} da comparação`} onClick={() => toggleCompare(item)}>×</button>
+                </div>
+              ) : (
+                <div className="store-compare-dock__item store-compare-dock__item--empty" key={`empty-${slot}`}>
+                  <span className="store-compare-dock__plus">+</span>
+                  <div className="store-compare-dock__item-copy">
+                    <small>Segundo hardware</small>
+                    <strong>{compare[0] ? `Escolha outro ${compare[0].category}` : 'Selecione um hardware'}</strong>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {compareMessage && <p className="store-compare-dock__message" role="status">{compareMessage}</p>}
+
+          <button
+            className="button button--primary store-compare-dock__compare"
+            type="button"
+            disabled={compare.length !== 2 || comparisonLoading}
+            onClick={openComparison}
+          >
+            {comparisonLoading ? 'Carregando comparação…' : compare.length === 2 ? 'Abrir comparação' : 'Selecione 2 hardwares'}
+          </button>
+        </aside>,
+        document.body,
       )}
 
-      {comparisonOpen && activeComparison.length === 2 && (
+      {typeof document !== 'undefined' && comparisonOpen && activeComparison.length === 2 && createPortal(
         <div className="store-dialog-backdrop" role="presentation" onMouseDown={() => setComparisonOpen(false)}>
           <section className="store-comparison" ref={comparisonDialogRef} role="dialog" aria-modal="true" aria-labelledby="store-comparison-title" onMouseDown={(event) => event.stopPropagation()}>
             <header className="store-comparison__header">
               <div><span className="eyebrow">{activeComparison[0].category}</span><h2 id="store-comparison-title">Comparação de produtos</h2></div>
               <button type="button" aria-label="Fechar" onClick={() => setComparisonOpen(false)}>×</button>
             </header>
-            <div className="store-comparison__table">
-              <div className="store-comparison__row store-comparison__row--head"><strong>Especificação</strong><strong>{activeComparison[0].name}</strong><strong>{activeComparison[1].name}</strong></div>
-              {fields.map(([label, key, better, suffix = '']) => {
-                const values = activeComparison.map((item) => item.specs?.[key])
-                const winner = winnerIndex(values, better)
-                return (
-                  <div className="store-comparison__row" key={key}>
-                    <span>{label}</span>
-                    {values.map((value, index) => <span className={winner === index ? 'is-better' : ''} key={`${key}-${activeComparison[index].id}`}>{formatSpecValue(value, suffix)}</span>)}
-                  </div>
-                )
-              })}
-              <div className="store-comparison__row">
-                <span>Preço</span>
-                {activeComparison.map((item, index) => {
-                  const winner = winnerIndex(activeComparison.map((p) => p.price), 'lower')
-                  return <span className={winner === index ? 'is-better' : ''} key={`price-${item.id}`}>{formatPrice(item.price)}</span>
+            <div className="store-comparison__scroll">
+              <div className="store-comparison__table">
+                <div className="store-comparison__row store-comparison__row--head"><strong>Especificação</strong><strong>{activeComparison[0].name}</strong><strong>{activeComparison[1].name}</strong></div>
+                {fields.map(([label, key, better, suffix = '']) => {
+                  const values = activeComparison.map((item) => item.specs?.[key])
+                  const winner = winnerIndex(values, better)
+                  return (
+                    <div className="store-comparison__row" key={key}>
+                      <span>{label}</span>
+                      {values.map((value, index) => <span className={winner === index ? 'is-better' : ''} key={`${key}-${activeComparison[index].id}`}>{formatSpecValue(value, suffix)}</span>)}
+                    </div>
+                  )
                 })}
+                <div className="store-comparison__row">
+                  <span>Preço</span>
+                  {activeComparison.map((item, index) => {
+                    const winner = winnerIndex(activeComparison.map((product) => product.price), 'lower')
+                    return <span className={winner === index ? 'is-better' : ''} key={`price-${item.id}`}>{formatPrice(item.price)}</span>
+                  })}
+                </div>
+                <div className="store-comparison__row"><span>Ofertas ativas</span>{activeComparison.map((item) => <span key={`offers-${item.id}`}>{item.offers?.length || 0}</span>)}</div>
               </div>
-              <div className="store-comparison__row"><span>Ofertas ativas</span>{activeComparison.map((item) => <span key={`offers-${item.id}`}>{item.offers?.length || 0}</span>)}</div>
+              <p className="store-comparison__note">O verde aparece apenas quando existe uma vantagem objetiva definida para aquele campo. Potência da fonte e outros atributos dependentes do contexto permanecem neutros.</p>
             </div>
-            <p className="store-comparison__note">O verde aparece apenas quando existe uma vantagem objetiva definida para aquele campo. Potência da fonte e outros atributos dependentes do contexto permanecem neutros.</p>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
+
     </div>
   )
 }

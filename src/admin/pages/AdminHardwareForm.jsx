@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
 import { adminService } from '../services/adminService'
@@ -8,6 +8,29 @@ import { AdminTechnicalFields, hardwareSchemaFor, normalizeSpec, readSpec } from
 
 const CATEGORIES = ['PROCESSADOR','COOLER','PLACA_MAE','MEMORIA_RAM','PLACA_VIDEO','ARMAZENAMENTO','FONTE','GABINETE','VENTOINHA','MONITOR','MOUSE','TECLADO','FONE','MICROFONE']
 const EMPTY = { nome:'', categoria:'PROCESSADOR', marca:'', modelo:'', descricao:'', mpn:'', gtin:'', imagemUrl:'', imagemHoverUrl:'', especificacoes:'{}', publicado:false, ativo:true }
+
+function cleanText(value) {
+  return String(value ?? '').trim()
+}
+
+function normalizeHardwareForm(item = {}) {
+  return {
+    ...EMPTY,
+    ...item,
+    nome: String(item.nome ?? ''),
+    categoria: normalizeHardwareCategory(item.categoria),
+    marca: String(item.marca ?? ''),
+    modelo: String(item.modelo ?? ''),
+    descricao: String(item.descricao ?? ''),
+    mpn: String(item.mpn ?? ''),
+    gtin: normalizeGtin(item.gtin),
+    imagemUrl: String(item.imagemUrl ?? ''),
+    imagemHoverUrl: String(item.imagemHoverUrl ?? ''),
+    especificacoes: JSON.stringify(item.especificacoes || {}, null, 2),
+    publicado: Boolean(item.publicado),
+    ativo: typeof item.ativo === 'boolean' ? item.ativo : true,
+  }
+}
 
 function normalizeGtin(value) {
   return String(value || '').replace(/\D/g, '').slice(0, 32)
@@ -25,9 +48,36 @@ function validGtin(value) {
 }
 
 
+function normalizeHardwareCategory(value, fallback = EMPTY.categoria) {
+  const raw = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+  const token = raw.replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  if (CATEGORIES.includes(token)) return token
+  const compact = token.replaceAll('_', '')
+  const aliases = {
+    PLACAMAE: 'PLACA_MAE',
+    MOTHERBOARD: 'PLACA_MAE',
+    MEMORIARAM: 'MEMORIA_RAM',
+    RAM: 'MEMORIA_RAM',
+    PLACAVIDEO: 'PLACA_VIDEO',
+    GPU: 'PLACA_VIDEO',
+    PROCESSADOR: 'PROCESSADOR',
+    CPU: 'PROCESSADOR',
+    SSD: 'ARMAZENAMENTO',
+    HDD: 'ARMAZENAMENTO',
+    STORAGE: 'ARMAZENAMENTO',
+    PSU: 'FONTE',
+    POWER: 'FONTE',
+    CASE: 'GABINETE',
+    FAN: 'VENTOINHA',
+  }
+  return aliases[compact] || fallback
+}
+
+
 function technicalFromPreview(schema, source = {}) {
   if (!schema) return {}
-  return Object.fromEntries(schema.fields.flatMap(([key]) => source[key] !== undefined && source[key] !== null ? [[key, source[key]]] : []))
+  const keys = [...schema.fields.map(([key]) => key), ...(schema.repeaters || []).map((item) => item.key)]
+  return Object.fromEntries(keys.flatMap((key) => source[key] !== undefined && source[key] !== null ? [[key, source[key]]] : []))
 }
 
 function consumeTransferredPreview(expectedDestination) {
@@ -47,7 +97,7 @@ function consumeTransferredPreview(expectedDestination) {
 function hardwareInitialFromPreview(preview) {
   if (!preview) return EMPTY
   const source = preview?.normalizacao?.camposNormalizados || {}
-  const categoria = CATEGORIES.includes(String(source.categoria || '').toUpperCase()) ? String(source.categoria).toUpperCase() : EMPTY.categoria
+  const categoria = normalizeHardwareCategory(source.categoria)
   const imagem = source.imagemUrl || preview?.coleta?.meta?.imagem || preview?.coleta?.meta?.ogImage || ''
   const identityKeys = new Set(['categoria','nome','marca','modelo','descricao','mpn','gtin','ean','imagemUrl','preco','evidencias'])
   const extras = Object.fromEntries(Object.entries(source).filter(([key, value]) => !identityKeys.has(key) && value !== null && value !== ''))
@@ -71,7 +121,7 @@ export default function AdminHardwareForm() {
   const [form, setForm] = useState(() => hardwareInitialFromPreview(transferredPreview))
   const [technical, setTechnical] = useState(() => {
     const source = transferredPreview?.normalizacao?.camposNormalizados || {}
-    const category = CATEGORIES.includes(String(source.categoria || '').toUpperCase()) ? String(source.categoria).toUpperCase() : EMPTY.categoria
+    const category = normalizeHardwareCategory(source.categoria)
     return technicalFromPreview(hardwareSchemaFor(category), source)
   })
   const [loading, setLoading] = useState(Boolean(editing))
@@ -81,6 +131,9 @@ export default function AdminHardwareForm() {
   const [importing, setImporting] = useState(false)
   const [importPreview, setImportPreview] = useState(transferredPreview)
   const [dirty, setDirty] = useState(Boolean(transferredPreview))
+  const originalFormRef = useRef(null)
+  const originalTechnicalRef = useRef(null)
+  const originalSpecsRef = useRef({})
 
   const schema = useMemo(() => hardwareSchemaFor(form.categoria), [form.categoria])
 
@@ -89,9 +142,13 @@ export default function AdminHardwareForm() {
     let active = true
     adminService.hardwares.get(id).then((item) => {
       if (!active) return
-      const next = { ...EMPTY, ...item, especificacoes: JSON.stringify(item.especificacoes || {}, null, 2) }
+      const next = normalizeHardwareForm(item)
+      const nextTechnical = readSpec(item, hardwareSchemaFor(next.categoria))
       setForm(next)
-      setTechnical(readSpec(item, hardwareSchemaFor(next.categoria)))
+      setTechnical(nextTechnical)
+      originalFormRef.current = structuredClone(next)
+      originalTechnicalRef.current = structuredClone(nextTechnical)
+      originalSpecsRef.current = structuredClone(item.especificacoes || {})
       setDirty(false)
     }).catch((err) => active && setError(err)).finally(() => active && setLoading(false))
     return () => { active = false }
@@ -123,7 +180,7 @@ export default function AdminHardwareForm() {
     setTechnical((current) => ({ ...current, [key]: value }))
   }
 
-  function applyImportPreview(preview = importPreview) {
+  function applyImportPreview(preview = importPreview, notify = true) {
     const source = preview?.normalizacao?.camposNormalizados || {}
     if (!Object.keys(source).length) {
       toast.show('Não existem dados normalizados para aplicar. Faça o cadastro manualmente.', 'alerta')
@@ -134,7 +191,7 @@ export default function AdminHardwareForm() {
       navigate('/admin/produtos/novo?origem=ia-importacao')
       return
     }
-    const importedCategory = CATEGORIES.includes(String(source.categoria || '').toUpperCase()) ? String(source.categoria).toUpperCase() : form.categoria
+    const importedCategory = normalizeHardwareCategory(source.categoria, form.categoria)
     const importedSchema = hardwareSchemaFor(importedCategory)
     const imagem = source.imagemUrl || preview?.coleta?.meta?.imagem || preview?.coleta?.meta?.ogImage || ''
     const identityKeys = new Set(['categoria','nome','marca','modelo','descricao','mpn','gtin','ean','imagemUrl','preco','evidencias'])
@@ -153,7 +210,7 @@ export default function AdminHardwareForm() {
     }))
     if (importedSchema) setTechnical((current) => ({ ...current, ...technicalFromPreview(importedSchema, source) }))
     setDirty(true)
-    toast.show('Prévia aplicada. Revise a ficha técnica e salve somente quando estiver correto.')
+    if (notify) toast.show('Prévia aplicada. Revise a ficha técnica e salve somente quando estiver correto.')
   }
 
   async function importData() {
@@ -163,8 +220,14 @@ export default function AdminHardwareForm() {
     try {
       const result = await adminService.ai.importLink(importUrl.trim())
       setImportPreview(result)
-      if (result?.iaDisponivel === false) toast.show(result?.avisoIa || 'Página coletada, mas a IA não conseguiu normalizar os dados.', 'alerta')
-      else toast.show('Prévia criada. Revise os dados antes de aplicá-los.')
+      if (result?.iaDisponivel === false) {
+        toast.show(result?.avisoIa || 'Página coletada, mas a IA não conseguiu normalizar os dados.', 'alerta')
+      } else if (result?.destinoSugerido === 'HARDWARE') {
+        applyImportPreview(result, false)
+        toast.show('Dados encontrados no fabricante/loja foram preenchidos. Revise antes de salvar.')
+      } else {
+        toast.show('A página parece ser um Produto. Use a ação abaixo para continuar no cadastro correto.', 'alerta')
+      }
     } catch (err) {
       toast.show(err.message, 'erro')
     } finally {
@@ -182,18 +245,77 @@ export default function AdminHardwareForm() {
     setError(null)
     try {
       let specs = {}
-      try { specs = form.especificacoes.trim() ? JSON.parse(form.especificacoes) : {} } catch { throw new Error('O JSON de especificações adicionais está inválido.') }
-      const body = {
-        nome: form.nome.trim(), categoria: form.categoria, marca: form.marca.trim(), modelo: form.modelo.trim(),
-        descricao: form.descricao.trim() || undefined, mpn: form.mpn.trim() || undefined, gtin: form.gtin.trim() || undefined,
-        imagemUrl: form.imagemUrl.trim() || undefined, imagemHoverUrl: form.imagemHoverUrl.trim() || undefined,
+      try { specs = cleanText(form.especificacoes) ? JSON.parse(cleanText(form.especificacoes)) : {} } catch { throw new Error('O JSON de especificações adicionais está inválido.') }
+      const fullBody = {
+        nome: cleanText(form.nome), categoria: form.categoria, marca: cleanText(form.marca), modelo: cleanText(form.modelo),
+        descricao: cleanText(form.descricao) || undefined, mpn: cleanText(form.mpn) || undefined, gtin: cleanText(form.gtin) || undefined,
+        imagemUrl: cleanText(form.imagemUrl) || undefined, imagemHoverUrl: cleanText(form.imagemHoverUrl) || undefined,
         especificacoes: specs, publicado: draft ? false : Boolean(form.publicado), ativo: Boolean(form.ativo),
       }
-      if (schema) body[schema.key] = normalizeSpec(schema, technical)
+      if (schema) fullBody[schema.key] = normalizeSpec(schema, technical)
+
+      let body = fullBody
+      if (editing) {
+        const original = originalFormRef.current || {}
+        body = {}
+        const currentText = {
+          nome: cleanText(form.nome),
+          marca: cleanText(form.marca),
+          modelo: cleanText(form.modelo),
+          descricao: cleanText(form.descricao),
+          mpn: cleanText(form.mpn),
+          gtin: cleanText(form.gtin),
+          imagemUrl: cleanText(form.imagemUrl),
+          imagemHoverUrl: cleanText(form.imagemHoverUrl),
+        }
+        const originalText = {
+          nome: cleanText(original.nome),
+          marca: cleanText(original.marca),
+          modelo: cleanText(original.modelo),
+          descricao: cleanText(original.descricao),
+          mpn: cleanText(original.mpn),
+          gtin: cleanText(original.gtin),
+          imagemUrl: cleanText(original.imagemUrl),
+          imagemHoverUrl: cleanText(original.imagemHoverUrl),
+        }
+        for (const key of ['nome', 'marca', 'modelo', 'descricao', 'mpn', 'gtin']) {
+          if (currentText[key] !== originalText[key]) body[key] = currentText[key]
+        }
+        for (const key of ['imagemUrl', 'imagemHoverUrl']) {
+          if (currentText[key] !== originalText[key] && currentText[key]) body[key] = currentText[key]
+        }
+        if (JSON.stringify(specs) !== JSON.stringify(originalSpecsRef.current || {})) body.especificacoes = specs
+
+        const nextPublished = draft ? false : Boolean(form.publicado)
+        if (nextPublished !== Boolean(original.publicado)) body.publicado = nextPublished
+        if (Boolean(form.ativo) !== Boolean(original.ativo)) body.ativo = Boolean(form.ativo)
+
+        if (schema) {
+          const currentTechnical = normalizeSpec(schema, technical)
+          const originalTechnical = normalizeSpec(schema, originalTechnicalRef.current || {})
+          if (JSON.stringify(currentTechnical) !== JSON.stringify(originalTechnical)) body[schema.key] = currentTechnical
+        }
+
+        if (!Object.keys(body).length) {
+          setDirty(false)
+          toast.show('Nenhuma alteração para salvar.')
+          return
+        }
+      }
+
       const saved = editing ? await adminService.hardwares.update(id, body) : await adminService.hardwares.create(body)
+      if (editing) {
+        const nextPublished = draft ? false : Boolean(form.publicado)
+        const nextForm = { ...form, publicado: nextPublished }
+        setForm(nextForm)
+        originalFormRef.current = structuredClone(nextForm)
+        originalTechnicalRef.current = structuredClone(technical)
+        originalSpecsRef.current = structuredClone(specs)
+      }
       setDirty(false)
       toast.show(draft ? 'Hardware salvo como rascunho.' : 'Hardware salvo.')
-      navigate(`/admin/hardwares/${saved?.id || id}`, { replace: true })
+      if (editing) navigate(`/admin/hardwares/${saved?.id || id}`, { replace: true })
+      else navigate('/admin/hardwares', { replace: true })
     } catch (err) {
       setError(err)
     } finally {
@@ -205,7 +327,7 @@ export default function AdminHardwareForm() {
   if (error && editing && !form.nome) return <AdminError error={error} />
 
   return <>
-    <AdminPageHeader title={editing ? 'Editar hardware' : 'Cadastrar hardware'} description="Ficha técnica do catálogo usado pelo montador e pelas regras de compatibilidade."><AdminBack to="/admin/hardwares">Cancelar</AdminBack></AdminPageHeader>
+    <AdminPageHeader title={editing ? 'Editar hardware' : 'Cadastrar hardware'} description="Cadastro completo alinhado aos DTOs técnicos do backend, incluindo compatibilidade, dimensões, energia, conectividade e refrigeração."><AdminBack to="/admin/hardwares">Cancelar</AdminBack></AdminPageHeader>
     <form className="admin-form-layout" onSubmit={submit}>
       <div className="admin-form-card">
         {canImportLink && <section className="admin-form-section admin-import-section">
@@ -225,7 +347,7 @@ export default function AdminHardwareForm() {
 
         <section className="admin-form-section"><h2>Identificação</h2><div className="admin-form-grid">
           <div className="admin-field full"><label>Nome</label><input className="admin-input" required value={form.nome} onChange={(e) => update('nome', e.target.value)} /></div>
-          <div className="admin-field"><label>Categoria</label><select className="admin-select" value={form.categoria} onChange={(e) => changeCategory(e.target.value)}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></div>
+          <div className="admin-field"><label>Categoria</label><select className="admin-select" value={form.categoria} disabled={Boolean(editing)} onChange={(e) => changeCategory(e.target.value)}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>{editing && <small className="admin-help">A categoria não pode ser alterada depois do cadastro.</small>}</div>
           <div className="admin-field"><label>Marca</label><input className="admin-input" required value={form.marca} onChange={(e) => update('marca', e.target.value)} /></div>
           <div className="admin-field"><label>Modelo</label><input className="admin-input" required value={form.modelo} onChange={(e) => update('modelo', e.target.value)} /></div>
           <div className="admin-field"><label>MPN</label><input className="admin-input" value={form.mpn} onChange={(e) => update('mpn', e.target.value)} /></div>

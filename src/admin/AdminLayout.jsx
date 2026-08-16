@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { key: 'notebooks', to: '/admin/notebooks', icon: 'NB', label: 'Notebooks', group: 'Catálogo', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'montados', to: '/admin/montados', icon: 'PC', label: 'PCs Montados', group: 'Catálogo', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'ofertas', to: '/admin/ofertas', icon: 'R$', label: 'Ofertas afiliadas', group: 'Comercial', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
-  { key: 'parceiros', to: '/admin/parceiros', icon: '◇', label: 'Parceiros', group: 'Comercial', roles: ['ADMIN', 'EDITOR'] },
+  { key: 'parceiros', to: '/admin/parceiros', icon: '◇', label: 'Parceiros', group: 'Comercial', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'modelos', to: '/admin/modelos-3d', icon: '◈', label: 'Modelos 3D', group: '3D e compatibilidade', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'compatibilidade', to: '/admin/compatibilidade', icon: '✓', label: 'Compatibilidade', group: '3D e compatibilidade', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'encaixes', to: '/admin/encaixes', icon: '3D', label: 'Encaixes 3D', group: '3D e compatibilidade', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
@@ -185,6 +185,10 @@ function AdminShell() {
                 </button>
                 <div className="admin-user-dropdown" role="menu">
                   <Link to="/conta" role="menuitem" onClick={() => setUserOpen(false)}>Minha conta</Link>
+                  <Link to="/conta/editar" role="menuitem" onClick={() => setUserOpen(false)}>Alterar cadastro</Link>
+                  <Link to="/minhas-builds" role="menuitem" onClick={() => setUserOpen(false)}>Minhas builds</Link>
+                  <Link to="/comunidade/publicar" role="menuitem" onClick={() => setUserOpen(false)}>Publicar build</Link>
+                  {['ADMIN', 'EDITOR'].includes(role) && <Link to="/busca-ofertas" role="menuitem" onClick={() => setUserOpen(false)}>Busca de Ofertas</Link>}
                   <Link to="/" role="menuitem" onClick={() => setUserOpen(false)}>Abrir site público</Link>
                   <button type="button" onClick={handleLogout} role="menuitem">Sair</button>
                 </div>

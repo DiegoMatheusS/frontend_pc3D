@@ -76,6 +76,39 @@ function normalizarHardwareParaBuilder(hardware) {
     ? hardware.especificacaoPlacaMae.tiposMemoriaSuportados
     : [];
   const preco = oferta?.preco ?? null;
+  const modelos3D = Array.isArray(hardware?.modelos3D) ? hardware.modelos3D : [];
+  const modelo3DAtivo = hardware?.modelo3DAtivo
+    || hardware?.modelo3D
+    || modelos3D.find((modelo) => modelo?.ativo !== false && modelo?.aprovado !== false)
+    || modelos3D[0]
+    || null;
+  const modelo3dUrl = String(
+    hardware?.modelo3dUrl
+      || hardware?.modelo3DUrl
+      || hardware?.model3dUrl
+      || modelo3DAtivo?.arquivoUrl
+      || "",
+  );
+  const transform3D = modelo3DAtivo
+    ? {
+        posicao: [
+          Number(modelo3DAtivo.posicaoCorrecaoX) || 0,
+          Number(modelo3DAtivo.posicaoCorrecaoY) || 0,
+          Number(modelo3DAtivo.posicaoCorrecaoZ) || 0,
+        ],
+        rotacao: [
+          Number(modelo3DAtivo.rotacaoCorrecaoX) || 0,
+          Number(modelo3DAtivo.rotacaoCorrecaoY) || 0,
+          Number(modelo3DAtivo.rotacaoCorrecaoZ) || 0,
+        ],
+        escala: [
+          Number(modelo3DAtivo.escalaCorrecaoX) || 1,
+          Number(modelo3DAtivo.escalaCorrecaoY) || 1,
+          Number(modelo3DAtivo.escalaCorrecaoZ) || 1,
+        ],
+        centralizarNoPonto: true,
+      }
+    : undefined;
 
   return {
     id: String(hardware.id),
@@ -89,6 +122,9 @@ function normalizarHardwareParaBuilder(hardware) {
     descricao: hardware.descricao || "",
     imagem: hardware.imagemUrl || hardware?.produto?.imagemHoverUrl || "",
     imagemUrl: hardware.imagemUrl || hardware?.produto?.imagemHoverUrl || "",
+    modelo3dUrl,
+    modelo3D: modelo3dUrl,
+    ...(transform3D ? { transform3D } : {}),
     preco,
     precoIndisponivel: preco === null || preco === undefined,
     loja: oferta?.parceiro?.nome || "",

@@ -249,6 +249,7 @@ export default function Header() {
                 <Link to="/minhas-builds" onClick={fecharMenus}>Minhas builds</Link>
                 <Link to="/comunidade/publicar" onClick={fecharMenus}>Publicar build</Link>
                 {['ADMIN', 'EDITOR', 'REVISOR'].includes(String(user.papel || '').toUpperCase()) && <Link to="/admin" onClick={fecharMenus}>Abrir Admin</Link>}
+                {['ADMIN', 'EDITOR'].includes(String(user.papel || '').toUpperCase()) && <Link to="/busca-ofertas" onClick={fecharMenus}>Busca de Ofertas</Link>}
                 <button type="button" onClick={handleLogout}>Sair</button>
               </div>
             </div>

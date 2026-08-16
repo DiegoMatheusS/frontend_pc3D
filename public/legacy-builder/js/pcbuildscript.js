@@ -12,7 +12,7 @@ import {
 import { verificarCompatibilidade } from "./compatibilidade.js";
 import { api } from "./api.js";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
-import { confirmar, solicitarTexto } from "./dialogos.js";
+import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {
   calcularConsumoMontagem,
   calcularFonteRecomendada,
@@ -734,6 +734,7 @@ function aplicarMontagemIa(componentes = []) {
   const possuiPecas = Object.values(estadoMontagem).some((valor) => Array.isArray(valor) ? valor.some(Boolean) : Boolean(valor));
   if (!possuiPecas) return false;
 
+  atualizarAncorasGabinete3D(estadoMontagem.gabinete);
   Object.entries(estadoMontagem).forEach(([categoria, estado]) => atualizarPecaNo3D(categoria, estado));
   atualizarResumo();
   renderizarListaPecas(categoriaAtual);
@@ -820,6 +821,7 @@ function aplicarConfiguracaoRecebidaDaHome() {
 
   if (!aplicouAlgumaPeca) return false;
 
+  atualizarAncorasGabinete3D(estadoMontagem.gabinete);
   Object.entries(estadoMontagem).forEach(([categoria, estado]) => {
     atualizarPecaNo3D(categoria, estado);
   });
@@ -996,8 +998,15 @@ function obterDadosObjeto3D(objeto) {
 }
 
 function obterObjetosInterativos3D() {
-  const modelos = Object.values(modelos3DAtivos ?? {}).filter(Boolean);
-  return [...objetosInterativos, ...modelos];
+  // O gabinete envolve fisicamente os demais componentes. Se ele participa do
+  // raycast, a carcaça/vidro intercepta o clique antes de RAM, GPU, placa-mãe,
+  // etc. O gabinete continua visível, mas a seleção dele é feita pela lista;
+  // no 3D o ponteiro atravessa o case e alcança as peças internas.
+  const modelos = Object.values(modelos3DAtivos ?? {})
+    .filter(Boolean)
+    .filter((modelo) => (modelo.userData?.categoria ?? modelo.userData?.tipo) !== "gabinete");
+  const placeholdersVisiveis = objetosInterativos.filter((objeto) => objeto.visible !== false);
+  return [...placeholdersVisiveis, ...modelos];
 }
 
 function destacarCardNaLista(categoria, idPeca = "") {
@@ -1385,6 +1394,188 @@ const objetosPorCategoria = {
   ventoinhas: listaFans,
 };
 
+/*
+ * Layout 3D relativo ao gabinete.
+ * O gabinete define apenas os limites e pontos de montagem; as pecas nunca
+ * sao escaladas para "caber". Quando uma peca e maior que o espaco fisico,
+ * ela permanece no tamanho real e pode ultrapassar o limite visual, deixando
+ * a incompatibilidade evidente.
+ */
+const DIMENSOES_GABINETE_PADRAO_3D = Object.freeze({
+  largura: 2.4,
+  altura: 4.6,
+  profundidade: 4.5,
+});
+
+function numeroMmPara3DLayout(valor, fallbackMm, minimo, maximo) {
+  const numero = Number(valor);
+  const mm = Number.isFinite(numero) && numero > 0 ? numero : fallbackMm;
+  return Math.min(maximo, Math.max(minimo, mm * 0.01));
+}
+
+function obterDimensoesGabineteLayout3D(peca = estadoMontagem.gabinete) {
+  if (!peca) return { ...DIMENSOES_GABINETE_PADRAO_3D };
+  const specs = peca?.especificacoes && typeof peca.especificacoes === "object"
+    ? peca.especificacoes
+    : {};
+  return {
+    largura: numeroMmPara3DLayout(specs.larguraMm ?? peca.larguraMm, 240, 1.55, 4.2),
+    altura: numeroMmPara3DLayout(specs.alturaMm ?? peca.alturaMm, 460, 2.4, 7.2),
+    profundidade: numeroMmPara3DLayout(specs.profundidadeMm ?? peca.profundidadeMm, 450, 2.5, 7.6),
+  };
+}
+
+function obterDimensoesPlacaMaeLayout3D() {
+  const peca = estadoMontagem.placamae;
+  const specs = peca?.especificacoes && typeof peca.especificacoes === "object" ? peca.especificacoes : {};
+  const formato = String(specs.formato || peca?.formato || "ATX").toUpperCase();
+  if (formato.includes("MINI")) return { altura: 1.70, profundidade: 1.70 };
+  if (formato.includes("MICRO") || formato.includes("MATX") || formato.includes("M-ATX")) return { altura: 2.44, profundidade: 2.44 };
+  if (formato.includes("E_ATX") || formato.includes("E-ATX") || formato.includes("EATX")) return { altura: 3.05, profundidade: 3.30 };
+  return { altura: 3.05, profundidade: 2.44 };
+}
+
+function obterDimensoesGpuLayout3D() {
+  const peca = estadoMontagem.placavideo;
+  const specs = peca?.especificacoes && typeof peca.especificacoes === "object" ? peca.especificacoes : {};
+  return {
+    altura: numeroMmPara3DLayout(specs.alturaMm ?? peca?.alturaMm, 120, 0.65, 2.2),
+    espessura: numeroMmPara3DLayout(specs.espessuraMm ?? (Number(specs.slotsOcupados || 2.5) * 20), 50, 0.24, 1.3),
+    comprimento: numeroMmPara3DLayout(specs.comprimentoMm ?? peca?.comprimentoMm, 280, 1.25, 4.8),
+  };
+}
+
+function obterDimensoesFonteLayout3D() {
+  const peca = estadoMontagem.fonte;
+  const specs = peca?.especificacoes && typeof peca.especificacoes === "object" ? peca.especificacoes : {};
+  return {
+    largura: numeroMmPara3DLayout(specs.larguraMm, 150, 1.0, 2.0),
+    altura: numeroMmPara3DLayout(specs.alturaMm, 86, 0.62, 1.35),
+    profundidade: numeroMmPara3DLayout(specs.comprimentoMm ?? specs.profundidadeMm, 160, 1.0, 2.7),
+  };
+}
+
+function centroDentroDosLimites(tamanho, minimo, maximo, preferido) {
+  const metade = Math.max(0, Number(tamanho) || 0) / 2;
+  const limiteMin = minimo + metade;
+  const limiteMax = maximo - metade;
+  if (limiteMax < limiteMin) return (minimo + maximo) / 2;
+  return Math.min(limiteMax, Math.max(limiteMin, preferido));
+}
+
+function atualizarGeometriaCaixa3D(objeto, largura, altura, profundidade) {
+  if (!objeto) return;
+  objeto.geometry?.dispose?.();
+  objeto.geometry = new THREE.BoxGeometry(
+    Math.max(0.03, largura),
+    Math.max(0.03, altura),
+    Math.max(0.03, profundidade),
+  );
+}
+
+function atualizarAncorasGabinete3D(pecaGabinete = estadoMontagem.gabinete) {
+  const { largura, altura, profundidade } = obterDimensoesGabineteLayout3D(pecaGabinete);
+  const meiaL = largura / 2;
+  const meiaP = profundidade / 2;
+  const margem = 0.10;
+
+  // Gabinete e compartimento inferior acompanham somente as dimensoes do case.
+  slotGabinete.position.set(0, altura / 2, 0);
+  atualizarGeometriaCaixa3D(slotGabinete, largura, altura, profundidade);
+
+  const alturaShroud = Math.min(1.25, Math.max(0.72, altura * 0.245));
+  psuCover.position.set(0, alturaShroud / 2, 0);
+  atualizarGeometriaCaixa3D(psuCover, largura, alturaShroud, profundidade);
+
+  // Placa-mae: encostada na bandeja lateral e alinhada pela traseira.
+  const mb = obterDimensoesPlacaMaeLayout3D();
+  const mbX = -meiaL + 0.08;
+  const mbY = alturaShroud + margem + mb.altura / 2 + 0.06;
+  const mbZ = meiaP - margem - mb.profundidade / 2;
+  slotPlacaMae.position.set(mbX, mbY, mbZ);
+  atualizarGeometriaCaixa3D(slotPlacaMae, 0.10, mb.altura, mb.profundidade);
+
+  // CPU, RAM e M.2 seguem a placa-mae, nao o tamanho absoluto da cena.
+  const cpuY = centroDentroDosLimites(0.42, alturaShroud + margem, altura - margem, mbY + Math.min(0.42, mb.altura * 0.14));
+  const cpuZ = centroDentroDosLimites(0.42, -meiaP + margem, meiaP - margem, mbZ + Math.min(0.24, mb.profundidade * 0.10));
+  slotProcessador.position.set(mbX + 0.10, cpuY, cpuZ);
+  slotCooler.position.set(-meiaL + Math.min(0.62, largura * 0.28), cpuY, cpuZ);
+
+  // DIMMs: usam exatamente a mesma referência visual desenhada no fallback da
+  // placa-mãe. Assim cada pente entra no centro de um slot diferente em vez de
+  // ficar apenas "perto" do socket. Os valores escalam levemente com o formato
+  // da placa para continuar dentro de ATX, mATX e Mini-ITX.
+  const deslocamentoRamY = Math.min(0.35, mb.altura * 0.14);
+  const deslocamentoRamZ = -Math.min(0.45, mb.profundidade * 0.18);
+  const espacamentoRamZ = Math.min(0.11, mb.profundidade * 0.045);
+  const ramY = centroDentroDosLimites(1.32, alturaShroud + margem, altura - margem, mbY + deslocamentoRamY);
+  slotsRam.forEach((slot, indice) => {
+    const zSlot = mbZ + deslocamentoRamZ + indice * espacamentoRamZ;
+    slot.position.set(
+      mbX + 0.10,
+      ramY,
+      centroDentroDosLimites(0.08, -meiaP + margem, meiaP - margem, zSlot),
+    );
+  });
+
+  slotM2.position.set(mbX + 0.10, mbY - Math.min(0.48, mb.altura * 0.16), mbZ + Math.min(0.22, mb.profundidade * 0.10));
+
+  // GPU: mantem comprimento/altura/espessura reais e alinha a traseira no PCIe.
+  const gpu = obterDimensoesGpuLayout3D();
+  const gpuX = -meiaL + margem + gpu.altura / 2;
+  const gpuY = centroDentroDosLimites(gpu.espessura, alturaShroud + margem, altura - margem, mbY - Math.min(0.82, mb.altura * 0.27));
+  // A traseira da GPU permanece presa ao bracket PCIe. Se for longa demais,
+  // ela ultrapassa a frente do gabinete em vez de ser encolhida/centralizada.
+  const gpuZ = meiaP - margem - gpu.comprimento / 2;
+  slotGpu.position.set(gpuX, gpuY, gpuZ);
+  atualizarGeometriaCaixa3D(slotGpu, gpu.altura, gpu.espessura, gpu.comprimento);
+
+  // Fonte: fundo/traseira, preservando as dimensoes reais.
+  const psu = obterDimensoesFonteLayout3D();
+  const psuX = -meiaL + margem + psu.largura / 2;
+  const psuY = margem + psu.altura / 2;
+  const psuZ = meiaP - margem - psu.profundidade / 2;
+  slotFonte.position.set(psuX, psuY, psuZ);
+  atualizarGeometriaCaixa3D(slotFonte, psu.largura, psu.altura, psu.profundidade);
+
+  // SSD 2.5/HDD fica numa baia interna relativa ao case.
+  slotSsd.position.set(
+    -meiaL + Math.min(0.18, largura * 0.08),
+    centroDentroDosLimites(0.9, alturaShroud + margem, altura - margem, alturaShroud + 0.70),
+    centroDentroDosLimites(1.0, -meiaP + margem, meiaP - margem, -meiaP + 0.72),
+  );
+
+  // Fans frontais e traseira ficam presas as faces do gabinete.
+  const tamanhosFans = estadoMontagem.ventoinhas.map((fan) => {
+    const specs = fan?.especificacoes && typeof fan.especificacoes === "object" ? fan.especificacoes : {};
+    return numeroMmPara3DLayout(specs.tamanhoMm, 120, 0.80, 1.60);
+  });
+  const fanPadrao = tamanhosFans.find(Boolean) || 1.20;
+  const raioFan = fanPadrao * 0.40;
+  const minFanY = alturaShroud + raioFan + 0.10;
+  const maxFanY = Math.max(minFanY, altura - raioFan - 0.12);
+  const fanYs = [maxFanY, (minFanY + maxFanY) / 2, minFanY];
+  const zFrente = -meiaP + 0.10;
+  const zTras = meiaP - 0.10;
+
+  fanTras.position.set(0, maxFanY, zTras);
+  fanFrente1.position.set(0, fanYs[0], zFrente);
+  fanFrente2.position.set(0, fanYs[1], zFrente);
+  fanFrente3.position.set(0, fanYs[2], zFrente);
+
+  botaoPower3D.position.set(meiaL * 0.58, Math.max(0.2, altura - 0.03), -meiaP * 0.90);
+
+  grupoMaquete.userData.dimensoesGabineteAtuais = { largura, altura, profundidade, alturaShroud };
+}
+
+function reconstruirRepresentacoes3DParaGabinete() {
+  atualizarAncorasGabinete3D(estadoMontagem.gabinete);
+  Object.entries(estadoMontagem).forEach(([categoria, estado]) => {
+    atualizarPecaNo3D(categoria, estado);
+  });
+  atualizarVisual3D();
+}
+
 Object.values(objetosPorCategoria)
   .flat()
   .forEach((objeto) => {
@@ -1392,14 +1583,22 @@ Object.values(objetosPorCategoria)
   });
 botaoPower3D.visible = true;
 
+const modelos3DAtivos = {};
+const versaoCarregamento3D = {};
+
 function atualizarVisual3D() {
   Object.entries(objetosPorCategoria).forEach(([categoria, objetos]) => {
     const estadoDaCategoria = estadoMontagem[categoria];
     const temPeca = Array.isArray(estadoDaCategoria)
       ? estadoDaCategoria.some(Boolean)
       : Boolean(estadoDaCategoria);
+    const temRepresentacao3D = Boolean(modelos3DAtivos?.[categoria]);
 
     objetos.forEach((objeto, index) => {
+      if (temRepresentacao3D && temPeca) {
+        objeto.visible = false;
+        return;
+      }
       if (categoria === "gabinete") {
         objeto.visible = true;
         objeto.material.transparent = true;
@@ -1997,7 +2196,13 @@ function selecionarPeca(categoria, idPeca, slotStr = "", fluxoSelecionado = "") 
     estadoMontagem[categoria] = jaSelecionada ? null : peca;
   }
 
-  atualizarPecaNo3D(categoria, estadoMontagem[categoria]);
+  if (categoria === "gabinete") {
+    // Trocar o gabinete reposiciona os pontos de montagem internos, mas nunca
+    // redimensiona as pecas selecionadas.
+    reconstruirRepresentacoes3DParaGabinete();
+  } else {
+    atualizarPecaNo3D(categoria, estadoMontagem[categoria]);
+  }
   renderizarListaPecas(categoriaAtual);
   atualizarResumo();
 
@@ -2305,8 +2510,13 @@ async function limparBuild() {
     } else {
       estadoMontagem[categoria] = null;
     }
+  });
 
-    atualizarPecaNo3D(categoria, estadoMontagem[categoria]);
+  // Sem gabinete selecionado, restaura a maquete e todos os pontos de montagem
+  // para as dimensoes padrao antes de reconstruir os placeholders.
+  atualizarAncorasGabinete3D(null);
+  Object.entries(estadoMontagem).forEach(([categoria, estado]) => {
+    atualizarPecaNo3D(categoria, estado);
   });
 
   sistemaLigado = false;
@@ -3222,9 +3432,12 @@ function aplicarConfiguracaoDoHistorico(configuracao) {
     } else {
       estadoMontagem[categoria] = recebida ?? null;
     }
-    atualizarPecaNo3D(categoria, estadoMontagem[categoria]);
   });
 
+  atualizarAncorasGabinete3D(estadoMontagem.gabinete);
+  Object.entries(estadoMontagem).forEach(([categoria, estado]) => {
+    atualizarPecaNo3D(categoria, estado);
+  });
   atualizarVisual3D();
   atualizarResumo();
   renderizarListaPecas(categoriaAtual);
@@ -3321,6 +3534,9 @@ function conectarCanvas() {
   return true;
 }
 
+const objetosAnimadosProcedurais = new Set();
+const ESCALA_MM_3D = 0.01;
+
 function animar() {
   requestAnimationFrame(animar);
   if (document.hidden) return;
@@ -3328,6 +3544,15 @@ function animar() {
   controles.update();
   listaFans.forEach((fan) => {
     fan.rotation.y += sistemaLigado ? 0.35 : 0.04;
+  });
+
+  objetosAnimadosProcedurais.forEach((objeto) => {
+    if (!objeto?.parent) {
+      objetosAnimadosProcedurais.delete(objeto);
+      return;
+    }
+    const velocidade = numero3DSeguro(objeto.userData?.velocidadeRotacao, 0.16);
+    objeto.rotation.y += sistemaLigado ? velocidade : velocidade * 0.12;
   });
 
   if (sistemaLigado) {
@@ -3489,8 +3714,11 @@ globalThis.PCBuilderLegacyBridge = {
   selecionarPecaAutomatica(categoria, idPeca) {
     const estadoCategoria = estadoMontagem[categoria];
     if (Array.isArray(estadoCategoria)) {
-      const slotLivre = estadoCategoria.findIndex((item) => !item);
-      if (slotLivre < 0) return false;
+      // Para RAM, a ocupação automática prioriza A2/B2 (slots 2 e 4), que é
+      // a disposição dual-channel mais comum. A seleção manual continua livre.
+      const ordemSlots = categoria === "memoria" ? [1, 3, 0, 2] : estadoCategoria.map((_, indice) => indice);
+      const slotLivre = ordemSlots.find((indice) => !estadoCategoria[indice]);
+      if (!Number.isInteger(slotLivre)) return false;
       return selecionarPeca(categoria, idPeca, String(slotLivre), categoria === "ventoinhas" ? "in" : "");
     }
     return selecionarPeca(categoria, idPeca, "", "");
@@ -3535,8 +3763,514 @@ window.addEventListener("pagehide", () => {
 
 animar();
 
-const modelos3DAtivos = {};
-const versaoCarregamento3D = {};
+function numero3DSeguro(valor, fallback = 0) {
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : fallback;
+}
+
+function limitar3D(valor, minimo, maximo) {
+  return Math.min(maximo, Math.max(minimo, valor));
+}
+
+function mmParaUnidade3D(valor, fallbackMm, minimo, maximo) {
+  const mm = numero3DSeguro(valor, fallbackMm);
+  return limitar3D(mm * ESCALA_MM_3D, minimo, maximo);
+}
+
+function especificacoesProcedurais(peca = {}) {
+  return peca?.especificacoes && typeof peca.especificacoes === "object"
+    ? peca.especificacoes
+    : {};
+}
+
+function textoProcedural(peca = {}) {
+  return [peca.nome, peca.marca, peca.modelo, peca.descricao]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function criarMaterialProcedural(cor, opcoes = {}) {
+  return new THREE.MeshStandardMaterial({
+    color: cor,
+    roughness: opcoes.roughness ?? 0.55,
+    metalness: opcoes.metalness ?? 0.2,
+    transparent: Boolean(opcoes.transparent),
+    opacity: opcoes.opacity ?? 1,
+    side: opcoes.doubleSide ? THREE.DoubleSide : THREE.FrontSide,
+    depthWrite: opcoes.depthWrite ?? true,
+  });
+}
+
+function criarMeshProcedural(geometria, material, posicao = [0, 0, 0], rotacao = [0, 0, 0]) {
+  const mesh = new THREE.Mesh(geometria, material);
+  mesh.position.set(...posicao);
+  mesh.rotation.set(...rotacao);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function registrarDadosProcedurais(grupo, categoria, peca) {
+  const dados = {
+    tipo: categoria,
+    categoria,
+    pecaId: String(peca?.id ?? ""),
+    nome: peca?.nome || nomesCategoriasBuilder[categoria] || categoria,
+    preco: peca?.preco ?? "",
+    objetoRaiz: grupo,
+    procedural: true,
+  };
+
+  grupo.userData = { ...grupo.userData, ...dados };
+  grupo.traverse((objeto) => {
+    if (!objeto.isMesh) return;
+    objeto.userData = { ...objeto.userData, ...dados };
+  });
+}
+
+function criarVentoinhaProcedural({
+  raio = 0.48,
+  espessura = 0.12,
+  corFrame = 0x111827,
+  corPas = 0x334155,
+  velocidade = 0.16,
+} = {}) {
+  const grupo = new THREE.Group();
+  const materialFrame = criarMaterialProcedural(corFrame, { roughness: 0.7, metalness: 0.1 });
+  const materialPas = criarMaterialProcedural(corPas, { roughness: 0.45, metalness: 0.15 });
+
+  const aro = criarMeshProcedural(
+    new THREE.TorusGeometry(raio * 0.88, raio * 0.09, 8, 32),
+    materialFrame,
+    [0, 0, 0],
+    [Math.PI / 2, 0, 0],
+  );
+  grupo.add(aro);
+
+  const cubo = criarMeshProcedural(
+    new THREE.CylinderGeometry(raio * 0.16, raio * 0.16, espessura, 20),
+    materialFrame,
+  );
+  grupo.add(cubo);
+
+  const rotor = new THREE.Group();
+  rotor.userData.rotacaoProcedural = true;
+  rotor.userData.velocidadeRotacao = velocidade;
+
+  const quantidadePas = 7;
+  for (let indice = 0; indice < quantidadePas; indice += 1) {
+    const angulo = (indice / quantidadePas) * Math.PI * 2;
+    const distancia = raio * 0.47;
+    const pa = criarMeshProcedural(
+      new THREE.BoxGeometry(raio * 0.58, espessura * 0.22, raio * 0.13),
+      materialPas,
+      [Math.cos(angulo) * distancia, 0, Math.sin(angulo) * distancia],
+      [0, -angulo + 0.42, 0],
+    );
+    rotor.add(pa);
+  }
+
+  grupo.add(rotor);
+  objetosAnimadosProcedurais.add(rotor);
+  return grupo;
+}
+
+function inferirQuantidadeFansGpu(peca, comprimento) {
+  const texto = textoProcedural(peca);
+  if (/blower|turbina|single\s*fan|1\s*fan/.test(texto)) return 1;
+  if (/dual|duo|2\s*fan|2x\s*fan/.test(texto)) return 2;
+  if (/triple|trio|3\s*fan|3x\s*fan/.test(texto)) return 3;
+  if (comprimento < 2.25) return 1;
+  if (comprimento < 2.85) return 2;
+  return 3;
+}
+
+function criarGpuProcedural(peca, basePos) {
+  const specs = especificacoesProcedurais(peca);
+  const comprimento = mmParaUnidade3D(specs.comprimentoMm ?? peca.comprimentoMm, 280, 1.8, 3.8);
+  const altura = mmParaUnidade3D(specs.alturaMm, 120, 0.8, 1.7);
+  const espessura = mmParaUnidade3D(
+    specs.espessuraMm ?? (numero3DSeguro(specs.slotsOcupados, 2.5) * 20),
+    50,
+    0.3,
+    0.9,
+  );
+
+  const grupo = new THREE.Group();
+  grupo.position.copy(basePos);
+
+  const shroud = criarMeshProcedural(
+    new THREE.BoxGeometry(altura, espessura, comprimento),
+    criarMaterialProcedural(0x202733, { roughness: 0.48, metalness: 0.32 }),
+  );
+  grupo.add(shroud);
+
+  const pcb = criarMeshProcedural(
+    new THREE.BoxGeometry(altura * 0.88, 0.035, comprimento * 0.94),
+    criarMaterialProcedural(0x173a2a, { roughness: 0.72, metalness: 0.08 }),
+    [0, espessura * 0.42, 0],
+  );
+  grupo.add(pcb);
+
+  const quantidadeFans = inferirQuantidadeFansGpu(peca, comprimento);
+  const raio = limitar3D(
+    Math.min(altura * 0.39, comprimento / (quantidadeFans * 2.25)),
+    0.24,
+    0.55,
+  );
+  const intervalo = comprimento / quantidadeFans;
+
+  for (let indice = 0; indice < quantidadeFans; indice += 1) {
+    const fan = criarVentoinhaProcedural({
+      raio,
+      espessura: Math.min(0.10, espessura * 0.2),
+      corFrame: 0x0f172a,
+      corPas: 0x475569,
+      velocidade: 0.23,
+    });
+    // A face das ventoinhas fica no lado oposto ao PCB. Isso evita que
+    // o fallback apareca com as fans voltadas para baixo no gabinete.
+    fan.position.set(0, -(espessura / 2 + 0.055), -comprimento / 2 + intervalo * (indice + 0.5));
+    fan.rotation.x = Math.PI;
+    grupo.add(fan);
+  }
+
+  const bracket = criarMeshProcedural(
+    new THREE.BoxGeometry(altura * 1.03, espessura * 1.02, 0.05),
+    criarMaterialProcedural(0x94a3b8, { roughness: 0.35, metalness: 0.75 }),
+    [0, 0, comprimento / 2 + 0.03],
+  );
+  grupo.add(bracket);
+
+  registrarDadosProcedurais(grupo, "placavideo", peca);
+  return grupo;
+}
+
+function inferirTemplateGabinete(peca, specs) {
+  const texto = textoProcedural(peca);
+  if (/aqu[aá]rio|aquarium|panor[aâ]mico|panoramic|o11|h9|y60|dual.?chamber/.test(texto)) return "panoramico";
+  if (/mesh|airflow|meshify|lancool|fractal/.test(texto)) return "mesh";
+  if (/mini|compact|compacto|itx|nr200|sff/.test(texto) || String(specs.tamanho || "").includes("MINI")) return "compacto";
+  if (/full.?tower|7000|cosmos/.test(texto) || String(specs.tamanho || "").includes("FULL")) return "full";
+  return "torre";
+}
+
+function adicionarBarraGabinete(grupo, tamanho, posicao, material) {
+  grupo.add(criarMeshProcedural(new THREE.BoxGeometry(...tamanho), material, posicao));
+}
+
+function criarGabineteProcedural(peca, basePos) {
+  const specs = especificacoesProcedurais(peca);
+  const largura = mmParaUnidade3D(specs.larguraMm, 240, 1.8, 3.6);
+  const altura = mmParaUnidade3D(specs.alturaMm, 460, 3.2, 6.4);
+  const profundidade = mmParaUnidade3D(specs.profundidadeMm, 450, 3.0, 6.8);
+  const template = inferirTemplateGabinete(peca, specs);
+
+  const grupo = new THREE.Group();
+  grupo.position.copy(basePos);
+  grupo.position.y = altura / 2;
+  grupo.userData.templateGabinete = template;
+
+  const matFrame = criarMaterialProcedural(0x1f2937, { roughness: 0.55, metalness: 0.48 });
+  const matPainel = criarMaterialProcedural(0x111827, { roughness: 0.6, metalness: 0.28 });
+  const matVidro = criarMaterialProcedural(0x93c5fd, {
+    roughness: 0.12,
+    metalness: 0.05,
+    transparent: true,
+    opacity: 0.13,
+    doubleSide: true,
+    depthWrite: false,
+  });
+  const esp = 0.055;
+  const meiaL = largura / 2;
+  const meiaA = altura / 2;
+  const meiaP = profundidade / 2;
+
+  // Estrutura principal — 12 travessas deixam o interior visível.
+  [[-meiaL, -meiaP], [-meiaL, meiaP], [meiaL, -meiaP], [meiaL, meiaP]].forEach(([x, z]) => {
+    adicionarBarraGabinete(grupo, [esp, altura, esp], [x, 0, z], matFrame);
+  });
+  [-meiaA, meiaA].forEach((y) => {
+    [-meiaP, meiaP].forEach((z) => adicionarBarraGabinete(grupo, [largura, esp, esp], [0, y, z], matFrame));
+    [-meiaL, meiaL].forEach((x) => adicionarBarraGabinete(grupo, [esp, esp, profundidade], [x, y, 0], matFrame));
+  });
+
+  // Piso e shroud inferior.
+  grupo.add(criarMeshProcedural(
+    new THREE.BoxGeometry(largura * 0.96, esp, profundidade * 0.96),
+    matPainel,
+    [0, -meiaA + esp * 1.5, 0],
+  ));
+  grupo.add(criarMeshProcedural(
+    new THREE.BoxGeometry(largura * 0.94, altura * 0.20, profundidade * 0.88),
+    criarMaterialProcedural(0x0f172a, { roughness: 0.72, metalness: 0.25, transparent: true, opacity: 0.58 }),
+    [0, -meiaA + altura * 0.12, 0.06],
+  ));
+
+  // Lateral visível em vidro. Panorâmicos também recebem frente de vidro.
+  grupo.add(criarMeshProcedural(
+    new THREE.BoxGeometry(esp * 0.45, altura * 0.94, profundidade * 0.92),
+    matVidro,
+    [meiaL - esp * 0.6, 0, 0],
+  ));
+
+  if (template === "panoramico") {
+    grupo.add(criarMeshProcedural(
+      new THREE.BoxGeometry(largura * 0.92, altura * 0.94, esp * 0.45),
+      matVidro.clone(),
+      [0, 0, -meiaP + esp * 0.6],
+    ));
+  } else if (template === "mesh") {
+    const barras = 11;
+    for (let indice = 0; indice < barras; indice += 1) {
+      const y = -meiaA * 0.82 + (indice / (barras - 1)) * altura * 0.82;
+      adicionarBarraGabinete(grupo, [largura * 0.84, 0.025, 0.03], [0, y, -meiaP + esp], matFrame);
+    }
+    // Três círculos sugerem as entradas frontais sem inventar a fan real.
+    [-0.28, 0, 0.28].forEach((fator) => {
+      const aro = criarMeshProcedural(
+        new THREE.TorusGeometry(Math.min(largura * 0.27, altura * 0.12), 0.025, 6, 28),
+        matFrame,
+        [0, fator * altura * 1.8, -meiaP + esp * 1.2],
+      );
+      grupo.add(aro);
+    });
+  } else {
+    grupo.add(criarMeshProcedural(
+      new THREE.BoxGeometry(largura * 0.90, altura * 0.88, esp),
+      criarMaterialProcedural(template === "compacto" ? 0x334155 : 0x1e293b, {
+        roughness: 0.66,
+        metalness: 0.30,
+        transparent: true,
+        opacity: 0.70,
+      }),
+      [0, 0, -meiaP + esp],
+    ));
+  }
+
+  // Tampa superior translúcida para manter a leitura interna.
+  grupo.add(criarMeshProcedural(
+    new THREE.BoxGeometry(largura * 0.94, esp * 0.5, profundidade * 0.92),
+    criarMaterialProcedural(0x334155, { transparent: true, opacity: 0.30, depthWrite: false }),
+    [0, meiaA - esp * 0.5, 0],
+  ));
+
+  registrarDadosProcedurais(grupo, "gabinete", peca);
+  return grupo;
+}
+
+function criarPlacaMaeProcedural(peca, basePos) {
+  const specs = especificacoesProcedurais(peca);
+  const formato = String(specs.formato || peca.formato || "ATX").toUpperCase();
+  const dimensoes = formato.includes("MINI")
+    ? [1.70, 1.70]
+    : formato.includes("MICRO") || formato.includes("MATX")
+      ? [2.44, 2.44]
+      : formato.includes("E_ATX") || formato.includes("E-ATX")
+        ? [3.30, 3.05]
+        : [2.44, 3.05];
+  const [larguraZ, alturaY] = dimensoes;
+
+  const grupo = new THREE.Group();
+  grupo.position.copy(basePos);
+  grupo.add(criarMeshProcedural(
+    new THREE.BoxGeometry(0.055, alturaY, larguraZ),
+    criarMaterialProcedural(0x143b2d, { roughness: 0.68, metalness: 0.08 }),
+  ));
+  grupo.add(criarMeshProcedural(
+    new THREE.BoxGeometry(0.08, 0.55, 0.55),
+    criarMaterialProcedural(0x64748b, { roughness: 0.38, metalness: 0.65 }),
+    [0.05, 0.35, 0.20],
+  ));
+  const deslocamentoRamY = Math.min(0.35, alturaY * 0.14);
+  const deslocamentoRamZ = -Math.min(0.45, larguraZ * 0.18);
+  const espacamentoRamZ = Math.min(0.11, larguraZ * 0.045);
+  for (let indice = 0; indice < 4; indice += 1) {
+    grupo.add(criarMeshProcedural(
+      new THREE.BoxGeometry(0.07, 1.25, 0.035),
+      criarMaterialProcedural(0x1d4ed8, { roughness: 0.55 }),
+      [0.05, deslocamentoRamY, deslocamentoRamZ + indice * espacamentoRamZ],
+    ));
+  }
+  registrarDadosProcedurais(grupo, "placamae", peca);
+  return grupo;
+}
+
+function criarCpuProcedural(peca, basePos) {
+  const grupo = new THREE.Group();
+  grupo.position.copy(basePos);
+  grupo.add(criarMeshProcedural(
+    new THREE.BoxGeometry(0.065, 0.42, 0.42),
+    criarMaterialProcedural(0xcbd5e1, { roughness: 0.25, metalness: 0.75 }),
+  ));
+  grupo.add(criarMeshProcedural(
+    new THREE.BoxGeometry(0.02, 0.34, 0.34),
+    criarMaterialProcedural(0x0f172a, { roughness: 0.55, metalness: 0.15 }),
+    [-0.045, 0, 0],
+  ));
+  registrarDadosProcedurais(grupo, "processador", peca);
+  return grupo;
+}
+
+function criarRamProcedural(peca, basePos) {
+  const specs = especificacoesProcedurais(peca);
+  const alturaX = mmParaUnidade3D(specs.alturaMm, 35, 0.24, 0.65);
+  const grupo = new THREE.Group();
+  grupo.position.copy(basePos);
+  grupo.add(criarMeshProcedural(
+    new THREE.BoxGeometry(alturaX, 1.32, 0.075),
+    criarMaterialProcedural(specs.rgb ? 0x6d28d9 : 0x1e293b, { roughness: 0.45, metalness: 0.18 }),
+  ));
+  for (let indice = 0; indice < 6; indice += 1) {
+    grupo.add(criarMeshProcedural(
+      new THREE.BoxGeometry(0.025, 0.13, 0.085),
+      criarMaterialProcedural(0x0f172a, { roughness: 0.7 }),
+      [alturaX * 0.08, -0.48 + indice * 0.19, 0],
+    ));
+  }
+  registrarDadosProcedurais(grupo, "memoria", peca);
+  return grupo;
+}
+
+function criarArmazenamentoProcedural(peca, basePos) {
+  const specs = especificacoesProcedurais(peca);
+  const textoFormato = `${specs.formato || ""} ${specs.interface || ""}`.toUpperCase();
+  const grupo = new THREE.Group();
+  grupo.position.copy(basePos);
+
+  if (textoFormato.includes("M2") || textoFormato.includes("M.2") || textoFormato.includes("NVME")) {
+    grupo.add(criarMeshProcedural(
+      new THREE.BoxGeometry(0.04, 0.22, 0.80),
+      criarMaterialProcedural(0x166534, { roughness: 0.68, metalness: 0.08 }),
+    ));
+    for (let indice = 0; indice < 4; indice += 1) {
+      grupo.add(criarMeshProcedural(
+        new THREE.BoxGeometry(0.025, 0.13, 0.12),
+        criarMaterialProcedural(0x111827, { roughness: 0.7 }),
+        [0.035, 0, -0.25 + indice * 0.17],
+      ));
+    }
+  } else {
+    const hdd = String(specs.tipo || "").toUpperCase() === "HDD";
+    grupo.add(criarMeshProcedural(
+      new THREE.BoxGeometry(hdd ? 0.28 : 0.08, hdd ? 1.02 : 0.70, hdd ? 1.47 : 1.00),
+      criarMaterialProcedural(0x475569, { roughness: 0.55, metalness: 0.42 }),
+    ));
+  }
+
+  registrarDadosProcedurais(grupo, "armazenamento", peca);
+  return grupo;
+}
+
+function criarFonteProcedural(peca, basePos) {
+  const specs = especificacoesProcedurais(peca);
+  const largura = mmParaUnidade3D(specs.larguraMm, 150, 1.2, 1.8);
+  const altura = mmParaUnidade3D(specs.alturaMm, 86, 0.72, 1.2);
+  const profundidade = mmParaUnidade3D(specs.comprimentoMm ?? specs.profundidadeMm, 160, 1.2, 2.2);
+  const grupo = new THREE.Group();
+  grupo.position.copy(basePos);
+  grupo.add(criarMeshProcedural(
+    new THREE.BoxGeometry(largura, altura, profundidade),
+    criarMaterialProcedural(0x111827, { roughness: 0.6, metalness: 0.42 }),
+  ));
+  const fan = criarVentoinhaProcedural({ raio: Math.min(largura, profundidade) * 0.31, espessura: 0.08, velocidade: 0.13 });
+  fan.position.set(0, altura / 2 + 0.045, 0);
+  grupo.add(fan);
+  registrarDadosProcedurais(grupo, "fonte", peca);
+  return grupo;
+}
+
+function criarCoolerProcedural(peca, basePos) {
+  const specs = especificacoesProcedurais(peca);
+  const texto = `${specs.tipo || ""} ${textoProcedural(peca)}`.toLowerCase();
+  const grupo = new THREE.Group();
+  grupo.position.copy(basePos);
+
+  if (/water|aio|liquid|radiador/.test(texto) || specs.tamanhoRadiadorMm) {
+    const tamanhoRad = mmParaUnidade3D(specs.tamanhoRadiadorMm, 240, 1.2, 3.6);
+    const qtd = limitar3D(numero3DSeguro(specs.quantidadeVentoinhas, Math.round(tamanhoRad / 1.2)), 1, 3);
+    const larguraRad = mmParaUnidade3D(specs.tamanhoVentoinhaMm, 120, 0.9, 1.5);
+    grupo.add(criarMeshProcedural(
+      new THREE.BoxGeometry(0.18, larguraRad, tamanhoRad),
+      criarMaterialProcedural(0x1e293b, { roughness: 0.62, metalness: 0.38 }),
+      [0.35, 0.62, 0],
+    ));
+    const intervalo = tamanhoRad / qtd;
+    for (let indice = 0; indice < qtd; indice += 1) {
+      const fan = criarVentoinhaProcedural({ raio: larguraRad * 0.38, espessura: 0.08, velocidade: 0.18 });
+      fan.rotation.z = Math.PI / 2;
+      fan.position.set(0.22, 0.62, -tamanhoRad / 2 + intervalo * (indice + 0.5));
+      grupo.add(fan);
+    }
+    grupo.add(criarMeshProcedural(
+      new THREE.CylinderGeometry(0.28, 0.28, 0.18, 24),
+      criarMaterialProcedural(0x0f172a, { roughness: 0.45, metalness: 0.35 }),
+      [0, 0, 0],
+      [0, 0, Math.PI / 2],
+    ));
+  } else {
+    const altura = mmParaUnidade3D(specs.alturaMm, 155, 0.75, 1.9);
+    const largura = mmParaUnidade3D(specs.larguraMm, 125, 0.65, 1.5);
+    const profundidade = mmParaUnidade3D(specs.profundidadeMm, 95, 0.55, 1.4);
+    grupo.add(criarMeshProcedural(
+      new THREE.BoxGeometry(altura * 0.72, largura, profundidade),
+      criarMaterialProcedural(0x94a3b8, { roughness: 0.34, metalness: 0.72 }),
+      [altura * 0.18, 0, 0],
+    ));
+    const fan = criarVentoinhaProcedural({ raio: Math.min(largura, profundidade) * 0.40, espessura: 0.08, velocidade: 0.18 });
+    fan.rotation.z = Math.PI / 2;
+    fan.position.set(-altura * 0.22, 0, 0);
+    grupo.add(fan);
+  }
+
+  registrarDadosProcedurais(grupo, "cooler", peca);
+  return grupo;
+}
+
+function criarVentoinhaSlotProcedural(peca, slot) {
+  const specs = especificacoesProcedurais(peca);
+  const tamanho = mmParaUnidade3D(specs.tamanhoMm, 120, 0.8, 1.6);
+  const fan = criarVentoinhaProcedural({
+    raio: tamanho * 0.40,
+    espessura: mmParaUnidade3D(specs.espessuraMm, 25, 0.10, 0.38),
+    velocidade: 0.22,
+    corFrame: 0x0f172a,
+    corPas: specs.rgb || specs.argb ? 0x2563eb : 0x475569,
+  });
+  fan.position.copy(slot?.position ?? new THREE.Vector3());
+  if (slot?.rotation) fan.rotation.copy(slot.rotation);
+  registrarDadosProcedurais(fan, "ventoinhas", peca);
+  return fan;
+}
+
+function criarModeloProcedural(categoria, peca, slot) {
+  if (!peca) return null;
+  const basePos = slot?.position?.clone?.() ?? new THREE.Vector3(0, 0, 0);
+
+  switch (categoria) {
+    case "gabinete": return criarGabineteProcedural(peca, basePos);
+    case "placavideo": return criarGpuProcedural(peca, basePos);
+    case "placamae": return criarPlacaMaeProcedural(peca, basePos);
+    case "processador": return criarCpuProcedural(peca, basePos);
+    case "memoria": return criarRamProcedural(peca, basePos);
+    case "armazenamento": return criarArmazenamentoProcedural(peca, basePos);
+    case "fonte": return criarFonteProcedural(peca, basePos);
+    case "cooler": return criarCoolerProcedural(peca, basePos);
+    case "ventoinhas": return criarVentoinhaSlotProcedural(peca, slot);
+    default: {
+      const grupo = new THREE.Group();
+      grupo.position.copy(basePos);
+      grupo.add(criarMeshProcedural(
+        new THREE.BoxGeometry(0.7, 0.7, 0.7),
+        criarMaterialProcedural(0x64748b, { transparent: true, opacity: 0.70 }),
+      ));
+      registrarDadosProcedurais(grupo, categoria, peca);
+      return grupo;
+    }
+  }
+}
+
 
 function removerModelo3D(categoria) {
   const modeloAtual = modelos3DAtivos[categoria];
@@ -3560,6 +4294,7 @@ function removerModelo3D(categoria) {
   function finalizar() {
     cena.remove(modeloAtual);
     modeloAtual.traverse((objeto) => {
+      if (objeto.userData?.rotacaoProcedural) objetosAnimadosProcedurais.delete(objeto);
       if (!objeto.isMesh) return;
       objeto.geometry?.dispose();
       if (Array.isArray(objeto.material)) objeto.material.forEach((mat) => mat.dispose());
@@ -3593,117 +4328,106 @@ function atualizarPecaNo3D(categoria, estadoDaCategoria) {
   const pecas = Array.isArray(estadoDaCategoria)
     ? estadoDaCategoria
     : [estadoDaCategoria];
+  const selecionadas = pecas
+    .map((peca, index) => ({ peca, index }))
+    .filter(({ peca }) => Boolean(peca));
 
+  // Sem peça: volta para o contorno de encaixe original.
   objetosPlaceholder.forEach((objeto, index) => {
     const peca = categoria === "gabinete" ? pecas[0] : pecas[index];
-    const possuiModelo3D = Boolean(peca?.modelo3D);
+    objeto.material.transparent = true;
 
-    /*
-     * O gabinete atual é representado pela maquete, pois os itens do catálogo
-     * ainda não têm arquivo GLB. Mantemos apenas o contorno e uma base leve,
-     * evitando o bloco cinza opaco que escondia todo o interior.
-     */
-    if (categoria === "gabinete") {
-      objeto.material.transparent = true;
-
-      if (objeto === slotGabinete) {
-        objeto.material.wireframe = true;
-        animarPlaceholder(objeto, true, peca ? 0.09 : 0.16);
+    if (!peca) {
+      if (categoria === "gabinete") {
+        objeto.material.wireframe = objeto === slotGabinete;
+        animarPlaceholder(
+          objeto,
+          true,
+          objeto === slotGabinete ? 0.16 : 0.28,
+        );
       } else {
-        objeto.material.wireframe = false;
-        animarPlaceholder(objeto, true, peca ? 0.16 : 0.28);
+        objeto.material.wireframe = true;
+        animarPlaceholder(objeto, true, objeto.userData.opacidadeOriginal ?? 0.35);
       }
       return;
     }
 
-    const selecionadaSemModelo = Boolean(peca) && !possuiModelo3D;
-    objeto.material.wireframe = !selecionadaSemModelo;
-    objeto.material.transparent = true;
-
-    if (possuiModelo3D) {
-      animarPlaceholder(objeto, false);
-    } else {
-      animarPlaceholder(
-        objeto,
-        true,
-        selecionadaSemModelo
-          ? 0.72
-          : (objeto.userData.opacidadeOriginal ?? 0.35),
-      );
-    }
+    // Toda peça selecionada recebe GLB real ou fallback procedural.
+    // O placeholder fica escondido para não sobrepor a geometria final.
+    animarPlaceholder(objeto, false);
   });
 
-  const pecasParaCarregar = pecas
-    .map((peca, index) => ({ peca, index }))
-    .filter(({ peca }) => peca?.modelo3D);
-
-  if (pecasParaCarregar.length === 0 || !carregador) {
-    if (!carregador && categoria !== "gabinete") {
-      objetosPlaceholder.forEach((objeto, index) => {
-        const peca = pecas[index];
-        objeto.material.wireframe = !peca;
-        animarPlaceholder(
-          objeto,
-          true,
-          peca ? 0.72 : (objeto.userData.opacidadeOriginal ?? 0.35),
-        );
-      });
-    }
-    return;
-  }
+  if (selecionadas.length === 0) return;
 
   const grupoPrincipal = new THREE.Group();
   grupoPrincipal.name = `grupo-modelos-${categoria}`;
+  grupoPrincipal.userData = {
+    tipo: categoria,
+    categoria,
+    nome: nomesCategoriasBuilder[categoria] ?? categoria,
+    objetoRaiz: grupoPrincipal,
+  };
 
-  let carregamentosFinalizados = 0;
-  let modelosCarregados = 0;
+  let quantidadeRepresentacoes = 0;
+  let carregamentosPendentes = 0;
 
-  function finalizarCarregamento() {
-    carregamentosFinalizados++;
+  function slotDaPeca(index) {
+    if (categoria === "gabinete") return slotGabinete;
+    return objetosPlaceholder[index] ?? objetosPlaceholder[0] ?? null;
+  }
 
-    if (carregamentosFinalizados !== pecasParaCarregar.length) return;
+  function adicionarProcedural(peca, index, motivo = "sem-modelo") {
+    if (versaoCarregamento3D[categoria] !== versaoAtual) return false;
+    const procedural = criarModeloProcedural(categoria, peca, slotDaPeca(index));
+    if (!procedural) return false;
+    procedural.userData = {
+      ...procedural.userData,
+      fallback3D: true,
+      motivoFallback3D: motivo,
+    };
+    grupoPrincipal.add(procedural);
+    quantidadeRepresentacoes++;
+    return true;
+  }
+
+  function publicarGrupoSeNecessario() {
     if (versaoCarregamento3D[categoria] !== versaoAtual) return;
+    if (quantidadeRepresentacoes <= 0) return;
 
-    if (modelosCarregados > 0) {
-      grupoPrincipal.userData = {
-        tipo: categoria,
-        categoria,
-        nome: nomesCategoriasBuilder[categoria] ?? categoria,
-        objetoRaiz: grupoPrincipal,
-      };
-
-      cena.add(grupoPrincipal);
-      modelos3DAtivos[categoria] = grupoPrincipal;
-      animarEscalaObjeto(grupoPrincipal, 1.06, 420);
-    }
-
+    if (!grupoPrincipal.parent) cena.add(grupoPrincipal);
+    modelos3DAtivos[categoria] = grupoPrincipal;
     controles.target.set(0, 2.3, 0);
     controles.update();
   }
 
-  pecasParaCarregar.forEach(({ peca, index }) => {
-    const slotEspecifico = objetosPlaceholder[index];
-    const basePos = slotEspecifico
-      ? slotEspecifico.position
-      : new THREE.Vector3(0, 0, 0);
+  function finalizarCargaAssincrona() {
+    carregamentosPendentes--;
+    if (carregamentosPendentes <= 0) publicarGrupoSeNecessario();
+  }
 
-    const caminhoModelo = new URL(peca.modelo3D, RAIZ_SITE).href;
+  selecionadas.forEach(({ peca, index }) => {
+    const urlModelo = String(peca.modelo3D || peca.modelo3dUrl || "").trim();
+
+    if (!urlModelo || !carregador) {
+      adicionarProcedural(peca, index, !urlModelo ? "sem-modelo" : "loader-indisponivel");
+      return;
+    }
+
+    carregamentosPendentes++;
+    const slotEspecifico = slotDaPeca(index);
+    const basePos = slotEspecifico?.position ?? new THREE.Vector3(0, 0, 0);
+    const caminhoModelo = new URL(urlModelo, RAIZ_SITE).href;
 
     carregarModelo3D(caminhoModelo)
       .then((gltf) => {
         if (versaoCarregamento3D[categoria] !== versaoAtual) {
-          finalizarCarregamento();
+          finalizarCargaAssincrona();
           return;
         }
 
         const modelo = gltf.scene;
         const materiaisClonados = new Map();
 
-        /*
-         * Clona os materiais do modelo antes da animação. Isso impede que a
-         * transparência temporária afete outros meshes ou carregamentos que
-         * compartilham o mesmo material do GLB.
-         */
         modelo.traverse((objeto) => {
           if (!objeto.isMesh || !objeto.material) return;
 
@@ -3723,36 +4447,29 @@ function atualizarPecaNo3D(categoria, estadoDaCategoria) {
         const transform = peca.transform3D ?? {};
         const posicaoJson = transform.posicao ?? [0, 0, 0];
         const posicaoTransform = new THREE.Vector3(...posicaoJson);
-
-        const finalPos =
-          transform.modoPosicao === "absoluta"
-            ? posicaoTransform
-            : new THREE.Vector3().copy(basePos).add(posicaoTransform);
+        const finalPos = transform.modoPosicao === "absoluta"
+          ? posicaoTransform
+          : new THREE.Vector3().copy(basePos).add(posicaoTransform);
 
         modelo.position.copy(finalPos);
 
         const rotacaoBase = transform.rotacao ?? [0, 0, 0];
         const rotacaoSaida = transform.rotacaoSaida ?? [0, 180, 0];
-        const aplicarRotacaoSaida =
-          categoria === "ventoinhas" && peca.fluxo === "out";
+        const aplicarRotacaoSaida = categoria === "ventoinhas" && peca.fluxo === "out";
 
         modelo.rotation.set(
           THREE.MathUtils.degToRad(
-            Number(rotacaoBase[0]) +
-              (aplicarRotacaoSaida ? Number(rotacaoSaida[0]) : 0),
+            Number(rotacaoBase[0]) + (aplicarRotacaoSaida ? Number(rotacaoSaida[0]) : 0),
           ),
           THREE.MathUtils.degToRad(
-            Number(rotacaoBase[1]) +
-              (aplicarRotacaoSaida ? Number(rotacaoSaida[1]) : 0),
+            Number(rotacaoBase[1]) + (aplicarRotacaoSaida ? Number(rotacaoSaida[1]) : 0),
           ),
           THREE.MathUtils.degToRad(
-            Number(rotacaoBase[2]) +
-              (aplicarRotacaoSaida ? Number(rotacaoSaida[2]) : 0),
+            Number(rotacaoBase[2]) + (aplicarRotacaoSaida ? Number(rotacaoSaida[2]) : 0),
           ),
         );
 
         const escala = transform.escala ?? 1;
-
         if (Array.isArray(escala)) {
           modelo.scale.set(
             Number(escala[0]) || 1,
@@ -3763,20 +4480,12 @@ function atualizarPecaNo3D(categoria, estadoDaCategoria) {
           modelo.scale.setScalar(Number(escala) || 1);
         }
 
-        /*
-         * Alguns GLBs têm a origem distante do centro visual. Quando a opção
-         * está ativa, reposicionamos o centro real da peça no ponto definido
-         * no JSON. Isso evita GPUs cortadas ou atravessando o gabinete.
-         */
         if (transform.centralizarNoPonto === true) {
           modelo.updateMatrixWorld(true);
           const caixaModelo = new THREE.Box3().setFromObject(modelo);
-
           if (!caixaModelo.isEmpty()) {
             const centroModelo = caixaModelo.getCenter(new THREE.Vector3());
-            modelo.position.add(
-              new THREE.Vector3().copy(finalPos).sub(centroModelo),
-            );
+            modelo.position.add(new THREE.Vector3().copy(finalPos).sub(centroModelo));
           }
         }
 
@@ -3788,11 +4497,11 @@ function atualizarPecaNo3D(categoria, estadoDaCategoria) {
           nome: peca.nome,
           preco: peca.preco,
           objetoRaiz: modelo,
+          fallback3D: false,
         };
 
         modelo.traverse((objeto) => {
           if (!objeto.isMesh) return;
-
           objeto.castShadow = true;
           objeto.receiveShadow = true;
           objeto.frustumCulled = false;
@@ -3804,24 +4513,30 @@ function atualizarPecaNo3D(categoria, estadoDaCategoria) {
             nome: peca.nome,
             preco: peca.preco,
             objetoRaiz: modelo,
+            fallback3D: false,
           };
         });
 
         const escalaFinal = modelo.scale.clone();
         animarEntradaModelo(modelo, escalaFinal);
         grupoPrincipal.add(modelo);
-        modelosCarregados++;
-        finalizarCarregamento();
+        quantidadeRepresentacoes++;
+        finalizarCargaAssincrona();
       })
       .catch((erro) => {
         console.error(`Erro ao carregar o modelo 3D de "${peca.nome}":`, erro);
-
-        if (objetosPlaceholder[index]) {
-          objetosPlaceholder[index].visible = true;
-        }
-
-        mostrarToast(`Modelo 3D indisponível: ${peca.nome}.`, "alerta");
-        finalizarCarregamento();
+        adicionarProcedural(peca, index, "falha-glb");
+        mostrarToast(`Modelo 3D indisponível: ${peca.nome}. Usando representação aproximada.`, "alerta");
+        finalizarCargaAssincrona();
       });
   });
+
+  // Fallbacks procedurais entram imediatamente; GLBs são incorporados assim
+  // que terminam de carregar. Isso evita deixar a montagem vazia enquanto a
+  // rede/S3 responde.
+  publicarGrupoSeNecessario();
+  if (quantidadeRepresentacoes > 0) {
+    animarEscalaObjeto(grupoPrincipal, 1.04, 360);
+  }
 }
+

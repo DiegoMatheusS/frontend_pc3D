@@ -22,6 +22,9 @@ function unwrapList(data) {
 
 function unwrapOne(data) {
   if (!data || typeof data !== 'object') return data
+  // Respostas especializadas (Notebook/Build) possuem `produto` como relação.
+  // Se o objeto já tem id próprio, ele é a entidade e não deve ser reduzido a data.produto.
+  if (data.id !== undefined && data.id !== null) return data
   return data?.item || data?.dados || data?.produto || data?.hardware || data?.oferta || data?.parceiro || data?.usuario || data?.notebook || data?.build || data
 }
 
@@ -33,30 +36,71 @@ async function one(path) {
   return unwrapOne(await apiRequest(path))
 }
 
+function normalizeNotebook(item) {
+  if (!item || typeof item !== 'object') return item
+  const produto = item.produto && typeof item.produto === 'object' ? item.produto : {}
+  return {
+    ...item,
+    produto,
+    produtoId: item.produtoId ?? produto.id,
+    nome: produto.nome ?? item.nome ?? '',
+    marca: produto.marca ?? item.marca ?? '',
+    modelo: produto.modelo ?? item.modelo ?? '',
+    descricao: produto.descricao ?? item.descricao ?? '',
+    mpn: produto.mpn ?? item.mpn ?? '',
+    gtin: produto.gtin ?? item.gtin ?? '',
+    imagemUrl: produto.imagemUrl ?? item.imagemUrl ?? '',
+    imagemHoverUrl: produto.imagemHoverUrl ?? item.imagemHoverUrl ?? '',
+    publicado: produto.publicado ?? item.publicado ?? false,
+    ativo: produto.ativo ?? item.ativo ?? true,
+    slug: produto.slug ?? item.slug,
+  }
+}
+
+function normalizeBuild(item) {
+  if (!item || typeof item !== 'object') return item
+  const produto = item.produto && typeof item.produto === 'object' ? item.produto : {}
+  return {
+    ...item,
+    produto,
+    produtoId: item.produtoId ?? produto.id,
+    nome: produto.nome ?? item.nome ?? '',
+    marca: produto.marca ?? item.marca ?? '',
+    modelo: produto.modelo ?? item.modelo ?? '',
+    descricao: produto.descricao ?? item.descricao ?? '',
+    imagemUrl: produto.imagemUrl ?? item.imagemUrl ?? '',
+    imagemHoverUrl: produto.imagemHoverUrl ?? item.imagemHoverUrl ?? '',
+    publicado: produto.publicado ?? item.publicado ?? false,
+    ativo: produto.ativo ?? item.ativo ?? true,
+    slug: produto.slug ?? item.slug,
+  }
+}
+
 export const adminService = {
   dashboard: {
-    async load() {
-      const entries = await Promise.allSettled([
-        list('/api/admin/produtos'),
-        list('/api/admin/hardwares'),
-        list('/api/admin/ofertas'),
-        list('/api/admin/ofertas/parceiros'),
-        list('/api/admin/notebooks'),
-        list('/api/admin/builds'),
-        list('/api/usuarios'),
-      ])
-      const value = (index) => entries[index].status === 'fulfilled' ? entries[index].value : []
-      const sourceNames = ['Produtos', 'Hardwares', 'Ofertas', 'Parceiros', 'Notebooks', 'PCs Montados', 'Usuários']
+    async load({ includeUsers = false } = {}) {
+      const requests = [
+        ['Produtos', list('/api/admin/produtos')],
+        ['Hardwares', list('/api/admin/hardwares')],
+        ['Ofertas', list('/api/admin/ofertas')],
+        ['Parceiros', list('/api/admin/ofertas/parceiros')],
+        ['Notebooks', list('/api/admin/notebooks')],
+        ['PCs Montados', list('/api/admin/builds')],
+      ]
+      if (includeUsers) requests.push(['Usuários', list('/api/usuarios')])
+
+      const entries = await Promise.allSettled(requests.map(([, promise]) => promise))
+      const value = (index) => entries[index]?.status === 'fulfilled' ? entries[index].value : []
       return {
         produtos: value(0),
         hardwares: value(1),
         ofertas: value(2),
         parceiros: value(3),
-        notebooks: value(4),
-        builds: value(5),
-        usuarios: value(6),
+        notebooks: value(4).map(normalizeNotebook),
+        builds: value(5).map(normalizeBuild),
+        usuarios: includeUsers ? value(6) : [],
         sources: entries.map((entry, index) => ({
-          name: sourceNames[index],
+          name: requests[index][0],
           ok: entry.status === 'fulfilled',
           message: entry.status === 'rejected' ? String(entry.reason?.message || entry.reason || 'Indisponível') : '',
         })),
@@ -69,6 +113,11 @@ export const adminService = {
     categories: () => list('/api/admin/categorias-produto'),
     get: (id) => one(`/api/admin/produtos/${id}`),
     create: (body) => oneRequest('/api/admin/produtos', 'POST', body),
+    createFromHardware: (hardwareId, body) => oneRequest(`/api/admin/produtos/de-hardware/${hardwareId}`, 'POST', body),
+    availableHardwares: (search = '') => {
+      const query = String(search || '').trim()
+      return list(`/api/admin/produtos/hardwares/disponiveis${query ? `?busca=${encodeURIComponent(query)}` : ''}`)
+    },
     update: (id, body) => oneRequest(`/api/admin/produtos/${id}`, 'PATCH', body),
     remove: (id) => apiRequest(`/api/admin/produtos/${id}`, { method: 'DELETE' }),
     import: (urlOriginal) => oneRequest('/api/admin/produtos/importar', 'POST', { urlOriginal }),
@@ -103,11 +152,17 @@ export const adminService = {
     create: (body) => oneRequest('/api/admin/ofertas', 'POST', body),
     update: (id, body) => oneRequest(`/api/admin/ofertas/${id}`, 'PATCH', body),
     remove: (id) => apiRequest(`/api/admin/ofertas/${id}`, { method: 'DELETE' }),
+    setStatus: (id, status) => oneRequest(`/api/admin/ofertas/${id}`, 'PATCH', { status }),
     history: (id) => list(`/api/admin/ofertas/${id}/historico`),
     partners: () => list('/api/admin/ofertas/parceiros'),
     partner: (id) => one(`/api/admin/ofertas/parceiros/${id}`),
     createPartner: (body) => oneRequest('/api/admin/ofertas/parceiros', 'POST', body),
     updatePartner: (id, body) => oneRequest(`/api/admin/ofertas/parceiros/${id}`, 'PATCH', body),
+    priceCheckStatus: () => apiRequest('/api/admin/ofertas/verificacao-precos/status'),
+    verifyPrices: (limite = 50) => apiRequest('/api/admin/ofertas/verificar-precos', {
+      method: 'POST',
+      body: { limite: Number(limite) || 50 },
+    }),
   },
 
   users: {
@@ -119,18 +174,18 @@ export const adminService = {
   },
 
   notebooks: {
-    list: () => list('/api/admin/notebooks'),
-    get: (id) => one(`/api/admin/notebooks/${id}`),
-    create: (body) => oneRequest('/api/admin/notebooks', 'POST', body),
-    update: (id, body) => oneRequest(`/api/admin/notebooks/${id}`, 'PATCH', body),
+    list: async () => (await list('/api/admin/notebooks')).map(normalizeNotebook),
+    get: async (id) => normalizeNotebook(await one(`/api/admin/notebooks/${id}`)),
+    create: async (body) => normalizeNotebook(await oneRequest('/api/admin/notebooks', 'POST', body)),
+    update: async (id, body) => normalizeNotebook(await oneRequest(`/api/admin/notebooks/${id}`, 'PATCH', body)),
     remove: (id) => apiRequest(`/api/admin/notebooks/${id}`, { method: 'DELETE' }),
   },
 
   builds: {
-    list: () => list('/api/admin/builds'),
-    get: (id) => one(`/api/admin/builds/${id}`),
-    create: (body) => oneRequest('/api/admin/builds', 'POST', body),
-    update: (id, body) => oneRequest(`/api/admin/builds/${id}`, 'PATCH', body),
+    list: async () => (await list('/api/admin/builds')).map(normalizeBuild),
+    get: async (id) => normalizeBuild(await one(`/api/admin/builds/${id}`)),
+    create: async (body) => normalizeBuild(await oneRequest('/api/admin/builds', 'POST', body)),
+    update: async (id, body) => normalizeBuild(await oneRequest(`/api/admin/builds/${id}`, 'PATCH', body)),
     remove: (id) => apiRequest(`/api/admin/builds/${id}`, { method: 'DELETE' }),
   },
 

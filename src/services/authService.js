@@ -33,10 +33,6 @@ function registrationEndpoints() {
   return [...new Set([
     configured,
     '/api/auth/cadastro',
-    '/api/auth/registrar',
-    '/api/auth/cadastrar',
-    '/api/auth/register',
-    '/api/usuarios/cadastro',
   ].filter(Boolean))]
 }
 
@@ -60,7 +56,7 @@ async function createAccount(data) {
   }
 
   throw new ApiError(
-    'O backend conectado não disponibiliza uma rota pública de cadastro. O frontend está pronto, mas a criação da conta precisa dessa rota no servidor.',
+    'A rota pública de cadastro não foi encontrada no servidor conectado.',
     {
       status: lastMissingRoute?.status || 404,
       data: lastMissingRoute?.data || null,

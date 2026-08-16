@@ -5,6 +5,19 @@ import { AdminLoading } from './AdminCommon'
 
 export const ADMIN_ROLES = ['ADMIN', 'EDITOR', 'REVISOR']
 
+export function useAdminPermissions() {
+  const { user } = useAuth()
+  const role = String(user?.papel || '').toUpperCase()
+  return {
+    role,
+    canWriteCatalog: role === 'ADMIN' || role === 'EDITOR',
+    canCreateHardware: role === 'ADMIN',
+    canDeleteCatalog: role === 'ADMIN',
+    canReview: role === 'ADMIN' || role === 'REVISOR',
+    isAdmin: role === 'ADMIN',
+  }
+}
+
 export default function AdminAccess({ children, roles = ADMIN_ROLES }) {
   const { user, loading } = useAuth()
   const location = useLocation()

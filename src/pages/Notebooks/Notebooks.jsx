@@ -35,7 +35,7 @@ const fields = [
   ['Upgrade armazenamento', 'upgradeStorage'],
 ]
 
-const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 function winnerIndex(values, better) {
   if (!better || values.length !== 2) return -1

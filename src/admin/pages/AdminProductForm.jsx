@@ -5,8 +5,37 @@ import { adminService } from '../services/adminService'
 import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 import { AdminTechnicalFields, normalizeSpec, productSchemaFor, readSpec } from '../components/AdminTechnicalFields'
+import { getSpecializedProductTarget } from '../utils/productRouting'
 
-const EMPTY = { categoriaId: '', nome: '', marca: '', modelo: '', descricao: '', mpn: '', gtin: '', imagemUrl: '', imagemHoverUrl: '', publicado: false, ativo: true, metadados: '{}' }
+const EMPTY = {
+  categoriaId: '', nome: '', marca: '', modelo: '', descricao: '', mpn: '', gtin: '',
+  imagemUrl: '', imagemHoverUrl: '', publicado: true, ativo: true, metadados: '{}',
+}
+
+const EMPTY_OFFER = {
+  parceiroId: '', preco: '', precoAnterior: '', urlOriginal: '', urlAfiliada: '',
+}
+
+const HARDWARE_CATEGORY_ALIASES = {
+  PROCESSADOR: ['processadores', 'processador', 'cpu'],
+  COOLER: ['coolers', 'cooler'],
+  PLACA_MAE: ['placas-mae', 'placa-mae', 'placa mae', 'motherboard'],
+  MEMORIA_RAM: ['memorias-ram', 'memoria-ram', 'memoria ram', 'ram'],
+  PLACA_VIDEO: ['placas-video', 'placa-video', 'placa de video', 'gpu'],
+  ARMAZENAMENTO: ['armazenamento', 'ssd', 'hdd'],
+  FONTE: ['fontes', 'fonte', 'psu'],
+  GABINETE: ['gabinetes', 'gabinete', 'case'],
+  VENTOINHA: ['ventoinhas', 'ventoinha', 'fan', 'fans'],
+  MONITOR: ['monitores', 'monitor'],
+  MOUSE: ['mouses', 'mouse'],
+  TECLADO: ['teclados', 'teclado'],
+  FONE: ['fones', 'fone', 'headsets', 'headset'],
+  MICROFONE: ['microfones', 'microfone'],
+}
+
+function cleanText(value) {
+  return String(value ?? '').trim()
+}
 
 function normalizeGtin(value) {
   return String(value || '').replace(/\D/g, '').slice(0, 32)
@@ -23,37 +52,107 @@ function validGtin(value) {
   return (10 - (sum % 10)) % 10 === check
 }
 
+function normalizeProductForm(item = {}) {
+  return {
+    ...EMPTY,
+    ...item,
+    categoriaId: item.categoriaId || item.categoria?.id || '',
+    nome: String(item.nome ?? ''),
+    marca: String(item.marca ?? ''),
+    modelo: String(item.modelo ?? ''),
+    descricao: String(item.descricao ?? ''),
+    mpn: String(item.mpn ?? ''),
+    gtin: normalizeGtin(item.gtin),
+    imagemUrl: String(item.imagemUrl ?? ''),
+    imagemHoverUrl: String(item.imagemHoverUrl ?? ''),
+    publicado: Boolean(item.publicado),
+    ativo: typeof item.ativo === 'boolean' ? item.ativo : true,
+    metadados: JSON.stringify(item.metadados || {}, null, 2),
+  }
+}
+
+function normalizeOfferForm(item = {}) {
+  return {
+    ...EMPTY_OFFER,
+    parceiroId: item.parceiroId || item.parceiro?.id || '',
+    preco: item.preco ?? '',
+    precoAnterior: item.precoAnterior ?? '',
+    urlOriginal: String(item.urlOriginal ?? ''),
+    urlAfiliada: String(item.urlAfiliada ?? ''),
+  }
+}
 
 function normalizeToken(value) {
-  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
 }
 
 function findCategoryFromPreview(categories, sourceCategory) {
   const target = normalizeToken(sourceCategory)
   if (!target) return null
   return categories.find((category) => {
-    const candidates = [category?.nome, category?.slug, category?.codigo, category?.categoria].map(normalizeToken).filter(Boolean)
+    const candidates = [category?.nome, category?.slug, category?.codigo, category?.categoria]
+      .map(normalizeToken)
+      .filter(Boolean)
     return candidates.some((candidate) => candidate === target || candidate.includes(target) || target.includes(candidate))
   }) || null
 }
 
-function technicalFromPreview(schema, source = {}) {
-  if (!schema) return {}
-  return Object.fromEntries(schema.fields.flatMap(([key]) => source[key] !== undefined && source[key] !== null ? [[key, source[key]]] : []))
+function findCategoryFromHardware(categories, hardware = {}) {
+  const directId = hardware?.produto?.categoriaId || hardware?.produto?.categoria?.id || hardware?.categoriaProdutoId
+  if (directId) {
+    const direct = categories.find((category) => Number(category.id) === Number(directId))
+    if (direct) return direct
+  }
+
+  const directName = hardware?.produto?.categoria?.slug || hardware?.produto?.categoria?.nome || hardware?.categoriaProduto
+  const byDirectName = findCategoryFromPreview(categories, directName)
+  if (byDirectName) return byDirectName
+
+  const aliases = HARDWARE_CATEGORY_ALIASES[String(hardware?.categoria || '').toUpperCase()] || [hardware?.categoria]
+  for (const alias of aliases) {
+    const found = findCategoryFromPreview(categories, alias)
+    if (found) return found
+  }
+  return null
 }
 
-function consumeTransferredPreview(expectedDestination) {
-  try {
-    const raw = sessionStorage.getItem('criabyteAdminIaImportPreview')
-    if (!raw) return null
-    const preview = JSON.parse(raw)
-    if (preview?.destinoSugerido !== expectedDestination) return null
-    sessionStorage.removeItem('criabyteAdminIaImportPreview')
-    return preview
-  } catch {
-    sessionStorage.removeItem('criabyteAdminIaImportPreview')
-    return null
-  }
+function hardwareProductId(hardware = {}) {
+  return Number(hardware?.produtoId || hardware?.produto?.id) || null
+}
+
+function hardwareLabel(hardware = {}) {
+  const category = String(hardware.categoria || 'HARDWARE').replaceAll('_', ' ')
+  const name = hardware.nome || [hardware.marca, hardware.modelo].filter(Boolean).join(' ') || `Hardware #${hardware.id}`
+  const productId = hardwareProductId(hardware)
+  return `${category} · ${name}${productId ? ` · Produto #${productId}` : ''}`
+}
+
+function technicalFromPreview(schema, source = {}) {
+  if (!schema) return {}
+  const keys = [...schema.fields.map(([key]) => key), ...(schema.repeaters || []).map((item) => item.key)]
+  return Object.fromEntries(keys.flatMap((key) => source[key] !== undefined && source[key] !== null ? [[key, source[key]]] : []))
+}
+
+function offersForProduct(offers = [], productId) {
+  if (!productId) return []
+  return offers
+    .filter((offer) => Number(offer?.produtoId || offer?.produto?.id) === Number(productId))
+    .sort((a, b) => Number(a?.id || 0) - Number(b?.id || 0))
+}
+
+function ofertaInicialUnsupported(error) {
+  const text = String(error?.message || error || '').toLowerCase()
+  return text.includes('ofertainicial') && (
+    text.includes('should not exist') ||
+    text.includes('não deve existir') ||
+    text.includes('nao deve existir') ||
+    text.includes('property') ||
+    text.includes('propriedade')
+  )
 }
 
 function PreviewList({ title, items = [], tone = '' }) {
@@ -71,49 +170,143 @@ export default function AdminProductForm() {
   const role = String(user?.papel || '').toUpperCase()
   const canWriteAi = role === 'ADMIN' || role === 'EDITOR'
   const canImportLink = role === 'ADMIN'
-  const [transferredPreview] = useState(() => editing ? null : consumeTransferredPreview('PRODUTO'))
+
   const [form, setForm] = useState(EMPTY)
   const [technical, setTechnical] = useState({})
   const [categories, setCategories] = useState([])
+  const [hardwares, setHardwares] = useState([])
+  const [hardwareSearch, setHardwareSearch] = useState('')
+  const [selectedHardwareId, setSelectedHardwareId] = useState('')
+  const [hardwareLoading, setHardwareLoading] = useState(!editing)
+  const [hardwareError, setHardwareError] = useState('')
+
+  const [partners, setPartners] = useState([])
+  const [allOffers, setAllOffers] = useState([])
+  const [includeOffer, setIncludeOffer] = useState(!editing)
+  const [offerRows, setOfferRows] = useState([{ ...EMPTY_OFFER }])
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [importUrl, setImportUrl] = useState(() => transferredPreview?.urlOrigem || '')
-  const [importing, setImporting] = useState(false)
-  const [importPreview, setImportPreview] = useState(transferredPreview)
   const [dirty, setDirty] = useState(false)
+  const [importUrl, setImportUrl] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importPreview, setImportPreview] = useState(null)
   const [aiBusy, setAiBusy] = useState('')
   const [aiAnalysis, setAiAnalysis] = useState('')
 
-  const selectedCategory = useMemo(() => categories.find((c) => Number(c.id) === Number(form.categoriaId)), [categories, form.categoriaId])
+  const selectedCategory = useMemo(
+    () => categories.find((category) => Number(category.id) === Number(form.categoriaId)),
+    [categories, form.categoriaId],
+  )
   const schema = useMemo(() => productSchemaFor(selectedCategory), [selectedCategory])
+
+  const filteredHardwares = useMemo(() => {
+    const terms = String(hardwareSearch || '')
+      .trim()
+      .split(/\s+/)
+      .map(normalizeToken)
+      .filter(Boolean)
+
+    return [...hardwares]
+      .filter((hardware) => {
+        if (!terms.length) return true
+        const product = hardware?.produto || {}
+        const searchable = normalizeToken([
+          hardware.id,
+          hardware.categoria,
+          hardware.nome,
+          hardware.marca,
+          hardware.modelo,
+          hardware.mpn,
+          hardware.gtin,
+          hardware.descricao,
+          product.nome,
+          product.marca,
+          product.modelo,
+          product.mpn,
+          product.gtin,
+          product.categoria?.nome,
+          product.categoria?.slug,
+        ].filter(Boolean).join(' '))
+        return terms.every((term) => searchable.includes(term))
+      })
+      .sort((a, b) => hardwareLabel(a).localeCompare(hardwareLabel(b), 'pt-BR'))
+  }, [hardwares, hardwareSearch])
+
+  const selectedHardware = useMemo(
+    () => hardwares.find((hardware) => Number(hardware.id) === Number(selectedHardwareId)) || null,
+    [hardwares, selectedHardwareId],
+  )
+  const selectedLinkedProductId = hardwareProductId(selectedHardware)
+  const linkedCount = useMemo(() => hardwares.filter((hardware) => hardwareProductId(hardware)).length, [hardwares])
 
   useEffect(() => {
     let active = true
-    Promise.all([adminService.products.categories(), editing ? adminService.products.get(id) : Promise.resolve(null)])
-      .then(([cats, item]) => {
+    Promise.all([
+      adminService.products.categories(),
+      adminService.offers.partners().catch(() => []),
+      adminService.offers.list().catch(() => []),
+      editing ? adminService.products.get(id) : Promise.resolve(null),
+    ])
+      .then(([cats, partnerItems, offerItems, item]) => {
         if (!active) return
         setCategories(cats)
+        setPartners(partnerItems)
+        setAllOffers(offerItems)
+
         if (item) {
-          const next = { ...EMPTY, ...item, categoriaId: item.categoriaId || item.categoria?.id || '', metadados: JSON.stringify(item.metadados || {}, null, 2) }
+          const specialized = getSpecializedProductTarget(item)
+          if (specialized?.kind !== 'HARDWARE' && specialized) {
+            toast.show(`Este item usa o cadastro especializado de ${specialized.label}. Abrindo a tela correta.`, 'info')
+            navigate(specialized.route, { replace: true })
+            return
+          }
+
+          const next = normalizeProductForm(item)
           setForm(next)
-          const cat = cats.find((c) => Number(c.id) === Number(next.categoriaId))
+          const cat = cats.find((category) => Number(category.id) === Number(next.categoriaId))
           setTechnical(readSpec(item, productSchemaFor(cat)))
+
+          const existingOffers = offersForProduct(offerItems, item.id)
+          if (existingOffers.length) {
+            setIncludeOffer(true)
+            setOfferRows(existingOffers.map((existingOffer) => ({
+              ...normalizeOfferForm(existingOffer),
+              id: existingOffer.id,
+              status: existingOffer.status || 'ATIVA',
+            })))
+          } else {
+            setIncludeOffer(false)
+            setOfferRows([{ ...EMPTY_OFFER }])
+          }
           setDirty(false)
-        } else if (transferredPreview) {
-          const source = transferredPreview?.normalizacao?.camposNormalizados || {}
-          const category = findCategoryFromPreview(cats, source.categoria)
-          const importedSchema = productSchemaFor(category)
-          const imagem = source.imagemUrl || transferredPreview?.coleta?.meta?.imagem || transferredPreview?.coleta?.meta?.ogImage || ''
-          setForm((current) => ({ ...current, categoriaId: category?.id || current.categoriaId, nome: source.nome || current.nome, marca: source.marca || current.marca, modelo: source.modelo || current.modelo, descricao: source.descricao || current.descricao, mpn: source.mpn || current.mpn, gtin: normalizeGtin(source.gtin || source.ean || current.gtin), imagemUrl: imagem || current.imagemUrl }))
-          if (importedSchema) setTechnical(technicalFromPreview(importedSchema, source))
-          setDirty(true)
         } else {
           setDirty(false)
         }
-      }).catch((err) => active && setError(err)).finally(() => active && setLoading(false))
+      })
+      .catch((err) => active && setError(err))
+      .finally(() => active && setLoading(false))
     return () => { active = false }
-  }, [id, editing, transferredPreview])
+  }, [id, editing, navigate, toast])
+
+  useEffect(() => {
+    if (editing) return
+    let active = true
+    adminService.hardwares.list()
+      .then((items) => {
+        if (!active) return
+        const list = Array.isArray(items) ? items : []
+        setHardwares(list)
+        setHardwareError('')
+      })
+      .catch((err) => {
+        if (!active) return
+        setHardwareError(err?.message || 'Não foi possível carregar os Hardwares cadastrados.')
+      })
+      .finally(() => active && setHardwareLoading(false))
+    return () => { active = false }
+  }, [editing])
 
   useEffect(() => {
     const handler = (event) => {
@@ -130,6 +323,31 @@ export default function AdminProductForm() {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
+  const updateOffer = (index, key, value) => {
+    setDirty(true)
+    setOfferRows((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, [key]: value } : row))
+  }
+
+  const addOffer = () => {
+    setDirty(true)
+    if (!includeOffer) {
+      setIncludeOffer(true)
+      setOfferRows((current) => current.length ? current : [{ ...EMPTY_OFFER }])
+      return
+    }
+    setOfferRows((current) => [...current, { ...EMPTY_OFFER }])
+  }
+
+  const removeOffer = (index) => {
+    setDirty(true)
+    setOfferRows((current) => {
+      const row = current[index]
+      if (row?.id) return current
+      const next = current.filter((_, rowIndex) => rowIndex !== index)
+      return next.length ? next : [{ ...EMPTY_OFFER }]
+    })
+  }
+
   function changeCategory(value) {
     setDirty(true)
     setForm((current) => ({ ...current, categoriaId: value }))
@@ -141,30 +359,123 @@ export default function AdminProductForm() {
     setTechnical((current) => ({ ...current, [key]: value }))
   }
 
+  function applyExistingOffers(productId) {
+    const existingOffers = offersForProduct(allOffers, productId)
+    setIncludeOffer(true)
+    setOfferRows(existingOffers.length
+      ? existingOffers.map((existingOffer) => ({
+          ...normalizeOfferForm(existingOffer),
+          id: existingOffer.id,
+          status: existingOffer.status || 'ATIVA',
+        }))
+      : [{ ...EMPTY_OFFER }])
+  }
+
+  async function selectHardware(value) {
+    setSelectedHardwareId(value)
+    if (!value) {
+      if (offerRows.some((row) => row.id)) {
+        setOfferRows([{ ...EMPTY_OFFER }])
+        setIncludeOffer(true)
+      }
+      return
+    }
+
+    setHardwareLoading(true)
+    setHardwareError('')
+    try {
+      const hardware = await adminService.hardwares.get(value)
+      const linkedProductId = hardwareProductId(hardware)
+      let sourceProduct = hardware?.produto || {}
+
+      if (linkedProductId && (!sourceProduct?.id || !sourceProduct?.categoria)) {
+        sourceProduct = await adminService.products.get(linkedProductId).catch(() => sourceProduct)
+      }
+
+      const enrichedHardware = { ...hardware, produto: sourceProduct }
+      const category = findCategoryFromHardware(categories, enrichedHardware)
+      const nextSchema = productSchemaFor(category)
+      const technicalSource = {
+        ...(hardware?.especificacoes && typeof hardware.especificacoes === 'object' ? hardware.especificacoes : {}),
+        ...(nextSchema && sourceProduct?.[nextSchema.key] && typeof sourceProduct[nextSchema.key] === 'object' ? sourceProduct[nextSchema.key] : {}),
+      }
+
+      setForm((current) => ({
+        ...current,
+        categoriaId: category?.id || current.categoriaId,
+        nome: String(sourceProduct?.nome ?? hardware?.nome ?? current.nome ?? ''),
+        marca: String(hardware?.marca ?? sourceProduct?.marca ?? current.marca ?? ''),
+        modelo: String(hardware?.modelo ?? sourceProduct?.modelo ?? current.modelo ?? ''),
+        descricao: String(sourceProduct?.descricao ?? hardware?.descricao ?? current.descricao ?? ''),
+        mpn: String(hardware?.mpn ?? sourceProduct?.mpn ?? current.mpn ?? ''),
+        gtin: normalizeGtin(hardware?.gtin ?? sourceProduct?.gtin ?? current.gtin),
+        imagemUrl: String(sourceProduct?.imagemUrl ?? hardware?.imagemUrl ?? current.imagemUrl ?? ''),
+        imagemHoverUrl: String(sourceProduct?.imagemHoverUrl ?? hardware?.imagemHoverUrl ?? current.imagemHoverUrl ?? ''),
+        publicado: linkedProductId ? Boolean(sourceProduct?.publicado) : current.publicado,
+        ativo: linkedProductId && typeof sourceProduct?.ativo === 'boolean' ? sourceProduct.ativo : current.ativo,
+        metadados: linkedProductId && sourceProduct?.metadados
+          ? JSON.stringify(sourceProduct.metadados, null, 2)
+          : current.metadados,
+      }))
+
+      if (nextSchema) setTechnical(technicalFromPreview(nextSchema, technicalSource))
+      else setTechnical({})
+
+      setHardwares((current) => current.map((item) => Number(item.id) === Number(hardware.id)
+        ? { ...item, ...hardware, produto: sourceProduct }
+        : item))
+      if (linkedProductId) applyExistingOffers(linkedProductId)
+      else if (offerRows.some((row) => row.id)) {
+        setOfferRows([{ ...EMPTY_OFFER }])
+        setIncludeOffer(true)
+      }
+
+      setDirty(true)
+      if (linkedProductId) {
+        toast.show(`Hardware #${hardware.id} já possui o Produto #${linkedProductId}. O cadastro comercial existente será reutilizado, sem duplicar.`)
+      } else if (category) {
+        toast.show(`Dados do Hardware #${hardware.id} preenchidos. Um novo Produto comercial será criado ao salvar.`)
+      } else {
+        toast.show(`Dados do Hardware #${hardware.id} preenchidos. Confira a categoria antes de salvar.`, 'alerta')
+      }
+    } catch (err) {
+      setHardwareError(err?.message || 'Não foi possível carregar o Hardware selecionado.')
+      toast.show(err?.message || 'Não foi possível carregar o Hardware selecionado.', 'erro')
+    } finally {
+      setHardwareLoading(false)
+    }
+  }
+
   async function importData() {
-    if (!canImportLink || !importUrl.trim()) return
+    if (!canImportLink || !cleanText(importUrl)) return
     setImporting(true)
     setImportPreview(null)
     try {
-      const result = await adminService.ai.importLink(importUrl.trim())
+      const result = await adminService.ai.importLink(cleanText(importUrl))
       setImportPreview(result)
-      if (result?.iaDisponivel === false) toast.show(result?.avisoIa || 'Página coletada, mas a IA não conseguiu normalizar os dados.', 'alerta')
-      else toast.show('Prévia criada. Revise os dados antes de aplicá-los ao formulário.')
+      if (result?.iaDisponivel === false) {
+        toast.show(result?.avisoIa || 'Página coletada, mas a IA não conseguiu normalizar os dados.', 'alerta')
+      } else if (result?.destinoSugerido === 'PRODUTO') {
+        applyImportPreview(result, false)
+        toast.show('Dados encontrados pela IA foram preenchidos. Revise o Produto e as ofertas antes de salvar.')
+      } else {
+        toast.show('A página parece ser um Hardware. Use a ação abaixo para continuar no cadastro correto.', 'alerta')
+      }
     } catch (err) {
-      toast.show(err.message, 'erro')
+      toast.show(err?.message || 'Não foi possível analisar o link com a IA.', 'erro')
     } finally {
       setImporting(false)
     }
   }
 
-  function applyImportPreview() {
-    const source = importPreview?.normalizacao?.camposNormalizados || {}
+  function applyImportPreview(preview = importPreview, notify = true) {
+    const source = preview?.normalizacao?.camposNormalizados || {}
     if (!Object.keys(source).length) {
       toast.show('Não existem dados normalizados para aplicar. Faça o cadastro manualmente.', 'alerta')
       return
     }
-    if (importPreview?.destinoSugerido === 'HARDWARE') {
-      try { sessionStorage.setItem('criabyteAdminIaImportPreview', JSON.stringify(importPreview)) } catch { /* opcional */ }
+    if (preview?.destinoSugerido === 'HARDWARE') {
+      try { sessionStorage.setItem('criabyteAdminIaImportPreview', JSON.stringify(preview)) } catch { /* opcional */ }
       navigate('/admin/hardwares/novo?origem=ia-importacao')
       return
     }
@@ -172,7 +483,8 @@ export default function AdminProductForm() {
     const category = findCategoryFromPreview(categories, source.categoria)
     const nextCategoryId = category?.id || form.categoriaId
     const importedSchema = productSchemaFor(category || selectedCategory)
-    const imagem = source.imagemUrl || importPreview?.coleta?.meta?.imagem || importPreview?.coleta?.meta?.ogImage || ''
+    const image = source.imagemUrl || preview?.coleta?.meta?.imagem || preview?.coleta?.meta?.ogImage || ''
+    setSelectedHardwareId('')
     setForm((current) => ({
       ...current,
       categoriaId: nextCategoryId,
@@ -182,11 +494,12 @@ export default function AdminProductForm() {
       descricao: source.descricao || current.descricao,
       mpn: source.mpn || current.mpn,
       gtin: normalizeGtin(source.gtin || source.ean || current.gtin),
-      imagemUrl: imagem || current.imagemUrl,
+      imagemUrl: image || current.imagemUrl,
+      imagemHoverUrl: source.imagemHoverUrl || current.imagemHoverUrl,
     }))
     if (importedSchema) setTechnical((current) => ({ ...current, ...technicalFromPreview(importedSchema, source) }))
     setDirty(true)
-    toast.show('Prévia aplicada ao formulário. Revise tudo e salve somente quando estiver correto.')
+    if (notify) toast.show('Prévia da IA aplicada. Revise os dados antes de salvar.')
   }
 
   async function analyzeWithAi() {
@@ -196,7 +509,7 @@ export default function AdminProductForm() {
       const result = await adminService.ai.analyzeProduct(id)
       setAiAnalysis(result?.analise || 'A IA não retornou uma análise.')
     } catch (err) {
-      toast.show(err.message, 'erro')
+      toast.show(err?.message || 'Não foi possível analisar o Produto com a IA.', 'erro')
     } finally {
       setAiBusy('')
     }
@@ -209,36 +522,174 @@ export default function AdminProductForm() {
       const result = await adminService.ai.generateProductDescription(id)
       if (!result?.descricao) throw new Error('A IA não retornou uma descrição.')
       update('descricao', result.descricao)
-      toast.show('Descrição gerada. Revise e salve para aplicar.')
+      toast.show('Descrição gerada pela IA. Revise e salve para aplicar.')
     } catch (err) {
-      toast.show(err.message, 'erro')
+      toast.show(err?.message || 'Não foi possível gerar a descrição com a IA.', 'erro')
     } finally {
       setAiBusy('')
     }
   }
 
+  function buildOffersPayload() {
+    if (!includeOffer) return []
+
+    return offerRows.map((row, index) => {
+      const numero = index + 1
+      const parceiroId = Number(row.parceiroId)
+      const preco = Number(row.preco)
+      const urlOriginal = cleanText(row.urlOriginal)
+      const urlAfiliada = cleanText(row.urlAfiliada)
+
+      if (!parceiroId) throw new Error(`Selecione o parceiro da Oferta ${numero}.`)
+      if (!Number.isFinite(preco) || preco <= 0) throw new Error(`Informe um preço válido para a Oferta ${numero}.`)
+      if (!urlOriginal) throw new Error(`Informe a URL original da Oferta ${numero}.`)
+      if (!urlAfiliada) throw new Error(`Informe a URL afiliada da Oferta ${numero}.`)
+
+      const precoAnterior = row.precoAnterior === '' ? undefined : Number(row.precoAnterior)
+      if (precoAnterior !== undefined && (!Number.isFinite(precoAnterior) || precoAnterior <= 0)) {
+        throw new Error(`Informe um preço anterior válido na Oferta ${numero} ou deixe o campo vazio.`)
+      }
+
+      return {
+        id: row.id || null,
+        status: row.status || 'ATIVA',
+        payload: {
+          parceiroId,
+          preco,
+          ...(precoAnterior !== undefined ? { precoAnterior } : {}),
+          urlOriginal,
+          urlAfiliada,
+        },
+      }
+    })
+  }
+
+  async function saveOffersForProduct(productId, entries, skipNewIndex = -1) {
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index]
+      if (index === skipNewIndex && !entry.id) continue
+
+      if (entry.id) {
+        await adminService.offers.update(entry.id, {
+          preco: entry.payload.preco,
+          precoAnterior: entry.payload.precoAnterior ?? null,
+          urlOriginal: entry.payload.urlOriginal,
+          urlAfiliada: entry.payload.urlAfiliada,
+        })
+        if (String(entry.status || 'ATIVA').toUpperCase() !== 'ATIVA') {
+          await adminService.offers.setStatus(entry.id, 'ATIVA')
+        }
+      } else {
+        await adminService.offers.create({ produtoId: Number(productId), ...entry.payload })
+      }
+    }
+  }
+
+  async function createWithOptionalInitialOffer(create, productBody, ofertaInicial) {
+    if (!ofertaInicial) return { saved: await create(productBody), offerCreatedInProduct: false }
+
+    try {
+      const saved = await create({ ...productBody, ofertaInicial })
+      return { saved, offerCreatedInProduct: true }
+    } catch (err) {
+      if (!ofertaInicialUnsupported(err)) throw err
+      const saved = await create(productBody)
+      return { saved, offerCreatedInProduct: false }
+    }
+  }
+
   async function submit(event, draft = false) {
     event?.preventDefault()
-    if (!validGtin(form.gtin)) {
+    if (!selectedHardwareId && !validGtin(form.gtin)) {
       setError(new Error('GTIN/EAN inválido. Confira a quantidade de dígitos e o dígito verificador.'))
       return
     }
+
     setSaving(true)
     setError(null)
     try {
       let metadados = {}
-      try { metadados = form.metadados.trim() ? JSON.parse(form.metadados) : {} } catch { throw new Error('O JSON de metadados está inválido.') }
+      const metadataText = cleanText(form.metadados)
+      try { metadados = metadataText ? JSON.parse(metadataText) : {} } catch { throw new Error('O JSON de metadados está inválido.') }
+
       const body = {
-        categoriaId: Number(form.categoriaId), nome: form.nome.trim(), marca: form.marca.trim() || undefined, modelo: form.modelo.trim() || undefined,
-        descricao: form.descricao.trim() || undefined, mpn: form.mpn.trim() || undefined, gtin: form.gtin.trim() || undefined,
-        imagemUrl: form.imagemUrl.trim() || undefined, imagemHoverUrl: form.imagemHoverUrl.trim() || undefined,
-        metadados, publicado: draft ? false : Boolean(form.publicado), ativo: Boolean(form.ativo),
+        categoriaId: Number(form.categoriaId),
+        nome: cleanText(form.nome),
+        marca: cleanText(form.marca) || undefined,
+        modelo: cleanText(form.modelo) || undefined,
+        descricao: cleanText(form.descricao) || undefined,
+        mpn: cleanText(form.mpn) || undefined,
+        gtin: cleanText(form.gtin) || undefined,
+        imagemUrl: cleanText(form.imagemUrl) || undefined,
+        imagemHoverUrl: cleanText(form.imagemHoverUrl) || undefined,
+        metadados,
+        publicado: draft ? false : Boolean(form.publicado),
+        ativo: Boolean(form.ativo),
       }
       if (schema) body[schema.key] = normalizeSpec(schema, technical)
-      const saved = editing ? await adminService.products.update(id, body) : await adminService.products.create(body)
+
+      const offerEntries = draft ? [] : buildOffersPayload()
+      const firstNewOfferIndex = offerEntries.findIndex((entry) => !entry.id)
+      const ofertaInicial = firstNewOfferIndex >= 0 ? offerEntries[firstNewOfferIndex].payload : null
+      let saved
+      let offerCreatedInProduct = false
+      let targetProductId = editing ? Number(id) : selectedLinkedProductId
+
+      if (editing) {
+        saved = await adminService.products.update(id, body)
+      } else if (selectedHardwareId && selectedLinkedProductId) {
+        saved = await adminService.products.update(selectedLinkedProductId, {
+          nome: body.nome || undefined,
+          descricao: body.descricao,
+          imagemUrl: body.imagemUrl,
+          imagemHoverUrl: body.imagemHoverUrl,
+          metadados: body.metadados,
+          publicado: body.publicado,
+          ativo: body.ativo,
+        })
+        targetProductId = selectedLinkedProductId
+      } else if (selectedHardwareId) {
+        const result = await createWithOptionalInitialOffer(
+          (payload) => adminService.products.createFromHardware(selectedHardwareId, payload),
+          {
+            nome: body.nome || undefined,
+            descricao: body.descricao,
+            imagemUrl: body.imagemUrl,
+            imagemHoverUrl: body.imagemHoverUrl,
+            metadados: body.metadados,
+            publicado: body.publicado,
+            ativo: body.ativo,
+          },
+          ofertaInicial,
+        )
+        saved = result.saved
+        offerCreatedInProduct = result.offerCreatedInProduct
+        targetProductId = Number(saved?.id)
+      } else {
+        const result = await createWithOptionalInitialOffer(
+          (payload) => adminService.products.create(payload),
+          body,
+          ofertaInicial,
+        )
+        saved = result.saved
+        offerCreatedInProduct = result.offerCreatedInProduct
+        targetProductId = Number(saved?.id)
+      }
+
+      if (offerEntries.length) {
+        await saveOffersForProduct(
+          targetProductId || saved?.id,
+          offerEntries,
+          offerCreatedInProduct ? firstNewOfferIndex : -1,
+        )
+      }
+
       setDirty(false)
-      toast.show(draft ? 'Produto salvo como rascunho.' : 'Produto salvo.')
-      navigate(`/admin/produtos/${saved?.id || id}`, { replace: true })
+      if (draft) toast.show('Produto salvo como rascunho.')
+      else if (offerEntries.length) toast.show(`Produto e ${offerEntries.length} oferta${offerEntries.length === 1 ? '' : 's'} salvos. O item já pode aparecer em Busca de Ofertas.`)
+      else toast.show('Produto salvo.')
+
+      navigate('/admin/produtos', { replace: true })
     } catch (err) {
       setError(err)
     } finally {
@@ -250,51 +701,242 @@ export default function AdminProductForm() {
   if (error && !form.nome && editing) return <AdminError error={error} />
 
   return <>
-    <AdminPageHeader title={editing ? 'Editar produto' : 'Cadastrar produto'} description="Ficha comercial separada das ofertas afiliadas."><AdminBack to="/admin/produtos">Cancelar</AdminBack></AdminPageHeader>
+    <AdminPageHeader
+      title={editing ? 'Editar produto' : 'Cadastrar produto'}
+      description="Cadastre o Produto comercial e, se quiser, já inclua a oferta com link afiliado no mesmo fluxo."
+    >
+      <AdminBack to="/admin/produtos">Cancelar</AdminBack>
+    </AdminPageHeader>
+
     <form className="admin-form-layout" onSubmit={submit}>
       <div className="admin-form-card">
         {canImportLink && <section className="admin-form-section admin-import-section">
-          <div className="admin-section-heading"><div><h2>Importar por link com IA</h2><p>O backend coleta e normaliza a página. Nenhum cadastro é criado até você revisar e salvar.</p></div><span className="admin-import-badge">Somente ADMIN</span></div>
-          <div className="admin-form-grid"><div className="admin-field full"><label>URL original</label><input className="admin-input" type="url" value={importUrl} onChange={(e) => setImportUrl(e.target.value)} placeholder="https://fabricante-ou-loja.com/produto" /></div><div className="admin-field full"><button className="btn btn-primario" type="button" disabled={importing || !importUrl.trim()} onClick={importData}>{importing ? 'Analisando página...' : 'Analisar produto'}</button></div></div>
+          <div className="admin-section-heading">
+            <div><h2>Cadastrar Produto com IA</h2><p>Cole o link do fabricante ou da loja. A IA analisa a página e preenche uma prévia editável; nada é salvo automaticamente.</p></div>
+            <span className="admin-import-badge">Somente ADMIN</span>
+          </div>
+          <div className="admin-form-grid">
+            <div className="admin-field full"><label>URL do produto</label><input className="admin-input" type="url" value={importUrl} onChange={(event) => setImportUrl(event.target.value)} placeholder="https://fabricante-ou-loja.com/produto" /></div>
+            <div className="admin-field full"><button className="btn btn-primario" type="button" disabled={importing || !cleanText(importUrl)} onClick={importData}>{importing ? 'Analisando com IA...' : 'Analisar e preencher Produto'}</button></div>
+          </div>
           {importPreview && <div className="admin-import-preview">
             <div className="admin-import-preview-head"><div><span className="admin-import-preview-status">{importPreview.status || 'PRÉVIA'}</span><h3>Prévia para revisão</h3></div><strong>{importPreview.destinoSugerido === 'HARDWARE' ? 'Hardware' : 'Produto'}</strong></div>
             {importPreview.avisoIa && <p className="admin-inline-warning">{importPreview.avisoIa}</p>}
             {importPreview.normalizacao?.textoExplicativo && <p className="admin-import-preview-copy">{importPreview.normalizacao.textoExplicativo}</p>}
             <div className="admin-import-preview-fields">
-              {Object.entries(importPreview.normalizacao?.camposNormalizados || {}).filter(([key, value]) => !['evidencias'].includes(key) && value !== null && value !== '' && typeof value !== 'object').slice(0, 12).map(([key, value]) => <div key={key}><span>{key}</span><strong>{String(value)}</strong></div>)}
+              {Object.entries(importPreview.normalizacao?.camposNormalizados || {}).filter(([key, value]) => key !== 'evidencias' && value !== null && value !== '' && typeof value !== 'object').slice(0, 12).map(([key, value]) => <div key={key}><span>{key}</span><strong>{String(value)}</strong></div>)}
             </div>
             <PreviewList title="Revisar" items={importPreview.normalizacao?.alertas} tone="warn" />
             <PreviewList title="Não encontrado" items={importPreview.normalizacao?.ausentes} tone="missing" />
-            <div className="admin-import-preview-actions"><button className="btn btn-secundario" type="button" onClick={() => { setImportPreview(null); setImportUrl('') }}>Descartar prévia</button><button className="btn btn-primario" type="button" onClick={applyImportPreview}>{importPreview.destinoSugerido === 'HARDWARE' ? 'Continuar no cadastro de Hardware' : 'Aplicar prévia ao formulário'}</button></div>
-            <small className="admin-help">A aplicação apenas preenche campos editáveis. O salvamento continua manual.</small>
+            <div className="admin-import-preview-actions">
+              <button className="btn btn-secundario" type="button" onClick={() => { setImportPreview(null); setImportUrl('') }}>Descartar prévia</button>
+              <button className="btn btn-primario" type="button" onClick={() => applyImportPreview()}>{importPreview.destinoSugerido === 'HARDWARE' ? 'Continuar no cadastro de Hardware' : 'Aplicar prévia ao Produto'}</button>
+            </div>
+            <small className="admin-help">A IA apenas preenche campos. Revise tudo e salve manualmente.</small>
           </div>}
         </section>}
 
-        <section className="admin-form-section"><h2>Identificação</h2><div className="admin-form-grid">
-          <div className="admin-field full"><label>Nome</label><input className="admin-input" required value={form.nome} onChange={(e) => update('nome', e.target.value)} /></div>
-          <div className="admin-field"><label>Categoria</label><select className="admin-select" required value={form.categoriaId} onChange={(e) => changeCategory(e.target.value)}><option value="">Selecione</option>{categories.map((cat) => <option value={cat.id} key={cat.id}>{cat.nome || cat.slug || `Categoria ${cat.id}`}</option>)}</select></div>
-          <div className="admin-field"><label>Marca</label><input className="admin-input" value={form.marca} onChange={(e) => update('marca', e.target.value)} /></div>
-          <div className="admin-field"><label>Modelo</label><input className="admin-input" value={form.modelo} onChange={(e) => update('modelo', e.target.value)} /></div>
-          <div className="admin-field"><label>MPN</label><input className="admin-input" value={form.mpn} onChange={(e) => update('mpn', e.target.value)} /></div>
-          <div className="admin-field"><label>GTIN/EAN</label><input className="admin-input" aria-invalid={form.gtin && !validGtin(form.gtin) ? 'true' : 'false'} inputMode="numeric" value={form.gtin} onChange={(e) => update('gtin', normalizeGtin(e.target.value))} />{form.gtin && !validGtin(form.gtin) && <small className="admin-inline-warning">GTIN/EAN inválido.</small>}</div>
-          <div className="admin-field full"><label>Descrição</label><textarea className="admin-textarea" value={form.descricao} onChange={(e) => update('descricao', e.target.value)} /></div>
-        </div></section>
+        {!editing && <section className="admin-form-section admin-import-section">
+          <div className="admin-section-heading">
+            <div>
+              <h2>Usar Hardware existente</h2>
+              <p>Pesquise qualquer Hardware cadastrado. Se ele já possuir Produto, o cadastro comercial existente será reutilizado; se não possuir, um novo Produto será criado.</p>
+            </div>
+            <span className="admin-import-badge">Recomendado</span>
+          </div>
 
-        <section className="admin-form-section"><AdminTechnicalFields schema={schema} values={technical} onChange={updateTechnical} /></section>
+          <div className="admin-form-grid">
+            <div className="admin-field full">
+              <label>Pesquisar Hardware</label>
+              <input
+                className="admin-input"
+                type="search"
+                value={hardwareSearch}
+                onChange={(event) => setHardwareSearch(event.target.value)}
+                placeholder="Ex.: RTX 5070, Ryzen 7, Kingston..."
+                disabled={hardwareLoading && !hardwares.length}
+              />
+              <small className="admin-help">
+                {hardwareLoading
+                  ? 'Carregando Hardwares...'
+                  : `${filteredHardwares.length} de ${hardwares.length} Hardware(s). ${hardwares.length - linkedCount} sem Produto · ${linkedCount} já vinculados.`}
+              </small>
 
-        <section className="admin-form-section"><h2>Imagens e metadados</h2><div className="admin-form-grid">
-          <div className="admin-field full"><label>Imagem principal</label><input className="admin-input" value={form.imagemUrl} onChange={(e) => update('imagemUrl', e.target.value)} placeholder="https://..." /></div>
-          <div className="admin-field full"><label>Imagem hover</label><input className="admin-input" value={form.imagemHoverUrl} onChange={(e) => update('imagemHoverUrl', e.target.value)} placeholder="https://..." /></div>
-          <div className="admin-field full"><label>Metadados JSON</label><textarea className="admin-textarea admin-code-area" value={form.metadados} onChange={(e) => update('metadados', e.target.value)} /><small className="admin-help">Use para dados adicionais que ainda não possuem campo próprio.</small></div>
-        </div></section>
+              {!hardwareLoading && hardwares.length > 0 && <div className="admin-hardware-picker-results" role="listbox" aria-label="Hardwares cadastrados">
+                {filteredHardwares.slice(0, 30).map((hardware) => {
+                  const productId = hardwareProductId(hardware)
+                  return <button
+                    className={`admin-hardware-picker-item ${Number(selectedHardwareId) === Number(hardware.id) ? 'is-selected' : ''}`}
+                    type="button"
+                    role="option"
+                    aria-selected={Number(selectedHardwareId) === Number(hardware.id)}
+                    key={hardware.id}
+                    onClick={() => selectHardware(hardware.id)}
+                  >
+                    <span>
+                      <strong>{hardware.nome || [hardware.marca, hardware.modelo].filter(Boolean).join(' ') || `Hardware #${hardware.id}`}</strong>
+                      <small>#{hardware.id} · {String(hardware.categoria || 'HARDWARE').replaceAll('_', ' ')}</small>
+                    </span>
+                    <span>
+                      <strong>{hardware.marca || '—'}</strong>
+                      <small>{productId ? `Produto #${productId} já vinculado` : (hardware.modelo || hardware.mpn || 'Sem Produto')}</small>
+                    </span>
+                  </button>
+                })}
+                {!filteredHardwares.length && <div className="admin-hardware-picker-empty">Nenhum Hardware encontrado para esta pesquisa.</div>}
+              </div>}
+              {!hardwareLoading && !hardwares.length && !hardwareError && <div className="admin-hardware-picker-empty">Nenhum Hardware cadastrado.</div>}
+            </div>
+
+            <div className="admin-field full">
+              <label>Hardware selecionado</label>
+              <select
+                className="admin-select"
+                value={selectedHardwareId}
+                onChange={(event) => selectHardware(event.target.value)}
+                disabled={hardwareLoading && !hardwares.length}
+              >
+                <option value="">Cadastro manual — não usar Hardware</option>
+                {hardwares.map((hardware) => <option key={hardware.id} value={hardware.id}>#{hardware.id} · {hardwareLabel(hardware)}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {hardwareError && <p className="admin-inline-warning">{hardwareError}</p>}
+
+          {selectedHardware && <div className="admin-import-preview">
+            <div className="admin-import-preview-head">
+              <div>
+                <span className="admin-import-preview-status">HARDWARE #{selectedHardware.id}</span>
+                <h3>{selectedHardware.nome || [selectedHardware.marca, selectedHardware.modelo].filter(Boolean).join(' ') || 'Hardware selecionado'}</h3>
+              </div>
+              <strong>{String(selectedHardware.categoria || 'Hardware').replaceAll('_', ' ')}</strong>
+            </div>
+            <p className="admin-import-preview-copy">
+              {selectedLinkedProductId
+                ? `Este Hardware já possui o Produto #${selectedLinkedProductId}. Ao salvar, esse Produto será atualizado e a oferta afiliada será associada a ele, sem criar duplicata.`
+                : 'Este Hardware ainda não possui Produto. Ao salvar, o Produto comercial será criado e vinculado ao Hardware.'}
+            </p>
+            <div className="admin-import-preview-actions">
+              <button className="btn btn-secundario" type="button" disabled={hardwareLoading} onClick={() => selectHardware(selectedHardware.id)}>
+                {hardwareLoading ? 'Carregando...' : 'Preencher novamente'}
+              </button>
+            </div>
+          </div>}
+        </section>}
+
+        <section className="admin-form-section">
+          <h2>Identificação</h2>
+          <div className="admin-form-grid">
+            <div className="admin-field full"><label>Nome</label><input className="admin-input" required value={form.nome} onChange={(event) => update('nome', event.target.value)} /></div>
+            <div className="admin-field"><label>Categoria</label><select className="admin-select" required={!selectedHardwareId} disabled={Boolean(selectedHardwareId)} value={form.categoriaId} onChange={(event) => changeCategory(event.target.value)}><option value="">{selectedHardwareId ? 'Definida pelo Hardware' : 'Selecione'}</option>{categories.map((cat) => <option value={cat.id} key={cat.id}>{cat.nome || cat.slug || `Categoria ${cat.id}`}</option>)}</select></div>
+            <div className="admin-field"><label>Marca</label><input className="admin-input" value={form.marca} readOnly={Boolean(selectedHardwareId)} onChange={(event) => update('marca', event.target.value)} /></div>
+            <div className="admin-field"><label>Modelo</label><input className="admin-input" value={form.modelo} readOnly={Boolean(selectedHardwareId)} onChange={(event) => update('modelo', event.target.value)} /></div>
+            <div className="admin-field"><label>MPN</label><input className="admin-input" value={form.mpn} readOnly={Boolean(selectedHardwareId)} onChange={(event) => update('mpn', event.target.value)} /></div>
+            <div className="admin-field"><label>GTIN/EAN</label><input className="admin-input" aria-invalid={!selectedHardwareId && form.gtin && !validGtin(form.gtin) ? 'true' : 'false'} inputMode="numeric" value={form.gtin} readOnly={Boolean(selectedHardwareId)} onChange={(event) => update('gtin', normalizeGtin(event.target.value))} />{!selectedHardwareId && form.gtin && !validGtin(form.gtin) && <small className="admin-inline-warning">GTIN/EAN inválido.</small>}</div>
+            <div className="admin-field full"><label>Descrição</label><textarea className="admin-textarea" value={form.descricao} onChange={(event) => update('descricao', event.target.value)} /></div>
+          </div>
+        </section>
+
+        <section className="admin-form-section">
+          {selectedHardwareId
+            ? <div className="admin-info-box"><strong>Ficha técnica vinculada ao Hardware</strong><p>Categoria, marca, modelo, MPN, GTIN e especificações técnicas continuam pertencendo ao Hardware. O Produto guarda somente a parte comercial.</p></div>
+            : <AdminTechnicalFields schema={schema} values={technical} onChange={updateTechnical} />}
+        </section>
+
+        <section className="admin-form-section">
+          <div className="admin-section-heading">
+            <div>
+              <h2>Ofertas afiliadas</h2>
+              <p>Cadastre uma ou várias ofertas para o mesmo Produto. Cada oferta pode ter parceiro, preço e link afiliado próprios.</p>
+            </div>
+            <div className="admin-offer-heading-actions">
+              <label className="admin-switch">
+                <input type="checkbox" checked={includeOffer} onChange={(event) => { setIncludeOffer(event.target.checked); setDirty(true) }} />
+                Incluir ofertas
+              </label>
+              <button className="btn btn-secundario" type="button" onClick={addOffer}>+ Oferta</button>
+            </div>
+          </div>
+
+          {includeOffer && <div className="admin-offer-editors">
+            {offerRows.map((row, index) => <div className="admin-offer-editor" key={row.id || `nova-oferta-${index}`}>
+              <div className="admin-offer-editor-head">
+                <div>
+                  <strong>Oferta {index + 1}</strong>
+                  <small>{row.id ? 'Oferta já cadastrada' : 'Nova oferta'}</small>
+                </div>
+                {!row.id && offerRows.length > 1 && <button className="admin-action-button" type="button" onClick={() => removeOffer(index)}>Remover</button>}
+              </div>
+              <div className="admin-form-grid">
+                <div className="admin-field">
+                  <label>Parceiro</label>
+                  <select className="admin-select" required value={row.parceiroId} disabled={Boolean(row.id)} onChange={(event) => updateOffer(index, 'parceiroId', event.target.value)}>
+                    <option value="">Selecione</option>
+                    {partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.nome}</option>)}
+                  </select>
+                  {row.id && <small className="admin-help">Para trocar o parceiro de uma oferta existente, edite-a diretamente em Ofertas.</small>}
+                </div>
+                <div className="admin-field"><label>Preço atual</label><input className="admin-input" type="number" min="0.01" step="0.01" required value={row.preco} onChange={(event) => updateOffer(index, 'preco', event.target.value)} placeholder="0,00" /></div>
+                <div className="admin-field"><label>Preço anterior</label><input className="admin-input" type="number" min="0.01" step="0.01" value={row.precoAnterior} onChange={(event) => updateOffer(index, 'precoAnterior', event.target.value)} placeholder="Opcional" /></div>
+                <div className="admin-field full"><label>URL original</label><input className="admin-input" type="url" required value={row.urlOriginal} onChange={(event) => updateOffer(index, 'urlOriginal', event.target.value)} placeholder="https://loja.com/produto" /></div>
+                <div className="admin-field full"><label>URL afiliada</label><input className="admin-input" type="url" required value={row.urlAfiliada} onChange={(event) => updateOffer(index, 'urlAfiliada', event.target.value)} placeholder="https://...link-afiliado..." /><small className="admin-help">Este é o link usado pela Busca de Ofertas e pelos botões de compra.</small></div>
+              </div>
+            </div>)}
+          </div>}
+        </section>
+
+        <section className="admin-form-section">
+          <h2>Imagens e metadados</h2>
+          <div className="admin-form-grid">
+            <div className="admin-field full"><label>Imagem principal</label><input className="admin-input" value={form.imagemUrl} onChange={(event) => update('imagemUrl', event.target.value)} placeholder="https://..." /></div>
+            <div className="admin-field full"><label>Imagem hover</label><input className="admin-input" value={form.imagemHoverUrl} onChange={(event) => update('imagemHoverUrl', event.target.value)} placeholder="https://..." /></div>
+            <div className="admin-field full"><label>Metadados JSON</label><textarea className="admin-textarea admin-code-area" value={form.metadados} onChange={(event) => update('metadados', event.target.value)} /><small className="admin-help">Use para dados adicionais que ainda não possuem campo próprio.</small></div>
+          </div>
+        </section>
 
         {error && <div className="admin-form-section"><p className="admin-form-error">{error.message}</p></div>}
-        <footer className="admin-form-footer"><span className={`admin-unsaved-state ${dirty ? 'is-dirty' : ''}`}>{dirty ? 'Alterações não salvas' : 'Tudo salvo'}</span><button className="btn btn-secundario" type="button" disabled={saving} onClick={(e) => submit(e, true)}>Salvar rascunho</button><button className="btn btn-primario" type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar produto'}</button></footer>
+
+        <footer className="admin-form-footer">
+          <span className={`admin-unsaved-state ${dirty ? 'is-dirty' : ''}`}>{dirty ? 'Alterações não salvas' : 'Tudo salvo'}</span>
+          <button className="btn btn-secundario" type="button" disabled={saving} onClick={(event) => submit(event, true)}>Salvar rascunho</button>
+          <button className="btn btn-primario" type="submit" disabled={saving}>{saving ? 'Salvando...' : (includeOffer ? 'Salvar produto e ofertas' : 'Salvar produto')}</button>
+        </footer>
       </div>
+
       <aside className="admin-sticky-side">
-        <div className="admin-card"><header className="admin-card-header"><h2>Pré-visualização</h2></header><div className="admin-card-body"><article className="admin-preview-card"><div className="admin-preview-image">{form.imagemUrl ? <img src={form.imagemUrl} alt="" /> : <div className="admin-empty">Sem imagem</div>}</div><div className="admin-preview-content"><span className="admin-status status-rascunho">{form.publicado ? 'PUBLICADO' : 'RASCUNHO'}</span><h3>{form.nome || 'Nome do produto'}</h3><p>{form.descricao || 'A descrição aparecerá aqui.'}</p><strong className="admin-preview-price">{selectedCategory?.nome || 'Categoria'}</strong></div></article></div></div>
-        {editing && <div className="admin-card admin-ai-product-card"><header className="admin-card-header"><div><h2>IA administrativa</h2><p>Usa somente os dados já cadastrados no backend.</p></div><span className="admin-stat-icon">✦</span></header><div className="admin-card-body"><div className="admin-ai-product-actions"><button className="btn btn-secundario" type="button" disabled={Boolean(aiBusy)} onClick={analyzeWithAi}>{aiBusy === 'analyze' ? 'Analisando...' : 'Analisar cadastro'}</button>{canWriteAi && <button className="btn btn-secundario" type="button" disabled={Boolean(aiBusy)} onClick={generateDescriptionWithAi}>{aiBusy === 'description' ? 'Gerando...' : 'Gerar descrição'}</button>}</div>{aiAnalysis && <div className="admin-ai-analysis">{aiAnalysis}</div>}<small className="admin-help">A IA não salva alterações automaticamente.</small></div></div>}
-        <div className="admin-info-box"><label className="admin-switch"><input type="checkbox" checked={form.publicado} onChange={(e) => update('publicado', e.target.checked)} /> Publicado</label><br /><label className="admin-switch"><input type="checkbox" checked={form.ativo} onChange={(e) => update('ativo', e.target.checked)} /> Ativo</label></div>
+        <div className="admin-card">
+          <header className="admin-card-header"><h2>Pré-visualização</h2></header>
+          <div className="admin-card-body">
+            <article className="admin-preview-card">
+              <div className="admin-preview-image">{form.imagemUrl ? <img src={form.imagemUrl} alt="" /> : <div className="admin-empty">Sem imagem</div>}</div>
+              <div className="admin-preview-content">
+                <span className="admin-status status-rascunho">{form.publicado ? 'PUBLICADO' : 'RASCUNHO'}</span>
+                <h3>{form.nome || 'Nome do produto'}</h3>
+                <p>{form.descricao || 'A descrição aparecerá aqui.'}</p>
+                <strong className="admin-preview-price">{offerRows[0]?.preco ? `R$ ${Number(offerRows[0].preco).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : (selectedCategory?.nome || 'Categoria')}</strong>
+                {includeOffer && offerRows.some((row) => cleanText(row.urlAfiliada)) && <small>✓ {offerRows.filter((row) => cleanText(row.urlAfiliada)).length} oferta(s) com link afiliado</small>}
+              </div>
+            </article>
+          </div>
+        </div>
+
+        {editing && <div className="admin-card admin-ai-product-card">
+          <header className="admin-card-header"><div><h2>IA administrativa</h2><p>Analisa os dados já cadastrados do Produto.</p></div><span className="admin-stat-icon">✦</span></header>
+          <div className="admin-card-body">
+            <div className="admin-ai-product-actions">
+              <button className="btn btn-secundario" type="button" disabled={Boolean(aiBusy)} onClick={analyzeWithAi}>{aiBusy === 'analyze' ? 'Analisando...' : 'Analisar cadastro'}</button>
+              {canWriteAi && <button className="btn btn-secundario" type="button" disabled={Boolean(aiBusy)} onClick={generateDescriptionWithAi}>{aiBusy === 'description' ? 'Gerando...' : 'Gerar descrição'}</button>}
+            </div>
+            {aiAnalysis && <div className="admin-ai-analysis">{aiAnalysis}</div>}
+            <small className="admin-help">A IA não salva alterações automaticamente.</small>
+          </div>
+        </div>}
+
+        <div className="admin-info-box">
+          <label className="admin-switch"><input type="checkbox" checked={form.publicado} onChange={(event) => update('publicado', event.target.checked)} /> Publicado</label><br />
+          <label className="admin-switch"><input type="checkbox" checked={form.ativo} onChange={(event) => update('ativo', event.target.checked)} /> Ativo</label>
+        </div>
       </aside>
     </form>
   </>

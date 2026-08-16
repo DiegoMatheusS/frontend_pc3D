@@ -21,7 +21,7 @@ export default function OfferCard({ product = {} }) {
   return (
     <article className="offer-card">
       <div className="offer-card__visual" aria-hidden="true">
-        <span>{category.slice(0, 2).toUpperCase()}</span>
+        {product.image ? <img src={product.image} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none' }} /> : <span>{category.slice(0, 2).toUpperCase()}</span>}
       </div>
 
       <div className="offer-card__content">
