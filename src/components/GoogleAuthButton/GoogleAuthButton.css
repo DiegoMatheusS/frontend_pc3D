@@ -1,0 +1,25 @@
+.google-auth-control {
+  display: grid;
+  justify-items: stretch;
+  gap: 7px;
+  width: 100%;
+  margin-top: 26px;
+}
+
+.google-auth-control__button {
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  width: 100%;
+}
+
+.google-auth-control__button > div,
+.google-auth-control__button iframe {
+  max-width: 100% !important;
+}
+
+.google-auth-control small {
+  color: var(--color-text-soft);
+  font-size: 11px;
+  text-align: center;
+}

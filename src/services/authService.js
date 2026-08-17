@@ -78,6 +78,14 @@ export const authService = {
     return this.profile()
   },
 
+  async google(credential) {
+    const response = await apiRequest('/api/auth/google', {
+      method: 'POST',
+      body: { credential: String(credential || '').trim() },
+    })
+    return normalizeProfile(response) || this.profile()
+  },
+
   async register(data) {
     const normalized = {
       nome: String(data?.nome || '').trim(),

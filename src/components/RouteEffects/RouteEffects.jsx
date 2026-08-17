@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 
 const DEFAULT_DESCRIPTION = 'Monte seu PC, compare peças, notebooks e computadores montados, confira compatibilidade e encontre ofertas.'
@@ -58,6 +58,7 @@ function upsertLink(selector, attrs) {
 
 export default function RouteEffects() {
   const location = useLocation()
+  const previousPathRef = useRef(null)
 
   useEffect(() => {
     let title
@@ -82,12 +83,24 @@ export default function RouteEffects() {
     upsertLink('link[rel="canonical"]', { rel: 'canonical', href: canonicalUrl })
     upsertMeta('meta[property="og:url"]', { property: 'og:url' }, canonicalUrl)
 
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [location.pathname, location.search])
+
+  useEffect(() => {
+    const previousPath = previousPathRef.current
+    previousPathRef.current = location.pathname
+
     const frame = window.requestAnimationFrame(() => {
+      if (location.hash) {
+        const target = document.getElementById(location.hash.slice(1))
+        target?.scrollIntoView({ block: 'start' })
+      } else if (previousPath !== location.pathname) {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      }
       document.getElementById('conteudo-principal')?.focus({ preventScroll: true })
     })
+
     return () => window.cancelAnimationFrame(frame)
-  }, [location.pathname, location.search])
+  }, [location.pathname, location.hash])
 
   return null
 }

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
-import { safeHttpUrl } from '../../utils/safeUrl'
+import GoogleAuthButton from '../../components/GoogleAuthButton/GoogleAuthButton'
 import './Auth.css'
 
 const PASSWORD_RULES = [
@@ -21,22 +21,6 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim())
 }
 
-function googleRegistrationUrl(returnPath) {
-  const configured = String(import.meta.env.VITE_GOOGLE_AUTH_URL || '').trim()
-  if (!configured) return ''
-
-  const safeConfigured = safeHttpUrl(configured)
-  if (!safeConfigured) return ''
-
-  try {
-    const target = new URL(safeConfigured)
-    target.searchParams.set('retorno', returnPath)
-    return target.toString()
-  } catch {
-    return ''
-  }
-}
-
 function getRegistrationError(error) {
   if (error?.status === 409) return 'Já existe uma conta cadastrada com este e-mail.'
   if (error?.status === 404 || error?.status === 405) {
@@ -47,7 +31,7 @@ function getRegistrationError(error) {
 }
 
 export default function Register() {
-  const { user, loading, register } = useAuth()
+  const { user, loading, register, googleLogin } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const returnPath = useMemo(() => safeReturnPath(searchParams.get('retorno')), [searchParams])
@@ -57,7 +41,6 @@ export default function Register() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [touched, setTouched] = useState({})
-  const googleUrl = googleRegistrationUrl(returnPath)
 
   if (!loading && user) return <Navigate to={returnPath} replace />
 
@@ -77,13 +60,14 @@ export default function Register() {
     setTouched((current) => ({ ...current, [key]: true }))
   }
 
-  function handleGoogleRegistration() {
+  async function handleGoogleCredential(credential) {
     setError('')
-    if (!googleUrl) {
-      setError('O cadastro com Google ainda precisa ser habilitado no backend.')
-      return
-    }
-    window.location.assign(googleUrl)
+    await googleLogin(credential)
+    navigate(returnPath, { replace: true })
+  }
+
+  function handleGoogleError(requestError) {
+    setError(requestError?.message || 'Não foi possível continuar com Google.')
   }
 
   async function handleSubmit(event) {
@@ -134,10 +118,7 @@ export default function Register() {
             <p>Preencha seus dados para criar a conta.</p>
           </header>
 
-          <button className="auth-google" type="button" onClick={handleGoogleRegistration}>
-            <span className="auth-google__icon" aria-hidden="true">G</span>
-            <span>Cadastrar com Google</span>
-          </button>
+          <GoogleAuthButton mode="register" onCredential={handleGoogleCredential} onError={handleGoogleError} />
           <div className="auth-divider"><span>ou use e-mail</span></div>
 
           <form className="auth-form auth-form--after-social" onSubmit={handleSubmit} noValidate>

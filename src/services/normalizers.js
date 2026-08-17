@@ -571,7 +571,7 @@ export function normalizeOfferItem(item) {
     category,
     name: product.nome || product.name || item.nome || item.name || 'Produto',
     brand: text(product.marca ?? product.brand ?? item.marca ?? item.brand),
-    image: product.imagemUrl || product.image || item.imagemUrl || item.image || null,
+    image: product.imagemUrl || product.imagem || product.image || item.imagemUrl || item.imagem || item.image || null,
     price: number(price),
     previousPrice: previousPrice == null ? null : number(previousPrice),
     offersCount: number(item.quantidadeOfertasAtivas ?? item.quantidadeOfertas ?? item.offersCount, offers.length),

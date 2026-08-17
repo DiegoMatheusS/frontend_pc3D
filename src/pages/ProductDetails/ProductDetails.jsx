@@ -72,6 +72,14 @@ export default function ProductDetails() {
     })
   }, [product])
 
+  useEffect(() => {
+    if (!product || window.location.hash !== '#onde-comprar') return undefined
+    const timer = window.setTimeout(() => {
+      document.getElementById('onde-comprar')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 80)
+    return () => window.clearTimeout(timer)
+  }, [product])
+
   const section = product ? (groupNavigation[product.group] || { label: 'Produtos', to: '/loja' }) : null
 
   if (product === undefined) return <div className="page-container product-detail-state">Carregando produto...</div>

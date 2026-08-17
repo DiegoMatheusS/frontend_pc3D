@@ -53,6 +53,12 @@ export default function AuthProvider({ children }) {
     return profile
   }, [])
 
+  const googleLogin = useCallback(async (credential) => {
+    const profile = await authService.google(credential)
+    setUser(profile)
+    return profile
+  }, [])
+
   const logout = useCallback(async () => {
     try {
       await authService.logout()
@@ -67,9 +73,10 @@ export default function AuthProvider({ children }) {
     isAuthenticated: Boolean(user),
     login,
     register,
+    googleLogin,
     logout,
     refresh,
-  }), [user, loading, login, register, logout, refresh])
+  }), [user, loading, login, register, googleLogin, logout, refresh])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

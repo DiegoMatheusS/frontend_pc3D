@@ -1,6 +1,8 @@
 import { ApiError, apiRequest } from './httpClient'
 
-const DEFAULT_DATA_MODE = import.meta.env.PROD ? 'api' : 'auto'
+// Catálogo real por padrão também no desenvolvimento. Dados mock só aparecem quando
+// VITE_DATA_MODE=mock for definido explicitamente.
+const DEFAULT_DATA_MODE = 'api'
 const DATA_MODE = String(import.meta.env.VITE_DATA_MODE || DEFAULT_DATA_MODE).toLowerCase()
 const state = {
   sources: {},

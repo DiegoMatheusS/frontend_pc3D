@@ -9,7 +9,7 @@ const calculateDiscount = (price, previousPrice) => {
   return Math.round(((previous - current) / previous) * 100)
 }
 
-export default function OfferCard({ product = {} }) {
+export default function OfferCard({ product = {}, anchorId = '', highlighted = false }) {
   const category = asText(product.category, 'Produto')
   const name = asText(product.name, 'Produto')
   const brand = asText(product.brand)
@@ -19,7 +19,7 @@ export default function OfferCard({ product = {} }) {
   const discount = calculateDiscount(price, previousPrice)
 
   return (
-    <article className="offer-card">
+    <article id={anchorId || undefined} className={`offer-card${highlighted ? ' offer-card--highlighted' : ''}`}>
       <div className="offer-card__visual" aria-hidden="true">
         {product.image ? <img src={product.image} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none' }} /> : <span>{category.slice(0, 2).toUpperCase()}</span>}
       </div>
@@ -44,7 +44,11 @@ export default function OfferCard({ product = {} }) {
           {product.registeredBy ? <span>Cadastrado por {product.registeredBy}</span> : null}
         </div>
 
-        <Link className="button button--secondary" to={`/ofertas?produto=${encodeURIComponent(product.id ?? '')}`}>Ver ofertas</Link>
+        {product.id != null && product.id !== '' ? (
+          <Link className="button button--secondary" to={`/produto/${encodeURIComponent(product.id)}#onde-comprar`}>Ver ofertas na loja</Link>
+        ) : (
+          <button className="button button--secondary" type="button" disabled>Oferta indisponível</button>
+        )}
       </div>
     </article>
   )

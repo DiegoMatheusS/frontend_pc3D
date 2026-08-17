@@ -24,7 +24,7 @@ export default function Offers() {
   const [search, setSearch] = useState('')
   const [group, setGroup] = useState('todos')
   const [budget, setBudget] = useState('todos')
-  const [sort, setSort] = useState('relevancia')
+  const [sort, setSort] = useState('maior-desconto')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
@@ -44,10 +44,18 @@ export default function Offers() {
     return () => { active = false }
   }, [reloadKey])
 
-  const selectedProduct = Number(searchParams.get('produto'))
-  const selectedItem = selectedProduct ? offers.find((offer) => offer.id === selectedProduct) : null
+  const selectedProduct = searchParams.get('produto')
+  const selectedItem = selectedProduct ? offers.find((offer) => String(offer.id) === String(selectedProduct)) : null
   const effectiveSearch = selectedItem ? selectedItem.name : search
   const effectiveGroup = selectedItem ? selectedItem.group : group
+
+  useEffect(() => {
+    if (loading || !selectedItem?.id) return undefined
+    const timer = window.setTimeout(() => {
+      document.getElementById(`oferta-${selectedItem.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 80)
+    return () => window.clearTimeout(timer)
+  }, [loading, selectedItem?.id])
 
   const filtered = useMemo(() => {
     const term = normalize(effectiveSearch.trim())
@@ -98,7 +106,7 @@ export default function Offers() {
     setSearch('')
     setGroup('todos')
     setBudget('todos')
-    setSort('relevancia')
+    setSort('maior-desconto')
     setSearchParams({})
   }
 
@@ -113,7 +121,7 @@ export default function Offers() {
         <div className="page-container offers-hero__inner">
           <div>
             <span className="eyebrow">Produtos organizados por categoria</span>
-            <h1>Ofertas sem misturar <span>hardware, periféricos e setup.</span></h1>
+            <h1>Todas as Ofertas</h1>
             <p>
               Encontre oportunidades em grupos claros, compare lojas e veja a melhor oferta ativa de cada produto sem duplicar itens no catálogo.
             </p>
@@ -190,10 +198,10 @@ export default function Offers() {
             <label className="offers-field">
               <span>Ordenar</span>
               <select value={sort} onChange={(event) => setSort(event.target.value)}>
+                <option value="maior-desconto">Maior desconto</option>
                 <option value="relevancia">Mais relevantes</option>
                 <option value="menor-preco">Menor preço</option>
                 <option value="maior-preco">Maior preço</option>
-                <option value="maior-desconto">Maior desconto</option>
                 <option value="mais-ofertas">Mais ofertas</option>
               </select>
             </label>
@@ -217,7 +225,13 @@ export default function Offers() {
 
                   <div className="offers-grid">
                     {section.products.map((product) => (
-                      <OfferCard key={product.id} product={product} compact={false} />
+                      <OfferCard
+                        key={product.id}
+                        product={product}
+                        compact={false}
+                        anchorId={`oferta-${product.id}`}
+                        highlighted={String(selectedItem?.id || '') === String(product.id)}
+                      />
                     ))}
                   </div>
                 </section>

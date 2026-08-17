@@ -119,3 +119,8 @@
   font-size: 11px;
   line-height: 1.45;
 }
+
+.offer-card--highlighted {
+  border-color: color-mix(in srgb, var(--color-primary) 72%, var(--color-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent), var(--shadow-sm);
+}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
-import { safeHttpUrl } from '../../utils/safeUrl'
+import GoogleAuthButton from '../../components/GoogleAuthButton/GoogleAuthButton'
 import '../Register/Auth.css'
 
 function safeReturnPath(value) {
@@ -9,24 +9,8 @@ function safeReturnPath(value) {
   return value
 }
 
-function googleLoginUrl(returnPath) {
-  const configured = String(import.meta.env.VITE_GOOGLE_AUTH_URL || '').trim()
-  if (!configured) return ''
-
-  const safeConfigured = safeHttpUrl(configured)
-  if (!safeConfigured) return ''
-
-  try {
-    const target = new URL(safeConfigured)
-    target.searchParams.set('retorno', returnPath)
-    return target.toString()
-  } catch {
-    return ''
-  }
-}
-
 export default function Login() {
-  const { user, loading, login } = useAuth()
+  const { user, loading, login, googleLogin } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -41,17 +25,17 @@ export default function Login() {
   const returnPath = useMemo(() => safeReturnPath(
     searchParams.get('retorno') || location.state?.from,
   ), [location.state, searchParams])
-  const googleUrl = googleLoginUrl(returnPath)
 
   if (!loading && user) return <Navigate to={returnPath} replace />
 
-  function handleGoogleLogin() {
+  async function handleGoogleCredential(credential) {
     setError('')
-    if (!googleUrl) {
-      setError('O login com Google ainda precisa ser habilitado no backend.')
-      return
-    }
-    window.location.assign(googleUrl)
+    await googleLogin(credential)
+    navigate(returnPath, { replace: true })
+  }
+
+  function handleGoogleError(requestError) {
+    setError(requestError?.message || 'Não foi possível entrar com Google.')
   }
 
   async function handleSubmit(event) {
@@ -94,10 +78,7 @@ export default function Login() {
             <p>Use Google ou entre com seu e-mail e senha.</p>
           </header>
 
-          <button className="auth-google" type="button" onClick={handleGoogleLogin}>
-            <span className="auth-google__icon" aria-hidden="true">G</span>
-            <span>Entrar com Google</span>
-          </button>
+          <GoogleAuthButton mode="login" onCredential={handleGoogleCredential} onError={handleGoogleError} />
           <div className="auth-divider"><span>ou use e-mail</span></div>
 
           <form className="auth-form auth-form--after-social" onSubmit={handleSubmit} noValidate>
