@@ -1,4 +1,6 @@
+import { getCommunityOfferCreatorName, getOfferCreatorId, getOfferCreatorName } from '../utils/offerCreator'
 import { configurationFromComponents, inferMountedPcConfiguration } from '../utils/builderConfiguration'
+import { safeHttpUrl } from '../utils/safeUrl'
 
 const CATEGORY_META = {
   PROCESSADOR: ['hardwares', 'Processador', 'processador'],
@@ -142,7 +144,9 @@ function normalizeOffers(rawOffers = []) {
       seller: item.vendedorNome || null,
       price: number(item.precoAtual ?? item.preco ?? item.valor),
       previousPrice: number(item.precoAnterior, 0) || null,
-      url: item.urlAfiliada || item.urlAfiliado || item.linkAfiliado || item.urlOriginal || item.url || '#',
+      url: safeHttpUrl(item.urlAfiliada || item.urlAfiliado || item.linkAfiliado || item.urlOriginal || item.url, { allowRelative: false }) || '#',
+      registeredBy: getCommunityOfferCreatorName(item),
+      registeredById: getOfferCreatorId(item),
     }))
     .filter((item) => item.price >= 0)
     .sort((a, b) => a.price - b.price)
@@ -344,6 +348,7 @@ export function normalizeProduct(item) {
     price,
     previousPrice,
     tags: Array.isArray(item.tags) ? item.tags : [],
+    registeredBy: getCommunityOfferCreatorName(item) || offers[0]?.registeredBy || null,
     specs: normalizeSpecs(hardware ? { ...item, ...hardware, especificacoes: item.especificacoes ?? hardware.especificacoes } : item, enumCategory),
     offers,
   }
@@ -557,6 +562,8 @@ export function normalizeOfferItem(item) {
     || 'Produto'
   const price = item.melhorPreco ?? offers[0]?.price ?? item.precoAtual ?? item.price ?? 0
   const previousPrice = item.precoAnterior ?? offers[0]?.previousPrice ?? item.previousPrice ?? null
+  const rawBestOffer = item.melhorOferta || item.oferta || (Array.isArray(item.ofertas) ? item.ofertas[0] : null)
+  const registeredBy = offers[0]?.registeredBy || getCommunityOfferCreatorName(rawBestOffer) || getCommunityOfferCreatorName(item)
 
   return {
     id: product.id ?? item.produtoId ?? item.hardwareId ?? item.id,
@@ -569,6 +576,7 @@ export function normalizeOfferItem(item) {
     previousPrice: previousPrice == null ? null : number(previousPrice),
     offersCount: number(item.quantidadeOfertasAtivas ?? item.quantidadeOfertas ?? item.offersCount, offers.length),
     bestStore: offers[0]?.store || item.melhorOferta?.parceiro?.nome || item.bestStore || 'Loja parceira',
+    registeredBy,
     context: product.descricao || item.descricao || item.context || '',
     tags: Array.isArray(product.tags || item.tags) ? (product.tags || item.tags) : [],
   }

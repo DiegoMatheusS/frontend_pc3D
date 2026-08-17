@@ -41,6 +41,7 @@ export default function OfferCard({ product = {} }) {
           {previousPrice > price && price > 0 ? <del>{formatCurrency(previousPrice)}</del> : null}
           <strong>{price > 0 ? formatCurrency(price) : 'Preço indisponível'}</strong>
           <span>{offersCount} oferta{offersCount === 1 ? '' : 's'} disponível{offersCount === 1 ? '' : 'is'}</span>
+          {product.registeredBy ? <span>Cadastrado por {product.registeredBy}</span> : null}
         </div>
 
         <Link className="button button--secondary" to={`/ofertas?produto=${encodeURIComponent(product.id ?? '')}`}>Ver ofertas</Link>

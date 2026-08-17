@@ -131,7 +131,7 @@
 .admin-action-button:hover { border-color: var(--admin-primary); color: var(--admin-primary); }
 .admin-status { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px; font-size: 12px; font-weight: 800; white-space: nowrap; }
 .admin-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.status-publicado, .status-ativo, .status-disponivel { color: var(--admin-success); background: var(--admin-success-soft); }
+.status-publicado, .status-ativo, .status-ativa, .status-disponivel { color: var(--admin-success); background: var(--admin-success-soft); }
 .status-rascunho, .status-pendente, .status-aguardando-revisao { color: var(--admin-warning); background: var(--admin-warning-soft); }
 .status-arquivado, .status-desativado, .status-indisponivel, .status-com-erro { color: var(--admin-danger); background: var(--admin-danger-soft); }
 .admin-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; color: var(--admin-muted); font-size: 12px; }
@@ -210,8 +210,19 @@
   .admin-toolbar { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 860px) {
-  .admin-sidebar { transform: translateX(-100%); transition: transform .2s ease; box-shadow: 18px 0 45px rgba(0,0,0,.28); }
-  .admin-root.admin-menu-aberto .admin-sidebar { transform: translateX(0); }
+  .admin-sidebar {
+    transform: translateX(-100%);
+    transition: transform .2s ease;
+    box-shadow: none;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .admin-root.admin-menu-aberto .admin-sidebar {
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+    box-shadow: 18px 0 45px rgba(0,0,0,.28);
+  }
   .admin-sidebar-close, .admin-menu-button { display: inline-grid; place-items: center; }
   .admin-overlay { position: fixed; inset: 0; z-index: 45; background: rgba(15,23,42,.55); }
   .admin-root.admin-menu-aberto .admin-overlay { display: block; }
@@ -364,7 +375,7 @@
 .admin-loading, .admin-error-box, .admin-empty-state { padding: 24px; border: 1px solid var(--admin-border); border-radius: 14px; background: var(--admin-surface); color: var(--admin-muted); }
 .admin-error-box { color: var(--admin-danger); border-color: color-mix(in srgb, var(--admin-danger) 35%, var(--admin-border)); background: var(--admin-danger-soft); }
 .admin-status { display:inline-flex; align-items:center; min-height:26px; padding:4px 9px; border-radius:999px; font-size:11px; font-weight:800; background:var(--admin-surface-2); border:1px solid var(--admin-border); }
-.admin-status.status-ativo, .admin-status.status-publicado, .admin-status.status-sucesso { color:var(--admin-success); background:var(--admin-success-soft); }
+.admin-status.status-ativo, .admin-status.status-ativa, .admin-status.status-publicado, .admin-status.status-sucesso { color:var(--admin-success); background:var(--admin-success-soft); }
 .admin-status.status-rascunho, .admin-status.status-inativo, .admin-status.status-desativado { color:var(--admin-muted); }
 .admin-status.status-aguardando-revisao, .admin-status.status-alerta { color:var(--admin-warning); background:var(--admin-warning-soft); }
 .admin-status.status-arquivado, .admin-status.status-removido, .admin-status.status-erro { color:var(--admin-danger); background:var(--admin-danger-soft); }
@@ -845,3 +856,87 @@
 .admin-offer-editor-head strong { font-size:13px; color:var(--admin-text); }
 .admin-offer-editor-head small { color:var(--admin-muted); font-size:10px; }
 @media (max-width:620px) { .admin-offer-heading-actions { justify-content:flex-start; } .admin-offer-editor-head { align-items:flex-start; } }
+
+
+/* v34 — evita qualquer resíduo visual do drawer fechado no lado esquerdo do admin mobile. */
+@media (max-width: 860px) {
+  .admin-root,
+  .admin-shell,
+  .admin-main {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+}
+
+/* Sugestões de ofertas enviadas pela comunidade */
+.admin-suggestion-counter { display:inline-flex; align-items:center; gap:7px; padding:8px 11px; border:1px solid var(--admin-border); border-radius:999px; background:var(--admin-surface); color:var(--admin-muted); font-size:12px; }
+.admin-suggestion-counter strong { color:var(--admin-warning); font-size:16px; }
+.admin-toolbar--suggestions { grid-template-columns:minmax(240px,1.4fr) minmax(150px,.55fr) minmax(180px,.7fr) auto; }
+.admin-toolbar-actions { display:flex; align-items:end; gap:8px; }
+.admin-suggestions-table { min-width:980px; }
+.admin-suggestion-avatar { width:38px; height:38px; display:grid; place-items:center; flex:0 0 auto; border-radius:10px; color:var(--admin-primary); background:var(--admin-primary-soft); font-weight:900; }
+.admin-cell-subline { display:block; margin-top:3px; color:var(--admin-muted); font-size:11px; }
+.admin-suggestion-return-banner { display:flex; align-items:center; gap:9px; margin-bottom:16px; padding:12px 14px; border:1px solid color-mix(in srgb,var(--admin-success) 34%,var(--admin-border)); border-radius:12px; background:var(--admin-success-soft); font-size:12px; }
+.admin-suggestion-return-banner span { color:var(--admin-muted); }
+.admin-suggestion-detail-grid { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr); gap:18px; align-items:start; }
+.admin-suggestion-detail-main,.admin-suggestion-detail-side { display:grid; gap:18px; }
+.admin-suggestion-detail-side { position:sticky; top:84px; }
+.admin-suggestion-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.admin-suggestion-summary > div { min-width:0; display:grid; gap:4px; padding:11px 12px; border:1px solid var(--admin-border); border-radius:10px; background:var(--admin-surface-2); }
+.admin-suggestion-summary > div.full { grid-column:1/-1; }
+.admin-suggestion-summary span,.admin-suggestion-spec-grid span,.admin-suggestion-prefill-grid span { color:var(--admin-muted); font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; }
+.admin-suggestion-summary a,.admin-suggestion-prefill-grid a { overflow-wrap:anywhere; color:var(--admin-primary); text-decoration:none; }
+.admin-suggestion-summary p { margin:0; line-height:1.55; }
+.admin-suggestion-spec-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.admin-suggestion-spec-grid > div { min-width:0; display:grid; gap:4px; padding:10px 11px; border:1px solid var(--admin-border); border-radius:9px; background:var(--admin-surface-2); }
+.admin-suggestion-analysis { display:grid; gap:10px; }
+.admin-suggestion-analysis > span { color:var(--admin-muted); font-size:12px; }
+.admin-suggestion-analysis p { margin:0; padding:10px 12px; border-radius:9px; background:var(--admin-surface-2); line-height:1.5; }
+.admin-suggestion-product-picker,.admin-suggestion-approval-form { display:grid; gap:12px; }
+.admin-suggestion-approval-form .full { width:100%; }
+.admin-suggestion-or { display:flex; align-items:center; gap:9px; color:var(--admin-muted); font-size:10px; text-transform:uppercase; font-weight:850; }
+.admin-suggestion-or::before,.admin-suggestion-or::after { content:""; height:1px; flex:1; background:var(--admin-border); }
+.admin-suggestion-reject-card { border-color:color-mix(in srgb,var(--admin-danger) 25%,var(--admin-border)); }
+.admin-suggestion-reject-card .admin-card-body { display:grid; gap:12px; }
+.admin-suggestion-prefill { background:color-mix(in srgb,var(--admin-primary-soft) 24%,transparent); }
+.admin-suggestion-prefill-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+.admin-suggestion-prefill-grid > div { min-width:0; display:grid; gap:4px; padding:10px 11px; border:1px solid var(--admin-border); border-radius:9px; background:var(--admin-surface); }
+.admin-suggestion-prefill-grid > div.full { grid-column:1/-1; }
+@media (max-width:980px) { .admin-suggestion-detail-grid { grid-template-columns:1fr; } .admin-suggestion-detail-side { position:static; } .admin-toolbar--suggestions { grid-template-columns:1fr 1fr; } .admin-toolbar--suggestions .admin-toolbar-field:first-child,.admin-toolbar-actions { grid-column:1/-1; } }
+@media (max-width:680px) { .admin-suggestion-summary,.admin-suggestion-spec-grid,.admin-suggestion-prefill-grid,.admin-toolbar--suggestions { grid-template-columns:1fr; } .admin-suggestion-summary > div.full,.admin-suggestion-prefill-grid > div.full,.admin-toolbar--suggestions .admin-toolbar-field:first-child,.admin-toolbar-actions { grid-column:auto; } .admin-toolbar-actions { display:grid; grid-template-columns:1fr 1fr; } .admin-suggestion-return-banner { align-items:flex-start; flex-direction:column; } }
+
+/* Busca visível de Produto ao analisar sugestão de oferta */
+.admin-suggestion-product-results { display:grid; gap:7px; max-height:310px; overflow-y:auto; padding:6px; border:1px solid var(--admin-border); border-radius:11px; background:var(--admin-surface-2); }
+.admin-suggestion-product-result { width:100%; display:grid; grid-template-columns:42px minmax(0,1fr) auto; gap:10px; align-items:center; padding:9px; border:1px solid transparent; border-radius:9px; background:var(--admin-surface); color:inherit; text-align:left; cursor:pointer; }
+.admin-suggestion-product-result:hover { border-color:color-mix(in srgb,var(--admin-primary) 40%,var(--admin-border)); background:var(--admin-primary-soft); }
+.admin-suggestion-product-result.is-selected { border-color:var(--admin-primary); box-shadow:0 0 0 1px color-mix(in srgb,var(--admin-primary) 32%,transparent); }
+.admin-suggestion-product-result img,.admin-suggestion-product-result__image { width:42px; height:42px; border-radius:8px; object-fit:contain; background:var(--admin-surface-2); }
+.admin-suggestion-product-result__image { display:grid; place-items:center; color:var(--admin-muted); font-weight:900; }
+.admin-suggestion-product-result__content { min-width:0; display:grid; gap:3px; }
+.admin-suggestion-product-result__content strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+.admin-suggestion-product-result__content small,.admin-suggestion-product-result__category { color:var(--admin-muted); font-size:10px; }
+.admin-suggestion-product-result__category { max-width:105px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-transform:capitalize; }
+.admin-suggestion-product-results__empty { padding:14px 10px; color:var(--admin-muted); font-size:12px; text-align:center; }
+.admin-suggestion-selected-product { display:grid; gap:3px; padding:10px 11px; border:1px solid color-mix(in srgb,var(--admin-success) 34%,var(--admin-border)); border-radius:9px; background:var(--admin-success-soft); }
+.admin-suggestion-selected-product > span { color:var(--admin-muted); font-size:9px; font-weight:850; text-transform:uppercase; letter-spacing:.04em; }
+.admin-suggestion-selected-product strong { font-size:12px; }
+.admin-suggestion-selected-product small { color:var(--admin-muted); font-size:10px; }
+@media (max-width:680px) { .admin-suggestion-product-result { grid-template-columns:38px minmax(0,1fr); } .admin-suggestion-product-result img,.admin-suggestion-product-result__image { width:38px; height:38px; } .admin-suggestion-product-result__category { grid-column:2; max-width:none; } }
+
+/* Ações principais das sugestões de oferta */
+.admin-suggestion-primary-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.admin-suggestion-primary-actions .btn { width:100%; justify-content:center; }
+
+/* Relatório da verificação de preços */
+.admin-price-report { margin-bottom:18px; }
+.admin-price-report-summary { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+.admin-price-report-summary span { padding:8px 10px; border:1px solid var(--admin-border); border-radius:10px; background:var(--admin-surface-2); color:var(--admin-muted); }
+.admin-price-report-summary strong { color:var(--admin-text); }
+.admin-price-report-row--changed { background:color-mix(in srgb, var(--admin-success-soft) 58%, transparent); }
+.admin-price-change { color:var(--admin-success); white-space:nowrap; }
+.admin-price-report-table small { color:var(--admin-muted); }
+@media (max-width: 680px) {
+  .admin-suggestion-primary-actions { grid-template-columns:1fr; }
+  .admin-price-report-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+}

@@ -37,16 +37,34 @@ export default function Home() {
       return undefined
     }
 
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return
-        entry.target.classList.add('is-visible')
-        observer.unobserve(entry.target)
-      })
-    }, { threshold: 0.12, rootMargin: '0px 0px -7% 0px' })
+    let observer
+    const reveal = (element) => {
+      element.classList.add('is-visible')
+      observer?.unobserve(element)
+    }
 
-    elements.forEach((element) => observer.observe(element))
-    return () => observer.disconnect()
+    observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting || entry.intersectionRatio > 0) reveal(entry.target)
+      })
+    }, { threshold: 0.01, rootMargin: '0px 0px 14% 0px' })
+
+    elements.forEach((element) => {
+      const rect = element.getBoundingClientRect()
+      if (rect.top < window.innerHeight * 1.08 && rect.bottom > 0) reveal(element)
+      else observer.observe(element)
+    })
+
+    // Fallback: conteúdo nunca fica invisível por causa do efeito de entrada
+    // caso o navegador não dispare o IntersectionObserver como esperado.
+    const fallback = window.setTimeout(() => {
+      elements.forEach((element) => element.classList.add('is-visible'))
+    }, 1400)
+
+    return () => {
+      window.clearTimeout(fallback)
+      observer.disconnect()
+    }
   }, [loadingHighlights, mountedPcs.length, offerGroups.length])
 
   function moverPreview(event) {
@@ -182,11 +200,11 @@ export default function Home() {
           {selectedGroup ? (
             <div className="home-offers__panel" role="tabpanel">
               <div className="home-offers__intro"><h3>{selectedGroup.label}</h3><p>{selectedGroup.description}</p></div>
-              <div className="home-offers__grid">{selectedGroup.products.map((product, index) => <OfferCard key={product.id ?? `offer-${index}`} product={product} />)}</div>
+              <div className="home-offers__grid">{selectedGroup.products.slice(0, 10).map((product, index) => <OfferCard key={product.id ?? `offer-${index}`} product={product} />)}</div>
             </div>
           ) : !loadingHighlights ? <div className="home-empty-block">As ofertas aparecerão aqui quando houver produtos com preço disponível.</div> : null}
 
-          <p className="home-data-note">Preços e descontos exibidos vêm das ofertas cadastradas.</p>
+          <p className="home-data-note">Mostramos até 10 destaques por categoria. Preços e descontos vêm das ofertas cadastradas.</p>
         </div>
       </section>
 

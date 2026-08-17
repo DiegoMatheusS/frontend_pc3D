@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
+import { safeHttpUrl } from '../../utils/safeUrl'
 import './Auth.css'
 
 const PASSWORD_RULES = [
@@ -18,6 +19,22 @@ function safeReturnPath(value) {
 
 function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim())
+}
+
+function googleRegistrationUrl(returnPath) {
+  const configured = String(import.meta.env.VITE_GOOGLE_AUTH_URL || '').trim()
+  if (!configured) return ''
+
+  const safeConfigured = safeHttpUrl(configured)
+  if (!safeConfigured) return ''
+
+  try {
+    const target = new URL(safeConfigured)
+    target.searchParams.set('retorno', returnPath)
+    return target.toString()
+  } catch {
+    return ''
+  }
 }
 
 function getRegistrationError(error) {
@@ -40,6 +57,7 @@ export default function Register() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [touched, setTouched] = useState({})
+  const googleUrl = googleRegistrationUrl(returnPath)
 
   if (!loading && user) return <Navigate to={returnPath} replace />
 
@@ -57,6 +75,15 @@ export default function Register() {
 
   function markTouched(key) {
     setTouched((current) => ({ ...current, [key]: true }))
+  }
+
+  function handleGoogleRegistration() {
+    setError('')
+    if (!googleUrl) {
+      setError('O cadastro com Google ainda precisa ser habilitado no backend.')
+      return
+    }
+    window.location.assign(googleUrl)
   }
 
   async function handleSubmit(event) {
@@ -99,7 +126,6 @@ export default function Register() {
               <li>Comente e responda dúvidas</li>
             </ul>
           </div>
-          <p className="auth-intro__note">Sua senha é enviada com segurança e não fica armazenada no navegador.</p>
         </aside>
 
         <div className="auth-card">
@@ -108,7 +134,13 @@ export default function Register() {
             <p>Preencha seus dados para criar a conta.</p>
           </header>
 
-          <form className="auth-form" onSubmit={handleSubmit} noValidate>
+          <button className="auth-google" type="button" onClick={handleGoogleRegistration}>
+            <span className="auth-google__icon" aria-hidden="true">G</span>
+            <span>Cadastrar com Google</span>
+          </button>
+          <div className="auth-divider"><span>ou use e-mail</span></div>
+
+          <form className="auth-form auth-form--after-social" onSubmit={handleSubmit} noValidate>
             <label className="auth-field">
               <span>Nome</span>
               <input
@@ -191,7 +223,6 @@ export default function Register() {
           </form>
 
           <p className="auth-switch">Já possui uma conta? <Link to={`/entrar?retorno=${encodeURIComponent(returnPath)}`}>Entrar</Link></p>
-          <p className="auth-security">Sua sessão é mantida por cookie protegido.</p>
         </div>
       </div>
     </section>

@@ -32,9 +32,151 @@ function primeiroObjeto(...valores) {
   return valores.find((valor) => valor && typeof valor === "object" && !Array.isArray(valor)) ?? {};
 }
 
+function numeroPrecoComercial(valor) {
+  if (typeof valor === "number") return Number.isFinite(valor) ? valor : null;
+  if (valor === null || valor === undefined) return null;
+
+  const bruto = String(valor).trim();
+  if (!bruto) return null;
+
+  // Respostas JSON/Prisma Decimal normalmente chegam como "1037.40".
+  // Number() precisa ser tentado antes de qualquer normalização pt-BR para não
+  // transformar 1037.40 em 103740.
+  const direto = Number(bruto);
+  if (Number.isFinite(direto)) return direto;
+
+  const limpo = bruto.replace(/[^\d,.-]/g, "");
+  const ultimaVirgula = limpo.lastIndexOf(",");
+  const ultimoPonto = limpo.lastIndexOf(".");
+  let normalizado = limpo;
+
+  if (ultimaVirgula >= 0 && ultimoPonto >= 0) {
+    // O último separador é tratado como decimal; os anteriores são milhares.
+    if (ultimaVirgula > ultimoPonto) {
+      normalizado = limpo.replace(/\./g, "").replace(",", ".");
+    } else {
+      normalizado = limpo.replace(/,/g, "");
+    }
+  } else if (ultimaVirgula >= 0) {
+    normalizado = limpo.replace(/\./g, "").replace(",", ".");
+  }
+
+  const numero = Number(normalizado);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+function precoOfertaHardware(oferta) {
+  if (!oferta || typeof oferta !== "object" || oferta.ativo === false) return null;
+  const preco = numeroPrecoComercial(
+    oferta.precoAtual ?? oferta.preco ?? oferta.valor ?? oferta.price,
+  );
+  return preco !== null && preco > 0 ? preco : null;
+}
+
+function escolherMelhorOfertaBuilder(ofertas = []) {
+  return (Array.isArray(ofertas) ? ofertas : [])
+    .filter((oferta) => precoOfertaHardware(oferta) !== null)
+    .sort((a, b) => precoOfertaHardware(a) - precoOfertaHardware(b))[0] ?? null;
+}
+
 function melhorOfertaHardware(hardware) {
-  const ofertas = Array.isArray(hardware?.produto?.ofertas) ? hardware.produto.ofertas : [];
-  return ofertas[0] ?? null;
+  // O preço do montador precisa seguir exatamente a mesma fonte comercial da
+  // Loja. Quando o catálogo público de Produtos foi cruzado com o Hardware,
+  // essa oferta tem prioridade sobre qualquer preço legado/nested do Hardware.
+  if (hardware?.__catalogoLojaSincronizado === true) {
+    const ofertaLoja = hardware?.__ofertaLojaBuilder;
+    return ofertaLoja && typeof ofertaLoja === "object" ? ofertaLoja : null;
+  }
+
+  const ofertasProduto = Array.isArray(hardware?.produto?.ofertas)
+    ? hardware.produto.ofertas
+    : [];
+  const ofertasHardware = Array.isArray(hardware?.ofertas)
+    ? hardware.ofertas
+    : [];
+  return escolherMelhorOfertaBuilder([...ofertasProduto, ...ofertasHardware]);
+}
+
+function extrairProdutosPublicos(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.dados)) return payload.dados;
+  if (Array.isArray(payload?.produtos)) return payload.produtos;
+  if (Array.isArray(payload?.itens)) return payload.itens;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+async function listarTodosProdutosPublicosParaBuilder() {
+  const primeiraPagina = await requisitar("/api/produtos?pagina=1&limite=100");
+  const produtos = [...extrairProdutosPublicos(primeiraPagina)];
+  const totalPaginas = Math.max(1, Number(primeiraPagina?.totalPaginas) || 1);
+
+  for (let pagina = 2; pagina <= totalPaginas; pagina += 1) {
+    const resposta = await requisitar(`/api/produtos?pagina=${pagina}&limite=100`);
+    produtos.push(...extrairProdutosPublicos(resposta));
+  }
+
+  return produtos;
+}
+
+function cruzarHardwareComCatalogoComercial(hardwaresResposta, produtos) {
+  const hardwares = Array.isArray(hardwaresResposta)
+    ? hardwaresResposta
+    : Array.isArray(hardwaresResposta?.itens)
+      ? hardwaresResposta.itens
+      : Array.isArray(hardwaresResposta?.dados)
+        ? hardwaresResposta.dados
+        : [];
+
+  const produtoPorHardware = new Map();
+  const produtoPorId = new Map();
+
+  (Array.isArray(produtos) ? produtos : []).forEach((produto) => {
+    const hardwareId = produto?.hardware?.id
+      ?? produto?.hardwareId
+      ?? produto?.hardwareId3D
+      ?? produto?.hardware?.hardwareId
+      ?? produto?.produtoHardwareId;
+    if (hardwareId !== undefined && hardwareId !== null) {
+      produtoPorHardware.set(String(hardwareId), produto);
+    }
+    if (produto?.id !== undefined && produto?.id !== null) {
+      produtoPorId.set(String(produto.id), produto);
+    }
+  });
+
+  return hardwares.map((hardware) => {
+    const produtoLoja = produtoPorHardware.get(String(hardware?.id))
+      ?? produtoPorId.get(String(hardware?.produtoId ?? hardware?.produto?.id ?? ""));
+
+    if (!produtoLoja) {
+      return {
+        ...hardware,
+        __catalogoLojaSincronizado: true,
+        __ofertaLojaBuilder: null,
+      };
+    }
+
+    const melhorOferta = escolherMelhorOfertaBuilder([
+      ...(produtoLoja?.melhorOferta ? [produtoLoja.melhorOferta] : []),
+      ...(Array.isArray(produtoLoja?.ofertas) ? produtoLoja.ofertas : []),
+      ...(Array.isArray(produtoLoja?.offers) ? produtoLoja.offers : []),
+    ]);
+
+    return {
+      ...hardware,
+      __catalogoLojaSincronizado: true,
+      __ofertaLojaBuilder: melhorOferta,
+      produto: {
+        ...(hardware?.produto && typeof hardware.produto === "object" ? hardware.produto : {}),
+        id: produtoLoja.id ?? hardware?.produto?.id,
+        imagemUrl: produtoLoja.imagemUrl ?? hardware?.produto?.imagemUrl,
+        imagemHoverUrl: produtoLoja.imagemHoverUrl ?? hardware?.produto?.imagemHoverUrl,
+        ofertas: melhorOferta ? [melhorOferta] : [],
+      },
+    };
+  });
 }
 
 function normalizarFormatoPlacaMae(valor) {
@@ -75,7 +217,7 @@ function normalizarHardwareParaBuilder(hardware) {
   const tiposMemoria = Array.isArray(hardware?.especificacaoPlacaMae?.tiposMemoriaSuportados)
     ? hardware.especificacaoPlacaMae.tiposMemoriaSuportados
     : [];
-  const preco = oferta?.preco ?? null;
+  const preco = precoOfertaHardware(oferta);
   const modelos3D = Array.isArray(hardware?.modelos3D) ? hardware.modelos3D : [];
   const modelo3DAtivo = hardware?.modelo3DAtivo
     || hardware?.modelo3D
@@ -86,7 +228,13 @@ function normalizarHardwareParaBuilder(hardware) {
     hardware?.modelo3dUrl
       || hardware?.modelo3DUrl
       || hardware?.model3dUrl
+      || hardware?.urlModelo3d
+      || hardware?.urlModelo3D
       || modelo3DAtivo?.arquivoUrl
+      || modelo3DAtivo?.urlArquivo
+      || modelo3DAtivo?.cdnUrl
+      || modelo3DAtivo?.cloudflareUrl
+      || modelo3DAtivo?.url
       || "",
   );
   const transform3D = modelo3DAtivo
@@ -243,7 +391,18 @@ export const api = Object.freeze({
     }
 
     const hardwares = await requisitar("/api/hardwares");
-    return normalizarListaHardwaresParaBuilder(hardwares);
+
+    // Cruza o catálogo técnico com /api/produtos, que é a mesma fonte usada
+    // pela Loja. Assim preço e link do PC 3D deixam de divergir do Produto.
+    try {
+      const produtos = await listarTodosProdutosPublicosParaBuilder();
+      return normalizarListaHardwaresParaBuilder(
+        cruzarHardwareComCatalogoComercial(hardwares, produtos),
+      );
+    } catch (erroProdutos) {
+      console.warn("Não foi possível sincronizar preços da Loja no montador; usando relação do Hardware.", erroProdutos);
+      return normalizarListaHardwaresParaBuilder(hardwares);
+    }
   },
 
   listarMontados() {

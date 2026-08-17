@@ -179,6 +179,38 @@ export default function Header() {
           </div>
 
           <NavLink to="/comunidade" onClick={fecharMenus}>Comunidade</NavLink>
+
+          <div className="mobile-nav-tools">
+            <button
+              type="button"
+              className="mobile-nav-theme"
+              onClick={() => setTema((value) => value === 'dark' ? 'light' : 'dark')}
+            >
+              <span aria-hidden="true">{tema === 'dark' ? '☀' : '◐'}</span>
+              <span>{tema === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}</span>
+            </button>
+
+            {!loading && !user && (
+              <Link className="mobile-nav-profile" to="/entrar" onClick={fecharMenus}>Entrar</Link>
+            )}
+
+            {!loading && user && (
+              <div className="mobile-nav-account">
+                <div className="mobile-nav-account__identity">
+                  <span className="account-menu__avatar" aria-hidden="true">{initials(user.nome)}</span>
+                  <span><strong>{user.nome}</strong><small>{user.email}</small></span>
+                </div>
+                <Link to="/conta" onClick={fecharMenus}>Minha conta</Link>
+                <Link to="/conta/editar" onClick={fecharMenus}>Alterar cadastro</Link>
+                <Link to="/minhas-builds" onClick={fecharMenus}>Minhas builds</Link>
+                <Link to="/comunidade/publicar" onClick={fecharMenus}>Publicar build</Link>
+                <Link to="/enviar-oferta" onClick={fecharMenus}>Enviar oferta</Link>
+                {['ADMIN', 'EDITOR', 'REVISOR'].includes(String(user.papel || '').toUpperCase()) && <Link to="/admin" onClick={fecharMenus}>Abrir Admin</Link>}
+                {['ADMIN', 'EDITOR'].includes(String(user.papel || '').toUpperCase()) && <Link to="/busca-ofertas" onClick={fecharMenus}>Busca de Ofertas</Link>}
+                <button type="button" onClick={handleLogout}>Sair</button>
+              </div>
+            )}
+          </div>
         </nav>
 
         <div className="site-header__actions">
@@ -248,6 +280,7 @@ export default function Header() {
                 <Link to="/conta/editar" onClick={fecharMenus}>Alterar cadastro</Link>
                 <Link to="/minhas-builds" onClick={fecharMenus}>Minhas builds</Link>
                 <Link to="/comunidade/publicar" onClick={fecharMenus}>Publicar build</Link>
+                <Link to="/enviar-oferta" onClick={fecharMenus}>Enviar oferta</Link>
                 {['ADMIN', 'EDITOR', 'REVISOR'].includes(String(user.papel || '').toUpperCase()) && <Link to="/admin" onClick={fecharMenus}>Abrir Admin</Link>}
                 {['ADMIN', 'EDITOR'].includes(String(user.papel || '').toUpperCase()) && <Link to="/busca-ofertas" onClick={fecharMenus}>Busca de Ofertas</Link>}
                 <button type="button" onClick={handleLogout}>Sair</button>

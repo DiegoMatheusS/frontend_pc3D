@@ -76,6 +76,9 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
 
         <Link className="product-card__title" to={href}>{name}</Link>
         <p>{asText(product.description, '')}</p>
+        {product.registeredBy && (
+          <div className="product-card__registered-by">Cadastrado por <strong>{product.registeredBy}</strong></div>
+        )}
 
         <div className="product-card__tags">
           {tags.slice(0, 3).map((tag, index) => <span key={`${asText(tag, 'tag')}-${index}`}>{asText(tag, '')}</span>)}

@@ -104,6 +104,7 @@ export default function ProductDetails() {
           <div className="product-detail-actions">
             <a className="button button--primary" href="#onde-comprar">Onde comprar</a>
             <Link className="button button--secondary" to={`/loja?comparar=${encodeURIComponent(product.slug || product.id)}`}>Comparar</Link>
+            <Link className="button button--secondary" to={`/enviar-oferta?produtoId=${encodeURIComponent(product.id)}`}>Enviar oferta</Link>
             {product.builderCompatible && <Link className="button button--secondary" to={`/montar?peca=${encodeURIComponent(product.builderId || product.id)}&categoria=${encodeURIComponent(builderCategory[product.categoryKey] || product.categoryKey)}`}>Abrir no 3D</Link>}
           </div>
           {product.builderCompatible && <p className="product-detail-legacy-note">Ao abrir o montador, este componente é selecionado automaticamente quando existe no catálogo 3D.</p>}
@@ -124,7 +125,7 @@ export default function ProductDetails() {
             {!asArray(product.offers).length && <p className="product-detail-state">Nenhuma oferta ativa cadastrada para este produto.</p>}
             {asArray(product.offers).map((offer, index) => (
               <article className="product-offer-row" key={`${offer.store}-${offer.price}`}>
-                <div><strong>{offer.store}</strong><span>{index === 0 ? 'Melhor preço disponível' : 'Oferta disponível'}</span></div>
+                <div><strong>{offer.store}</strong><span>{index === 0 ? 'Melhor preço disponível' : 'Oferta disponível'}</span>{offer.registeredBy && <span>Cadastrado por {offer.registeredBy}</span>}</div>
                 <strong>{formatCurrency(offer.price)}</strong>
                 {offer.url && offer.url !== '#' ? (
                   <a className="button button--primary" href={offer.url} target="_blank" rel="sponsored noopener noreferrer">Comprar</a>

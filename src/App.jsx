@@ -20,6 +20,7 @@ const Register = lazy(() => import('./pages/Register/Register'))
 const Account = lazy(() => import('./pages/Account/Account'))
 const AccountEdit = lazy(() => import('./pages/AccountEdit/AccountEdit'))
 const AffiliateOffers = lazy(() => import('./pages/AffiliateOffers/AffiliateOffers'))
+const OfferSuggestion = lazy(() => import('./pages/OfferSuggestion/OfferSuggestion'))
 const Institutional = lazy(() => import('./pages/Institutional/Institutional'))
 const SavedBuilds = lazy(() => import('./pages/SavedBuilds/SavedBuilds'))
 const SavedBuildDetails = lazy(() => import('./pages/SavedBuildDetails/SavedBuildDetails'))
@@ -35,6 +36,8 @@ const AdminProductForm = lazy(() => import('./admin/pages/AdminProductForm'))
 const AdminHardwares = lazy(() => import('./admin/pages/AdminHardwares'))
 const AdminHardwareForm = lazy(() => import('./admin/pages/AdminHardwareForm'))
 const AdminOffers = lazy(() => import('./admin/pages/AdminOffers'))
+const AdminOfferSuggestions = lazy(() => import('./admin/pages/AdminOfferSuggestions'))
+const AdminOfferSuggestionDetail = lazy(() => import('./admin/pages/AdminOfferSuggestionDetail'))
 const AdminOfferForm = lazy(() => import('./admin/pages/AdminOfferForm'))
 const AdminPartners = lazy(() => import('./admin/pages/AdminPartners'))
 const AdminModels3D = lazy(() => import('./admin/pages/AdminModels3D'))
@@ -69,6 +72,14 @@ export default function App() {
         <Route path="/pecas" element={<Lazy><Store defaultGroup="hardwares" /></Lazy>} />
         <Route path="/produto/:id" element={<Lazy><ProductDetails /></Lazy>} />
         <Route path="/ofertas" element={<Lazy><Offers /></Lazy>} />
+        <Route
+          path="/enviar-oferta"
+          element={(
+            <RequireAuth>
+              <Lazy><OfferSuggestion /></Lazy>
+            </RequireAuth>
+          )}
+        />
         <Route path="/notebooks" element={<Lazy><Notebooks /></Lazy>} />
         <Route path="/notebooks/:id" element={<Lazy><NotebookDetails /></Lazy>} />
         <Route path="/montados" element={<Lazy><MountedPcs /></Lazy>} />
@@ -129,6 +140,8 @@ export default function App() {
         <Route path="hardwares/novo" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminHardwareForm /></AdminAccess></Lazy>} />
         <Route path="hardwares/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminHardwareForm /></AdminAccess></Lazy>} />
         <Route path="ofertas" element={<Lazy><AdminOffers /></Lazy>} />
+        <Route path="sugestoes-ofertas" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminOfferSuggestions /></AdminAccess></Lazy>} />
+        <Route path="sugestoes-ofertas/:id" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminOfferSuggestionDetail /></AdminAccess></Lazy>} />
         <Route path="ofertas/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminOfferForm /></AdminAccess></Lazy>} />
         <Route path="parceiros" element={<Lazy><AdminPartners /></Lazy>} />
         <Route path="modelos-3d" element={<Lazy><AdminModels3D /></Lazy>} />

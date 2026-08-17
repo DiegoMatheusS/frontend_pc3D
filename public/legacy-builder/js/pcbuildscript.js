@@ -10,7 +10,7 @@ import {
 } from "./renderer.js";
 
 import { verificarCompatibilidade } from "./compatibilidade.js";
-import { api } from "./api.js";
+import { api } from "./api.js?v=react-v42-price-case-fit";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {
@@ -874,11 +874,31 @@ function caminhoSite(arquivo = "") {
 
 function converterPreco(valor = 0) {
   if (typeof valor === "number") return Number.isFinite(valor) ? valor : 0;
-  const numero = String(valor)
-    .replace(/[^\d,.]/g, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
-  return Number(numero) || 0;
+  if (valor === null || valor === undefined) return 0;
+
+  const bruto = String(valor).trim();
+  if (!bruto) return 0;
+
+  // Decimal vindo da API/Prisma: "1037.40" precisa continuar 1037,40.
+  // Antes o ponto era removido como se fosse milhar, gerando valores 10x/100x.
+  const direto = Number(bruto);
+  if (Number.isFinite(direto)) return direto;
+
+  const limpo = bruto.replace(/[^\d,.-]/g, "");
+  const ultimaVirgula = limpo.lastIndexOf(",");
+  const ultimoPonto = limpo.lastIndexOf(".");
+  let normalizado = limpo;
+
+  if (ultimaVirgula >= 0 && ultimoPonto >= 0) {
+    normalizado = ultimaVirgula > ultimoPonto
+      ? limpo.replace(/\./g, "").replace(",", ".")
+      : limpo.replace(/,/g, "");
+  } else if (ultimaVirgula >= 0) {
+    normalizado = limpo.replace(/\./g, "").replace(",", ".");
+  }
+
+  const numero = Number(normalizado);
+  return Number.isFinite(numero) ? numero : 0;
 }
 
 function formatarPreco(valor = 0) {
@@ -1413,15 +1433,125 @@ function numeroMmPara3DLayout(valor, fallbackMm, minimo, maximo) {
   return Math.min(maximo, Math.max(minimo, mm * 0.01));
 }
 
+function obterDimensoesMinimasConteudoGabinete3D() {
+  // Limite visual mínimo do conjunto selecionado. As peças não são deformadas:
+  // quando o gabinete procedural cadastrado é menor que o conjunto, cresce
+  // apenas a carcaça/área útil da maquete para manter tudo dentro de contexto.
+  let largura = 1.75;
+  let altura = 2.80;
+  let profundidade = 2.80;
+
+  if (estadoMontagem.placamae) {
+    const mb = obterDimensoesPlacaMaeLayout3D();
+    altura = Math.max(altura, 1.10 + mb.altura + 0.32);
+    profundidade = Math.max(profundidade, mb.profundidade + 0.30);
+  }
+
+  if (estadoMontagem.placavideo) {
+    const gpu = obterDimensoesGpuLayout3D();
+    largura = Math.max(largura, gpu.altura + 0.32);
+    profundidade = Math.max(profundidade, gpu.comprimento + 0.30);
+    altura = Math.max(altura, 1.08 + gpu.espessura + 1.40);
+  }
+
+  if (estadoMontagem.fonte) {
+    const psu = obterDimensoesFonteLayout3D();
+    largura = Math.max(largura, psu.largura + 0.25);
+    profundidade = Math.max(profundidade, psu.profundidade + 0.28);
+    altura = Math.max(altura, psu.altura + 2.20);
+  }
+
+  if (estadoMontagem.cooler) {
+    const specs = estadoMontagem.cooler?.especificacoes && typeof estadoMontagem.cooler.especificacoes === "object"
+      ? estadoMontagem.cooler.especificacoes
+      : {};
+    const texto = `${specs.tipo || ""} ${estadoMontagem.cooler?.nome || ""}`.toLowerCase();
+    if (/water|aio|liquid|radiador/.test(texto) || specs.tamanhoRadiadorMm) {
+      const radiador = numeroMmPara3DLayout(specs.tamanhoRadiadorMm, 240, 1.20, 4.20);
+      profundidade = Math.max(profundidade, radiador + 0.30);
+    } else {
+      const alturaCooler = numeroMmPara3DLayout(specs.alturaMm, 155, 0.75, 2.20);
+      largura = Math.max(largura, alturaCooler + 0.32);
+    }
+  }
+
+  const fansFrontais = estadoMontagem.ventoinhas
+    .slice(1, 4)
+    .filter(Boolean);
+  if (fansFrontais.length) {
+    const maiorFan = Math.max(...fansFrontais.map((fan) => {
+      const specs = fan?.especificacoes && typeof fan.especificacoes === "object" ? fan.especificacoes : {};
+      return numeroMmPara3DLayout(specs.tamanhoMm, 120, 0.80, 1.60);
+    }));
+    altura = Math.max(altura, 1.05 + fansFrontais.length * maiorFan + 0.24);
+    largura = Math.max(largura, maiorFan + 0.28);
+  }
+
+  return { largura, altura, profundidade };
+}
+
 function obterDimensoesGabineteLayout3D(peca = estadoMontagem.gabinete) {
-  if (!peca) return { ...DIMENSOES_GABINETE_PADRAO_3D };
+  if (!peca) {
+    const minimoConteudo = obterDimensoesMinimasConteudoGabinete3D();
+    return {
+      largura: Math.max(DIMENSOES_GABINETE_PADRAO_3D.largura, minimoConteudo.largura),
+      altura: Math.max(DIMENSOES_GABINETE_PADRAO_3D.altura, minimoConteudo.altura),
+      profundidade: Math.max(DIMENSOES_GABINETE_PADRAO_3D.profundidade, minimoConteudo.profundidade),
+    };
+  }
   const specs = peca?.especificacoes && typeof peca.especificacoes === "object"
     ? peca.especificacoes
     : {};
+
+  const texto = [peca?.nome, peca?.marca, peca?.modelo, specs?.tamanho]
+    .filter(Boolean)
+    .join(" ")
+    .toUpperCase();
+
+  let padrao = { ...DIMENSOES_GABINETE_PADRAO_3D };
+  if (/SFF|MINI_ITX|MINI-ITX|NR200|COMPACT/.test(texto)) {
+    padrao = { largura: 1.95, altura: 3.25, profundidade: 3.65 };
+  } else if (/MINI_TOWER|MINI TOWER/.test(texto)) {
+    padrao = { largura: 2.05, altura: 3.75, profundidade: 3.90 };
+  } else if (/FULL_TOWER|FULL TOWER|COSMOS|7000D|7000X/.test(texto)) {
+    padrao = { largura: 2.60, altura: 5.65, profundidade: 5.30 };
+  } else if (/O11|H9|Y60|AQUARI|PANORAM|DUAL.?CHAMBER/.test(texto)) {
+    padrao = { largura: 2.85, altura: 4.65, profundidade: 4.65 };
+  } else if (/OPEN_FRAME|OPEN FRAME/.test(texto)) {
+    padrao = { largura: 2.40, altura: 4.30, profundidade: 4.10 };
+  }
+
+  const larguraMm = Number(specs.larguraMm ?? peca.larguraMm);
+  const alturaMm = Number(specs.alturaMm ?? peca.alturaMm);
+  const profundidadeMm = Number(specs.profundidadeMm ?? peca.profundidadeMm);
+  const dimensoesMmValidas =
+    Number.isFinite(larguraMm) && larguraMm >= 140 && larguraMm <= 420 &&
+    Number.isFinite(alturaMm) && alturaMm >= 250 && alturaMm <= 750 &&
+    Number.isFinite(profundidadeMm) && profundidadeMm >= 250 && profundidadeMm <= 750;
+
+  // Só usa dimensões cadastradas quando o conjunto inteiro é plausível. Isso
+  // evita um único campo incorreto deformar o gabinete e jogar as peças para
+  // fora de contexto. Na ausência delas, usa proporções coerentes por formato.
+  if (!dimensoesMmValidas) {
+    const minimoConteudo = obterDimensoesMinimasConteudoGabinete3D();
+    return {
+      largura: Math.max(padrao.largura, minimoConteudo.largura),
+      altura: Math.max(padrao.altura, minimoConteudo.altura),
+      profundidade: Math.max(padrao.profundidade, minimoConteudo.profundidade),
+    };
+  }
+
+  const dimensoesBase = {
+    largura: numeroMmPara3DLayout(larguraMm, padrao.largura * 100, 1.55, 4.2),
+    altura: numeroMmPara3DLayout(alturaMm, padrao.altura * 100, 2.4, 7.2),
+    profundidade: numeroMmPara3DLayout(profundidadeMm, padrao.profundidade * 100, 2.5, 7.6),
+  };
+  const minimoConteudo = obterDimensoesMinimasConteudoGabinete3D();
+
   return {
-    largura: numeroMmPara3DLayout(specs.larguraMm ?? peca.larguraMm, 240, 1.55, 4.2),
-    altura: numeroMmPara3DLayout(specs.alturaMm ?? peca.alturaMm, 460, 2.4, 7.2),
-    profundidade: numeroMmPara3DLayout(specs.profundidadeMm ?? peca.profundidadeMm, 450, 2.5, 7.6),
+    largura: Math.max(dimensoesBase.largura, minimoConteudo.largura),
+    altura: Math.max(dimensoesBase.altura, minimoConteudo.altura),
+    profundidade: Math.max(dimensoesBase.profundidade, minimoConteudo.profundidade),
   };
 }
 
@@ -1565,7 +1695,25 @@ function atualizarAncorasGabinete3D(pecaGabinete = estadoMontagem.gabinete) {
 
   botaoPower3D.position.set(meiaL * 0.58, Math.max(0.2, altura - 0.03), -meiaP * 0.90);
 
-  grupoMaquete.userData.dimensoesGabineteAtuais = { largura, altura, profundidade, alturaShroud };
+  const baseSemConteudo = pecaGabinete
+    ? (() => {
+        const specs = pecaGabinete?.especificacoes && typeof pecaGabinete.especificacoes === "object" ? pecaGabinete.especificacoes : {};
+        return {
+          largura: numeroMmPara3DLayout(specs.larguraMm ?? pecaGabinete.larguraMm, largura * 100, 1.55, 4.2),
+          altura: numeroMmPara3DLayout(specs.alturaMm ?? pecaGabinete.alturaMm, altura * 100, 2.4, 7.2),
+          profundidade: numeroMmPara3DLayout(specs.profundidadeMm ?? pecaGabinete.profundidadeMm, profundidade * 100, 2.5, 7.6),
+        };
+      })()
+    : DIMENSOES_GABINETE_PADRAO_3D;
+  grupoMaquete.userData.dimensoesGabineteAtuais = {
+    largura,
+    altura,
+    profundidade,
+    alturaShroud,
+    ajusteVisualAutomatico: largura > baseSemConteudo.largura + 0.01
+      || altura > baseSemConteudo.altura + 0.01
+      || profundidade > baseSemConteudo.profundidade + 0.01,
+  };
 }
 
 function reconstruirRepresentacoes3DParaGabinete() {
@@ -2196,9 +2344,19 @@ function selecionarPeca(categoria, idPeca, slotStr = "", fluxoSelecionado = "") 
     estadoMontagem[categoria] = jaSelecionada ? null : peca;
   }
 
-  if (categoria === "gabinete") {
-    // Trocar o gabinete reposiciona os pontos de montagem internos, mas nunca
-    // redimensiona as pecas selecionadas.
+  const categoriaAfetaEnvelopeGabinete = [
+    "gabinete",
+    "placamae",
+    "placavideo",
+    "fonte",
+    "cooler",
+    "ventoinhas",
+  ].includes(categoria);
+
+  if (categoriaAfetaEnvelopeGabinete) {
+    // Esses componentes podem alterar a área útil necessária do gabinete.
+    // Recalcula as âncoras e refaz as representações para que o case acompanhe
+    // o conjunto sem achatar/esticar cada peça individualmente.
     reconstruirRepresentacoes3DParaGabinete();
   } else {
     atualizarPecaNo3D(categoria, estadoMontagem[categoria]);
@@ -3425,12 +3583,21 @@ function aplicarConfiguracaoDoHistorico(configuracao) {
   Object.entries(estadoMontagem).forEach(([categoria, atual]) => {
     const recebida = normalizada[categoria];
     if (Array.isArray(atual)) {
-      estadoMontagem[categoria] = Array.from(
-        { length: atual.length },
-        (_, indice) => recebida?.[indice] ?? null,
-      );
+      estadoMontagem[categoria] = Array.from({ length: atual.length }, (_, indice) => {
+        const item = recebida?.[indice] ?? null;
+        if (!item) return null;
+        const peca = resolverPecaConfiguracao(categoria, item, indice);
+        if (!peca) return null;
+        if (categoria === "ventoinhas") {
+          const dados = item && typeof item === "object" ? item : {};
+          peca.fluxo = dados.fluxo === "out" ? "out" : "in";
+        }
+        return peca;
+      });
     } else {
-      estadoMontagem[categoria] = recebida ?? null;
+      estadoMontagem[categoria] = recebida
+        ? resolverPecaConfiguracao(categoria, recebida)
+        : null;
     }
   });
 
@@ -3962,9 +4129,10 @@ function adicionarBarraGabinete(grupo, tamanho, posicao, material) {
 
 function criarGabineteProcedural(peca, basePos) {
   const specs = especificacoesProcedurais(peca);
-  const largura = mmParaUnidade3D(specs.larguraMm, 240, 1.8, 3.6);
-  const altura = mmParaUnidade3D(specs.alturaMm, 460, 3.2, 6.4);
-  const profundidade = mmParaUnidade3D(specs.profundidadeMm, 450, 3.0, 6.8);
+  const dimensoes = obterDimensoesGabineteLayout3D(peca);
+  const largura = dimensoes.largura;
+  const altura = dimensoes.altura;
+  const profundidade = dimensoes.profundidade;
   const template = inferirTemplateGabinete(peca, specs);
 
   const grupo = new THREE.Group();
@@ -4008,19 +4176,26 @@ function criarGabineteProcedural(peca, basePos) {
     [0, -meiaA + altura * 0.12, 0.06],
   ));
 
-  // Lateral visível em vidro. Panorâmicos também recebem frente de vidro.
-  grupo.add(criarMeshProcedural(
+  // Lateral visível em vidro. Não recebe/projeta sombra para não virar um
+  // grande plano claro dependendo do ângulo da câmera.
+  const vidroLateral = criarMeshProcedural(
     new THREE.BoxGeometry(esp * 0.45, altura * 0.94, profundidade * 0.92),
     matVidro,
     [meiaL - esp * 0.6, 0, 0],
-  ));
+  );
+  vidroLateral.castShadow = false;
+  vidroLateral.receiveShadow = false;
+  grupo.add(vidroLateral);
 
   if (template === "panoramico") {
-    grupo.add(criarMeshProcedural(
+    const vidroFrontal = criarMeshProcedural(
       new THREE.BoxGeometry(largura * 0.92, altura * 0.94, esp * 0.45),
       matVidro.clone(),
       [0, 0, -meiaP + esp * 0.6],
-    ));
+    );
+    vidroFrontal.castShadow = false;
+    vidroFrontal.receiveShadow = false;
+    grupo.add(vidroFrontal);
   } else if (template === "mesh") {
     const barras = 11;
     for (let indice = 0; indice < barras; indice += 1) {
@@ -4272,6 +4447,69 @@ function criarModeloProcedural(categoria, peca, slot) {
 }
 
 
+function transform3DTemCalibracaoExplicita(transform = {}) {
+  const posicao = Array.isArray(transform.posicao) ? transform.posicao : [0, 0, 0];
+  const rotacao = Array.isArray(transform.rotacao) ? transform.rotacao : [0, 0, 0];
+  const escala = Array.isArray(transform.escala)
+    ? transform.escala
+    : [transform.escala ?? 1, transform.escala ?? 1, transform.escala ?? 1];
+
+  const deslocado = posicao.some((valor) => Math.abs(Number(valor) || 0) > 0.0001);
+  const rotacionado = rotacao.some((valor) => Math.abs(Number(valor) || 0) > 0.0001);
+  const escalado = escala.some((valor) => Math.abs((Number(valor) || 1) - 1) > 0.0001);
+  return deslocado || rotacionado || escalado;
+}
+
+function normalizarGabineteGlbForaDeEscala(modelo, peca, basePos, transform = {}) {
+  if (!modelo || transform3DTemCalibracaoExplicita(transform)) return;
+
+  modelo.updateMatrixWorld(true);
+  let caixa = new THREE.Box3().setFromObject(modelo);
+  if (caixa.isEmpty()) return;
+
+  const tamanho = caixa.getSize(new THREE.Vector3());
+  const dimensoesEsperadas = obterDimensoesGabineteLayout3D(peca);
+  const maiorAtual = Math.max(tamanho.x, tamanho.y, tamanho.z);
+  const maiorEsperada = Math.max(
+    dimensoesEsperadas.largura,
+    dimensoesEsperadas.altura,
+    dimensoesEsperadas.profundidade,
+  );
+
+  if (!Number.isFinite(maiorAtual) || maiorAtual <= 0.001) return;
+  const proporcao = maiorAtual / maiorEsperada;
+
+  // Arquivos GLB podem vir em metros, centímetros ou milímetros. Corrige
+  // automaticamente diferenças claras de unidade e também garante que o case
+  // visual não fique menor que a área útil calculada para as peças atuais.
+  if (proporcao > 1.8 || proporcao < 0.55) {
+    const fator = maiorEsperada / maiorAtual;
+    modelo.scale.multiplyScalar(fator);
+    modelo.updateMatrixWorld(true);
+    caixa = new THREE.Box3().setFromObject(modelo);
+  }
+
+  const tamanhoAjustado = caixa.getSize(new THREE.Vector3());
+  const fatoresParaConter = [
+    dimensoesEsperadas.largura / Math.max(0.001, tamanhoAjustado.x),
+    dimensoesEsperadas.altura / Math.max(0.001, tamanhoAjustado.y),
+    dimensoesEsperadas.profundidade / Math.max(0.001, tamanhoAjustado.z),
+  ];
+  const fatorConter = Math.max(1, ...fatoresParaConter.filter(Number.isFinite));
+  if (fatorConter > 1.02 && fatorConter < 2.5) {
+    modelo.scale.multiplyScalar(fatorConter);
+    modelo.updateMatrixWorld(true);
+    caixa = new THREE.Box3().setFromObject(modelo);
+    modelo.userData.ajusteVisualGabineteAutomatico = true;
+  }
+
+  // Mantém o gabinete no mesmo centro do layout, evitando modelos cuja origem
+  // fica longe da malha aparecerem deslocados/"fora de contexto".
+  const centro = caixa.getCenter(new THREE.Vector3());
+  modelo.position.add(new THREE.Vector3().copy(basePos).sub(centro));
+  modelo.updateMatrixWorld(true);
+}
+
 function removerModelo3D(categoria) {
   const modeloAtual = modelos3DAtivos[categoria];
   if (!modeloAtual) return;
@@ -4487,6 +4725,10 @@ function atualizarPecaNo3D(categoria, estadoDaCategoria) {
             const centroModelo = caixaModelo.getCenter(new THREE.Vector3());
             modelo.position.add(new THREE.Vector3().copy(finalPos).sub(centroModelo));
           }
+        }
+
+        if (categoria === "gabinete") {
+          normalizarGabineteGlbForaDeEscala(modelo, peca, basePos, transform);
         }
 
         modelo.userData = {

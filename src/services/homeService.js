@@ -29,8 +29,8 @@ export function getFeaturedOfferGroups() {
           label,
           description: offerGroupsMock.find((group) => group.id === id)?.description || '',
           products: Array.isArray(payload?.[id])
-            ? payload[id].map(normalizeOfferItem)
-            : normalizedDirect.filter((item) => item.group === id),
+            ? payload[id].map(normalizeOfferItem).slice(0, 10)
+            : normalizedDirect.filter((item) => item.group === id).slice(0, 10),
         }))
         .filter((group) => group.products.length)
     },

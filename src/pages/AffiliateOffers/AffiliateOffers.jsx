@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { atualizarBuscaOfertas, listarBuscaOfertas, statusVerificacaoPrecos, verificarPrecosOfertas } from '../../services/affiliateOffersService'
+import { getOfferCreatorName } from '../../utils/offerCreator'
 import './AffiliateOffers.css'
 
 const TAGS = [
@@ -227,7 +228,7 @@ export default function AffiliateOffers() {
               <tbody>
                 {filteredOffers.map((offer) => (
                   <tr key={offer.id}>
-                    <td data-label="Nome"><div className="affiliate-offers-product">{offer.imagemUrl ? <img src={offer.imagemUrl} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none' }} /> : <span className="affiliate-offers-product-placeholder" aria-hidden="true">{String(offer.tag || 'OF').slice(0, 2)}</span>}<span><a href={offer.url} target="_blank" rel="noreferrer noopener">{offer.nome}</a>{offer.parceiro?.nome && <small>{offer.parceiro.nome}</small>}</span></div></td>
+                    <td data-label="Nome"><div className="affiliate-offers-product">{offer.imagemUrl ? <img src={offer.imagemUrl} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none' }} /> : <span className="affiliate-offers-product-placeholder" aria-hidden="true">{String(offer.tag || 'OF').slice(0, 2)}</span>}<span><a href={offer.url} target="_blank" rel="noreferrer noopener">{offer.nome}</a>{offer.parceiro?.nome && <small>{offer.parceiro.nome}</small>}{getOfferCreatorName(offer) && <small>Cadastrado por {getOfferCreatorName(offer)}</small>}</span></div></td>
                     <td data-label="Tag"><span className="affiliate-offers-tag">{TAG_LABELS[offer.tag] || 'Outros'}</span></td>
                     <td data-label="Descrição" className="affiliate-offers-description">{offer.descricao || '—'}</td>
                     <td data-label="Valor" className="affiliate-offers-price"><strong>{formatMoney(offer.precoAtual)}</strong>{Number(offer.precoAnterior) > Number(offer.precoAtual) && <del>{formatMoney(offer.precoAnterior)}</del>}</td>

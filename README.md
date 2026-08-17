@@ -328,3 +328,17 @@ O arquivo `BACKEND_INTEGRATION.md` descreve o formato recomendado para que PCs M
 - O shell React do montador usa a altura real disponível abaixo do cabeçalho, evitando o resumo inferior cortado.
 - Somente a lista de peças rola no desktop; cabeçalho e resumo permanecem visíveis.
 - O botão flutuante legado de IA fica oculto no `/montar`, pois o painel já possui `Montar com IA`.
+
+
+### Cadastro com Google (frontend preparado)
+
+A tela de cadastro exibe **Cadastrar com Google**. Para ativar o redirecionamento OAuth, configure `VITE_GOOGLE_AUTH_URL` com a rota pública de início do OAuth no backend. Enquanto essa variável não existir, o frontend informa que o recurso ainda precisa ser habilitado no backend.
+
+## Segurança do frontend
+
+- Não coloque segredos em variáveis `VITE_*`: elas ficam públicas no bundle do navegador.
+- Arquivos `.env` locais são ignorados; use apenas `.env.example` sem valores secretos no repositório.
+- URLs de ofertas normalizadas aceitam apenas HTTP/HTTPS antes de virar links clicáveis.
+- `public/_headers` adiciona headers de hardening em provedores compatíveis.
+- A autenticação continua baseada em cookie de sessão HttpOnly emitido pelo backend; não armazenar tokens de sessão em `localStorage`.
+

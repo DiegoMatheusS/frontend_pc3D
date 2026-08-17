@@ -1,11 +1,28 @@
 import { useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
+import { safeHttpUrl } from '../../utils/safeUrl'
 import '../Register/Auth.css'
 
 function safeReturnPath(value) {
   if (!value || !value.startsWith('/') || value.startsWith('//')) return '/conta'
   return value
+}
+
+function googleLoginUrl(returnPath) {
+  const configured = String(import.meta.env.VITE_GOOGLE_AUTH_URL || '').trim()
+  if (!configured) return ''
+
+  const safeConfigured = safeHttpUrl(configured)
+  if (!safeConfigured) return ''
+
+  try {
+    const target = new URL(safeConfigured)
+    target.searchParams.set('retorno', returnPath)
+    return target.toString()
+  } catch {
+    return ''
+  }
 }
 
 export default function Login() {
@@ -24,8 +41,18 @@ export default function Login() {
   const returnPath = useMemo(() => safeReturnPath(
     searchParams.get('retorno') || location.state?.from,
   ), [location.state, searchParams])
+  const googleUrl = googleLoginUrl(returnPath)
 
   if (!loading && user) return <Navigate to={returnPath} replace />
+
+  function handleGoogleLogin() {
+    setError('')
+    if (!googleUrl) {
+      setError('O login com Google ainda precisa ser habilitado no backend.')
+      return
+    }
+    window.location.assign(googleUrl)
+  }
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -64,10 +91,16 @@ export default function Login() {
         <div className="auth-card">
           <header className="auth-card__header">
             <h2>Entrar</h2>
-            <p>Use seu e-mail e sua senha.</p>
+            <p>Use Google ou entre com seu e-mail e senha.</p>
           </header>
 
-          <form className="auth-form" onSubmit={handleSubmit} noValidate>
+          <button className="auth-google" type="button" onClick={handleGoogleLogin}>
+            <span className="auth-google__icon" aria-hidden="true">G</span>
+            <span>Entrar com Google</span>
+          </button>
+          <div className="auth-divider"><span>ou use e-mail</span></div>
+
+          <form className="auth-form auth-form--after-social" onSubmit={handleSubmit} noValidate>
             <label className="auth-field">
               <span>E-mail</span>
               <input
@@ -118,7 +151,6 @@ export default function Login() {
           </form>
 
           <p className="auth-switch">Ainda não tem uma conta? <Link to={`/cadastro?retorno=${encodeURIComponent(returnPath)}`}>Cadastre-se</Link></p>
-          <p className="auth-security">Sua senha não fica salva no navegador. A sessão é mantida por cookie protegido.</p>
         </div>
       </div>
     </section>

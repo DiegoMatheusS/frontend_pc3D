@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
 import { adminService } from '../services/adminService'
 import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../components/AdminCommon'
@@ -155,6 +155,31 @@ function ofertaInicialUnsupported(error) {
   )
 }
 
+
+function findCategoryFromSuggestion(categories, suggestionCategory) {
+  const raw = String(suggestionCategory || '').toUpperCase()
+  const aliases = raw === 'NOTEBOOK'
+    ? ['notebooks', 'notebook']
+    : raw === 'OUTRO'
+      ? ['outros', 'outro', 'setup']
+      : (HARDWARE_CATEGORY_ALIASES[raw] || [suggestionCategory])
+  for (const alias of aliases) {
+    const found = findCategoryFromPreview(categories, alias)
+    if (found) return found
+  }
+  return null
+}
+
+function technicalFromSuggestion(schema, suggestion = {}) {
+  if (!schema) return {}
+  const source = suggestion.especificacoes || {}
+  const category = String(suggestion.categoria || '').toUpperCase()
+  const mapped = { ...source }
+  if (category === 'MONITOR' && source.painel !== undefined) mapped.tipoPainel = source.painel
+  if (category === 'FONE' && source.conexao !== undefined) mapped.tipoConexao = source.conexao
+  return technicalFromPreview(schema, mapped)
+}
+
 function PreviewList({ title, items = [], tone = '' }) {
   const clean = (Array.isArray(items) ? items : []).filter(Boolean)
   if (!clean.length) return null
@@ -165,7 +190,10 @@ export default function AdminProductForm() {
   const { id } = useParams()
   const editing = id && id !== 'novo'
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const toast = useAdminToast()
+  const suggestionOriginId = !editing && searchParams.get('origem') === 'sugestao-oferta' ? searchParams.get('sugestaoId') : ''
+  const fromOfferSuggestion = Boolean(suggestionOriginId)
   const { user } = useAuth()
   const role = String(user?.papel || '').toUpperCase()
   const canWriteAi = role === 'ADMIN' || role === 'EDITOR'
@@ -194,6 +222,11 @@ export default function AdminProductForm() {
   const [importPreview, setImportPreview] = useState(null)
   const [aiBusy, setAiBusy] = useState('')
   const [aiAnalysis, setAiAnalysis] = useState('')
+  const [suggestionPrefill, setSuggestionPrefill] = useState(null)
+  const [originMode, setOriginMode] = useState(fromOfferSuggestion ? 'SUGESTAO' : 'ADMIN')
+  const [originSuggestionSearch, setOriginSuggestionSearch] = useState('')
+  const [originSuggestions, setOriginSuggestions] = useState([])
+  const [originSuggestionsLoading, setOriginSuggestionsLoading] = useState(false)
 
   const selectedCategory = useMemo(
     () => categories.find((category) => Number(category.id) === Number(form.categoriaId)),
@@ -248,8 +281,9 @@ export default function AdminProductForm() {
       adminService.offers.partners().catch(() => []),
       adminService.offers.list().catch(() => []),
       editing ? adminService.products.get(id) : Promise.resolve(null),
+      suggestionOriginId ? adminService.offerSuggestions.get(suggestionOriginId) : Promise.resolve(null),
     ])
-      .then(([cats, partnerItems, offerItems, item]) => {
+      .then(([cats, partnerItems, offerItems, item, suggestion]) => {
         if (!active) return
         setCategories(cats)
         setPartners(partnerItems)
@@ -281,6 +315,22 @@ export default function AdminProductForm() {
             setOfferRows([{ ...EMPTY_OFFER }])
           }
           setDirty(false)
+        } else if (suggestion) {
+          const suggestionCategory = findCategoryFromSuggestion(cats, suggestion.categoria)
+          const suggestionSchema = productSchemaFor(suggestionCategory)
+          setSuggestionPrefill(suggestion)
+          setForm({
+            ...EMPTY,
+            categoriaId: suggestionCategory?.id || '',
+            nome: String(suggestion.nome || ''),
+            publicado: true,
+            ativo: true,
+          })
+          setTechnical(technicalFromSuggestion(suggestionSchema, suggestion))
+          setIncludeOffer(false)
+          setOfferRows([{ ...EMPTY_OFFER }])
+          setImportUrl(String(suggestion.urlOriginal || ''))
+          setDirty(true)
         } else {
           setDirty(false)
         }
@@ -288,7 +338,7 @@ export default function AdminProductForm() {
       .catch((err) => active && setError(err))
       .finally(() => active && setLoading(false))
     return () => { active = false }
-  }, [id, editing, navigate, toast])
+  }, [id, editing, navigate, toast, suggestionOriginId])
 
   useEffect(() => {
     if (editing) return
@@ -307,6 +357,35 @@ export default function AdminProductForm() {
       .finally(() => active && setHardwareLoading(false))
     return () => { active = false }
   }, [editing])
+
+  useEffect(() => {
+    if (editing || fromOfferSuggestion || role !== 'ADMIN' || originMode !== 'SUGESTAO') {
+      setOriginSuggestions([])
+      setOriginSuggestionsLoading(false)
+      return
+    }
+    let active = true
+    setOriginSuggestionsLoading(true)
+    const timer = window.setTimeout(() => {
+      adminService.offerSuggestions.list({ status: 'EM_ANALISE', search: originSuggestionSearch.trim() })
+        .then((payload) => {
+          if (!active) return
+          const items = Array.isArray(payload) ? payload : Array.isArray(payload?.sugestoes) ? payload.sugestoes : []
+          setOriginSuggestions(items.slice(0, 20))
+        })
+        .catch(() => { if (active) setOriginSuggestions([]) })
+        .finally(() => { if (active) setOriginSuggestionsLoading(false) })
+    }, 250)
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [editing, fromOfferSuggestion, originMode, originSuggestionSearch, role])
+
+  function chooseOriginSuggestion(suggestion) {
+    if (!suggestion?.id) return
+    navigate(`/admin/produtos/novo?origem=sugestao-oferta&sugestaoId=${encodeURIComponent(suggestion.id)}`)
+  }
 
   useEffect(() => {
     const handler = (event) => {
@@ -628,7 +707,7 @@ export default function AdminProductForm() {
       }
       if (schema) body[schema.key] = normalizeSpec(schema, technical)
 
-      const offerEntries = draft ? [] : buildOffersPayload()
+      const offerEntries = (draft || fromOfferSuggestion) ? [] : buildOffersPayload()
       const firstNewOfferIndex = offerEntries.findIndex((entry) => !entry.id)
       const ofertaInicial = firstNewOfferIndex >= 0 ? offerEntries[firstNewOfferIndex].payload : null
       let saved
@@ -686,10 +765,15 @@ export default function AdminProductForm() {
 
       setDirty(false)
       if (draft) toast.show('Produto salvo como rascunho.')
+      else if (fromOfferSuggestion) toast.show('Produto criado. Agora aceite a sugestão para criar a Oferta.')
       else if (offerEntries.length) toast.show(`Produto e ${offerEntries.length} oferta${offerEntries.length === 1 ? '' : 's'} salvos. O item já pode aparecer em Busca de Ofertas.`)
       else toast.show('Produto salvo.')
 
-      navigate('/admin/produtos', { replace: true })
+      if (suggestionOriginId && !editing) {
+        navigate(`/admin/sugestoes-ofertas/${suggestionOriginId}?produtoId=${encodeURIComponent(targetProductId || saved?.id)}`, { replace: true })
+      } else {
+        navigate('/admin/produtos', { replace: true })
+      }
     } catch (err) {
       setError(err)
     } finally {
@@ -703,13 +787,49 @@ export default function AdminProductForm() {
   return <>
     <AdminPageHeader
       title={editing ? 'Editar produto' : 'Cadastrar produto'}
-      description="Cadastre o Produto comercial e, se quiser, já inclua a oferta com link afiliado no mesmo fluxo."
+      description={fromOfferSuggestion ? 'Cadastre somente o Produto. Depois crie a Oferta e use Aceitar Oferta para concluir a sugestão.' : 'Cadastre o Produto comercial e, se quiser, já inclua a oferta com link afiliado no mesmo fluxo.'}
     >
       <AdminBack to="/admin/produtos">Cancelar</AdminBack>
     </AdminPageHeader>
 
     <form className="admin-form-layout" onSubmit={submit}>
       <div className="admin-form-card">
+        {!editing && role === 'ADMIN' && <section className="admin-form-section admin-import-section">
+          <div className="admin-section-heading">
+            <div><h2>Origem do cadastro</h2><p>Informe se este Produto está sendo criado diretamente pelo Admin ou a partir de uma sugestão enviada pela comunidade.</p></div>
+            <span className="admin-import-badge">AUTORIA</span>
+          </div>
+          <div className="admin-form-grid">
+            <div className="admin-field full">
+              <label>Origem</label>
+              <select className="admin-select" value={fromOfferSuggestion ? 'SUGESTAO' : originMode} disabled={fromOfferSuggestion} onChange={(event) => setOriginMode(event.target.value)}>
+                <option value="ADMIN">Cadastro do Admin</option>
+                <option value="SUGESTAO">Sugestão de usuário</option>
+              </select>
+            </div>
+            {!fromOfferSuggestion && originMode === 'SUGESTAO' && <div className="admin-field full">
+              <label>Pesquisar sugestão</label>
+              <input className="admin-input" type="search" value={originSuggestionSearch} onChange={(event) => setOriginSuggestionSearch(event.target.value)} placeholder="Usuário, produto, link ou ID da sugestão" autoComplete="off" />
+              <small className="admin-help">Selecione a própria sugestão para preservar corretamente quem enviou a oferta.</small>
+              <div className="admin-suggestion-product-results" role="listbox" aria-label="Sugestões de ofertas em análise">
+                {originSuggestionsLoading ? <div className="admin-suggestion-product-results__empty">Buscando sugestões...</div> : originSuggestions.length ? originSuggestions.map((suggestion) => <button
+                  key={suggestion.id}
+                  className="admin-suggestion-product-result"
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  onClick={() => chooseOriginSuggestion(suggestion)}
+                >
+                  <span className="admin-suggestion-product-result__image">#{suggestion.id}</span>
+                  <span className="admin-suggestion-product-result__content"><strong>{suggestion.nome || `Sugestão #${suggestion.id}`}</strong><small>{suggestion.usuario?.nome || 'Usuário'} · {String(suggestion.categoria || '').replaceAll('_', ' ')}</small></span>
+                  <span className="admin-suggestion-product-result__category">{Number(suggestion.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </button>) : <div className="admin-suggestion-product-results__empty">Nenhuma sugestão em análise encontrada.</div>}
+              </div>
+            </div>}
+            {fromOfferSuggestion && suggestionPrefill && <div className="admin-field full"><div className="admin-suggestion-selected-product"><span>Sugestão selecionada</span><strong>#{suggestionPrefill.id} · {suggestionPrefill.nome}</strong><small>Enviada por {suggestionPrefill.usuario?.nome || 'usuário'}. A autoria será preservada quando a Oferta for aceita.</small></div></div>}
+          </div>
+        </section>}
+
         {canImportLink && <section className="admin-form-section admin-import-section">
           <div className="admin-section-heading">
             <div><h2>Cadastrar Produto com IA</h2><p>Cole o link do fabricante ou da loja. A IA analisa a página e preenche uma prévia editável; nada é salvo automaticamente.</p></div>
@@ -734,6 +854,20 @@ export default function AdminProductForm() {
             </div>
             <small className="admin-help">A IA apenas preenche campos. Revise tudo e salve manualmente.</small>
           </div>}
+        </section>}
+
+        {suggestionPrefill && <section className="admin-form-section admin-suggestion-prefill">
+          <div className="admin-section-heading">
+            <div><h2>Produto a partir da Sugestão #{suggestionPrefill.id}</h2><p>O nome e os dados comerciais foram trazidos da sugestão. Nenhum Hardware ou Oferta será criado automaticamente nesta etapa.</p></div>
+            <span className="admin-import-badge">EM ANÁLISE</span>
+          </div>
+          <div className="admin-suggestion-prefill-grid">
+            <div><span>Categoria</span><strong>{String(suggestionPrefill.categoria || '').replaceAll('_', ' ')}</strong></div>
+            <div><span>Preço sugerido</span><strong>{Number(suggestionPrefill.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+            <div className="full"><span>URL enviada</span><a href={suggestionPrefill.urlOriginal} target="_blank" rel="noopener noreferrer">{suggestionPrefill.urlOriginal} ↗</a></div>
+            {Object.entries(suggestionPrefill.especificacoes || {}).map(([key, value]) => <div key={key}><span>{key.replaceAll('_', ' ')}</span><strong>{typeof value === 'boolean' ? (value ? 'Sim' : 'Não') : String(value)}</strong></div>)}
+          </div>
+          <div className="admin-info-box"><strong>Fluxo correto</strong><p>Crie somente o Produto aqui. Ao salvar, você volta para a sugestão, usa “Criar oferta” para cadastrar os dados comerciais e depois “Aceitar Oferta” para vincular a Oferta existente e marcar a sugestão como aprovada.</p></div>
         </section>}
 
         {!editing && <section className="admin-form-section admin-import-section">
@@ -844,6 +978,12 @@ export default function AdminProductForm() {
             : <AdminTechnicalFields schema={schema} values={technical} onChange={updateTechnical} />}
         </section>
 
+        {fromOfferSuggestion ? <section className="admin-form-section admin-suggestion-offer-locked">
+          <div className="admin-info-box">
+            <strong>Oferta será criada depois</strong>
+            <p>Este cadastro veio de uma sugestão em análise. Aqui você cria somente o Produto. Depois volte à sugestão, clique em “Criar oferta” e, quando a Oferta existir, use “Aceitar Oferta” para vinculá-la e mudar o status para APROVADA.</p>
+          </div>
+        </section> : <>
         <section className="admin-form-section">
           <div className="admin-section-heading">
             <div>
@@ -886,6 +1026,8 @@ export default function AdminProductForm() {
           </div>}
         </section>
 
+        </>}
+
         <section className="admin-form-section">
           <h2>Imagens e metadados</h2>
           <div className="admin-form-grid">
@@ -899,8 +1041,8 @@ export default function AdminProductForm() {
 
         <footer className="admin-form-footer">
           <span className={`admin-unsaved-state ${dirty ? 'is-dirty' : ''}`}>{dirty ? 'Alterações não salvas' : 'Tudo salvo'}</span>
-          <button className="btn btn-secundario" type="button" disabled={saving} onClick={(event) => submit(event, true)}>Salvar rascunho</button>
-          <button className="btn btn-primario" type="submit" disabled={saving}>{saving ? 'Salvando...' : (includeOffer ? 'Salvar produto e ofertas' : 'Salvar produto')}</button>
+          {!fromOfferSuggestion && <button className="btn btn-secundario" type="button" disabled={saving} onClick={(event) => submit(event, true)}>Salvar rascunho</button>}
+          <button className="btn btn-primario" type="submit" disabled={saving}>{saving ? 'Salvando...' : (fromOfferSuggestion ? 'Criar Produto' : (includeOffer ? 'Salvar produto e ofertas' : 'Salvar produto'))}</button>
         </footer>
       </div>
 

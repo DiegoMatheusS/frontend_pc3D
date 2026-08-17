@@ -192,9 +192,12 @@
   .store-comparison__header { padding: 14px 16px; }
 }
 
-/* Mobile da Loja: sem rolagem horizontal na página. */
-@media (max-width: 560px) {
-  .store-page {
+/* Mobile da Loja: sem rolagem horizontal na página.
+   Usa o mesmo breakpoint do layout mobile real da Loja. */
+@media (max-width: 780px) {
+  .store-page,
+  .store-page__hero,
+  .store-groups-wrap {
     width: 100%;
     max-width: 100%;
     overflow-x: clip;
@@ -250,6 +253,11 @@
   }
 
   /* A comparação também deixa de exigir arrastar para os lados no celular. */
+  .store-dialog-backdrop {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
   .store-comparison__scroll {
     overflow-x: hidden;
     overflow-y: auto;

@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Variáveis locais / segredos nunca devem ir para o repositório
+.env
+.env.*
+!.env.example

@@ -313,3 +313,9 @@ Se frontend e backend estiverem em origens diferentes, `VITE_API_BASE_URL` deve 
 A rota de criação `POST /api/hardwares` está protegida por `AdminGuard`, portanto o frontend só oferece **Cadastrar hardware** para ADMIN. A edição de Hardware existente continua disponível para ADMIN/EDITOR em `PATCH /api/admin/hardwares/:id`.
 
 O dashboard também evita consultar a lista de usuários para papéis que não sejam ADMIN.
+
+## Sugestões de ofertas — aceitar Oferta existente
+
+- `PATCH /api/admin/ofertas/sugestoes/:id/aceitar-existente`
+- Body: `{ "produtoId": 123 }`
+- A ação não cria Produto/Oferta e não pede URL afiliada. O backend localiza a Oferta do Produto pelo `urlOriginal` da sugestão, vincula a autoria do usuário e marca a sugestão como `APROVADA`.

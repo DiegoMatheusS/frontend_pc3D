@@ -146,6 +146,22 @@ export const adminService = {
     updateMountAdjustment: (ajusteId, body) => oneRequest(`/api/admin/hardwares/ajustes-encaixe/${ajusteId}`, 'PATCH', body),
   },
 
+  offerSuggestions: {
+    fields: () => apiRequest('/api/ofertas/sugestoes/campos'),
+    list: ({ status = '', category = '', search = '' } = {}) => {
+      const params = new URLSearchParams()
+      if (status) params.set('status', status)
+      if (category) params.set('categoria', category)
+      if (search) params.set('busca', search)
+      const query = params.toString()
+      return apiRequest(`/api/admin/ofertas/sugestoes${query ? `?${query}` : ''}`)
+    },
+    get: (id) => apiRequest(`/api/admin/ofertas/sugestoes/${id}`),
+    approve: (id, body) => apiRequest(`/api/admin/ofertas/sugestoes/${id}/aprovar`, { method: 'PATCH', body }),
+    acceptExisting: (id, body) => apiRequest(`/api/admin/ofertas/sugestoes/${id}/aceitar-existente`, { method: 'PATCH', body }),
+    reject: (id, motivo) => apiRequest(`/api/admin/ofertas/sugestoes/${id}/rejeitar`, { method: 'PATCH', body: { motivo } }),
+  },
+
   offers: {
     list: () => list('/api/admin/ofertas'),
     get: (id) => one(`/api/admin/ofertas/${id}`),
@@ -190,7 +206,17 @@ export const adminService = {
   },
 
   audit: {
-    list: () => list('/api/admin/auditoria'),
+    list: ({ acao = '', entidade = '', entidadeId = '', usuarioId = '', pagina = 1, porPagina = 200 } = {}) => {
+      const params = new URLSearchParams()
+      if (acao) params.set('acao', acao)
+      if (entidade) params.set('entidade', entidade)
+      if (entidadeId) params.set('entidadeId', entidadeId)
+      if (usuarioId) params.set('usuarioId', String(usuarioId))
+      if (pagina) params.set('pagina', String(pagina))
+      if (porPagina) params.set('porPagina', String(porPagina))
+      const query = params.toString()
+      return list(`/api/admin/auditoria${query ? `?${query}` : ''}`)
+    },
   },
 
   ai: {

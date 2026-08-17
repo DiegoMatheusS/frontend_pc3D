@@ -122,6 +122,19 @@
   line-height: 1.55;
 }
 
+
+.product-card__registered-by {
+  margin: -3px 0 12px;
+  color: var(--color-text-soft);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.product-card__registered-by strong {
+  color: var(--color-text);
+  font-weight: 800;
+}
+
 .product-card__tags {
   display: flex;
   flex-wrap: wrap;

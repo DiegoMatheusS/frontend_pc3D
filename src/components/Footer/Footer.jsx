@@ -27,7 +27,7 @@ export default function Footer() {
       <div className="page-container site-footer__content">
         <div className="site-footer__columns">
           <section className="site-footer__intro">
-            <Link className="site-footer__logo" to="/">PC <span>BUILDER</span></Link>
+            <Link className="site-footer__logo" to="/">CRIA<span>BYTE</span></Link>
             <p>Monte, compare e compartilhe configurações de PC com informações técnicas, ofertas e comunidade.</p>
             <Link className="site-footer__primary-link" to="/montar">Monte seu PC em 3D →</Link>
           </section>
