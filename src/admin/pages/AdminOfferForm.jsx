@@ -61,7 +61,6 @@ export default function AdminOfferForm() {
           precoAnterior: item.precoAnterior ?? '',
           frete: item.frete ?? '',
         })
-        
       } else if (suggestion) {
         setForm((current) => ({
           ...current,

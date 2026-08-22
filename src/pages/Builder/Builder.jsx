@@ -414,7 +414,7 @@ export default function Builder() {
         await carregarScript('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js')
         if (cancelado) return
 
-        await carregarScript('/legacy-builder/js/pcbuildscript.js?v=react-v44-r2-glb-direct', { modulo: true })
+        await carregarScript('/legacy-builder/js/pcbuildscript.js?v=react-v45-r2-csp-blob', { modulo: true })
         if (cancelado) return
 
         const inicializar = globalThis.inicializarMontadorLegado

@@ -10,7 +10,7 @@ import {
 } from "./renderer.js";
 
 import { verificarCompatibilidade } from "./compatibilidade.js";
-import { api } from "./api.js?v=react-v44-r2-glb-direct";
+import { api } from "./api.js?v=react-v45-r2-csp-blob";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {
