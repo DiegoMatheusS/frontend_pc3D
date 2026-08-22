@@ -4,14 +4,12 @@ import { useAuth } from '../../contexts/authContext'
 import { adminService } from '../services/adminService'
 import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
+import AdminMultiOfferEditor from '../components/AdminMultiOfferEditor'
+import { emptyOfferRow, normalizeOfferRow } from '../components/AdminMultiOfferEditor.utils'
 
 const EMPTY = {
   nome: '', marca: '', modelo: '', descricao: '', imagemUrl: '', imagemHoverUrl: '', categoria: '', finalidade: '', resolucaoRecomendada: '',
   publicado: false, ativo: true, componentes: '[]', configuracao3D: '{}',
-}
-
-const EMPTY_OFFER = {
-  parceiroId: '', preco: '', precoAnterior: '', frete: '', validoAte: '', vendedorNome: '', vendedorIdentificador: '', urlOriginal: '', urlAfiliada: '',
 }
 
 const REQUIRED_PUBLISHED_CATEGORIES = ['PROCESSADOR', 'PLACA_MAE', 'MEMORIA_RAM', 'ARMAZENAMENTO', 'FONTE', 'GABINETE']
@@ -100,11 +98,6 @@ function validAiComponents(value) {
   }
 }
 
-function formatMoney(value) {
-  const number = Number(value)
-  if (!Number.isFinite(number) || number <= 0) return 'Preço não informado'
-  return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
 
 function toIsoDate(value) {
   if (!value) return undefined
@@ -130,14 +123,15 @@ export default function AdminMountedForm() {
   const [hardwares, setHardwares] = useState([])
   const [partners, setPartners] = useState([])
   const [hardwareSearch, setHardwareSearch] = useState('')
-  const [includeOffer, setIncludeOffer] = useState(false)
-  const [offerForm, setOfferForm] = useState(EMPTY_OFFER)
+  const [hardwareCategory, setHardwareCategory] = useState('TODOS')
+  const [offerRows, setOfferRows] = useState([])
+  const [hardwareLoadError, setHardwareLoadError] = useState('')
   const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
     let active = true
     const requests = [
-      adminService.hardwares.list().catch(() => []),
+      adminService.hardwares.listForBuild().catch((err) => { setHardwareLoadError(err?.message || 'Não foi possível carregar o catálogo de Hardware.'); return [] }),
       adminService.offers.partners().catch(() => []),
       editing ? adminService.builds.get(id) : Promise.resolve(null),
     ]
@@ -145,9 +139,14 @@ export default function AdminMountedForm() {
     Promise.all(requests)
       .then(([hardwareItems, partnerItems, item]) => {
         if (!active) return
-        setHardwares(Array.isArray(hardwareItems) ? hardwareItems : [])
+        const usableHardwares = Array.isArray(hardwareItems) ? hardwareItems.filter((hardware) => hardware?.ativo !== false) : []
+        setHardwares(usableHardwares)
+        if (usableHardwares.length) setHardwareLoadError('')
         setPartners(Array.isArray(partnerItems) ? partnerItems : [])
-        if (item) setForm(normalizedMountedForm(item))
+        if (item) {
+          setForm(normalizedMountedForm(item))
+          setOfferRows(Array.isArray(item?.produto?.ofertas) ? item.produto.ofertas.map(normalizeOfferRow) : [])
+        }
       })
       .catch((err) => active && setError(err))
       .finally(() => active && setLoading(false))
@@ -156,23 +155,40 @@ export default function AdminMountedForm() {
   }, [editing, id])
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }))
-  const updateOffer = (key, value) => setOfferForm((current) => ({ ...current, [key]: value }))
+  function updateOffer(index, key, value) {
+    setOfferRows((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, [key]: value } : row))
+  }
+
+  function addOffer(prefill = {}) {
+    setOfferRows((current) => [...current, { ...emptyOfferRow(), ...prefill }])
+  }
+
+  function removeOffer(index) {
+    setOfferRows((current) => {
+      const row = current[index]
+      if (!row) return current
+      if (row.id) return current.map((item, rowIndex) => rowIndex === index ? { ...item, _removed: true } : item)
+      return current.filter((_, rowIndex) => rowIndex !== index)
+    })
+  }
 
   const selectedComponents = useMemo(() => parseComponents(form.componentes), [form.componentes])
   const hardwareById = useMemo(() => new Map(hardwares.map((item) => [Number(item.id), item])), [hardwares])
   const hardwareResults = useMemo(() => {
     const term = normalizeSearch(hardwareSearch)
-    if (term.length < 2) return []
     return hardwares
-      .filter((hardware) => normalizeSearch([
+      .filter((hardware) => hardwareCategory === 'TODOS' || String(hardware.categoria || '').toUpperCase() === hardwareCategory)
+      .filter((hardware) => !term || normalizeSearch([
         hardware.nome,
         hardware.marca,
         hardware.modelo,
         hardware.categoria,
         hardware.id,
       ].join(' ')).includes(term))
-      .slice(0, 12)
-  }, [hardwareSearch, hardwares])
+      .slice(0, 24)
+  }, [hardwareSearch, hardwareCategory, hardwares])
+
+  const hardwareCategories = useMemo(() => [...new Set(hardwares.map((item) => String(item.categoria || '').toUpperCase()).filter(Boolean))].sort(), [hardwares])
 
   const missingPublishedCategories = useMemo(() => {
     const categories = new Set(selectedComponents.map((item) => item.categoria))
@@ -225,17 +241,20 @@ export default function AdminMountedForm() {
   }
 
   function applyImportPreview(preview = importPreview, notify = true) {
-    const source = preview?.normalizacao?.camposNormalizados || {}
+    const payload = preview?.cadastroSugerido?.payload || preview?.acaoFrontend?.payloadInicial || {}
+    const normalized = preview?.normalizacao?.camposNormalizados || {}
+    const source = Object.keys(payload).length ? payload : normalized
     if (!Object.keys(source).length) {
       toast.show('A IA não retornou campos para preencher. Faça o cadastro manualmente.', 'alerta')
       return
     }
 
-    const image = source.imagemUrl || preview?.coleta?.meta?.imagem || preview?.coleta?.meta?.ogImage || ''
+    const image = source.imagemUrl || normalized.imagemUrl || preview?.coleta?.meta?.['og:image'] || preview?.coleta?.meta?.imagem || ''
     const components = validAiComponents(source.componentes)
     const configuration = source.configuracao3D && typeof source.configuracao3D === 'object' && !Array.isArray(source.configuracao3D)
       ? source.configuracao3D
       : null
+    const detected = preview?.cadastroSugerido?.componentesDetectados || preview?.acaoFrontend?.componentesDetectados || []
 
     setForm((current) => ({
       ...current,
@@ -253,34 +272,25 @@ export default function AdminMountedForm() {
     }))
     setImageError(false)
 
-    const price = source.preco ?? source.precoAtual ?? source.melhorPreco
-    const originalUrl = source.urlOriginal || importUrl
-    const affiliateUrl = source.urlAfiliada || source.urlAfiliado
-    const storeName = cleanText(source.parceiro || source.loja || preview?.coleta?.meta?.siteName)
-    const matchedPartner = storeName
-      ? partners.find((partner) => normalizeSearch(partner.nome).includes(normalizeSearch(storeName)) || normalizeSearch(storeName).includes(normalizeSearch(partner.nome)))
-      : null
-
-    if (price || originalUrl || affiliateUrl) {
-      setIncludeOffer(true)
-      setOfferForm((current) => ({
-        ...current,
-        parceiroId: matchedPartner?.id ? String(matchedPartner.id) : current.parceiroId,
-        preco: price ?? current.preco,
-        urlOriginal: originalUrl || current.urlOriginal,
-        urlAfiliada: affiliateUrl || current.urlAfiliada,
-      }))
+    const originalUrl = cleanText(importUrl || preview?.urlFinal || preview?.urlOrigem)
+    if (originalUrl && !offerRows.some((row) => !row._removed && cleanText(row.urlOriginal))) {
+      const storeName = cleanText(preview?.coleta?.meta?.siteName || preview?.coleta?.meta?.['og:site_name'])
+      const matchedPartner = storeName
+        ? partners.find((partner) => normalizeSearch(partner.nome).includes(normalizeSearch(storeName)) || normalizeSearch(storeName).includes(normalizeSearch(partner.nome)))
+        : null
+      addOffer({ urlOriginal: originalUrl, parceiroId: matchedPartner?.id ? String(matchedPartner.id) : '' })
     }
 
-    if (Array.isArray(source.componentes) && source.componentes.length && !components) {
-      setAiComponentNotice('A IA identificou componentes, mas eles não possuem hardwareId válido. Use a pesquisa abaixo para vincular cada peça ao Hardware existente.')
-    } else if (components) {
-      setAiComponentNotice('Os componentes retornados pela IA possuem hardwareId e foram aplicados. Confira cada vínculo antes de salvar.')
+    if (components?.length) {
+      setAiComponentNotice(`${components.length} componente(s) foram vinculados pela IA a Hardwares reais do catálogo. Confira os vínculos abaixo.`)
+    } else if (Array.isArray(detected) && detected.length) {
+      const linked = detected.filter((item) => Number(item?.hardwareId) > 0).length
+      setAiComponentNotice(`A IA identificou ${detected.length} componente(s); ${linked} foram vinculados ao catálogo. Pesquise abaixo os que ainda faltam.`)
     } else {
-      setAiComponentNotice('Dados gerais preenchidos. Agora pesquise e adicione os componentes reais da Build.')
+      setAiComponentNotice('Dados gerais preenchidos. Pesquise e adicione os componentes reais da Build abaixo.')
     }
 
-    if (notify) toast.show('Dados da IA aplicados ao PC Montado. Revise tudo antes de salvar.')
+    if (notify) toast.show('Dados da IA do backend aplicados ao PC Montado. Revise tudo antes de salvar.')
   }
 
   async function importData() {
@@ -290,14 +300,14 @@ export default function AdminMountedForm() {
     setImportPreview(null)
     setAiComponentNotice('')
     try {
-      const result = await adminService.ai.importLink(url)
+      const result = await adminService.ai.importLink(url, 'PC_MONTADO')
       setImportPreview(result)
-      if (result?.iaDisponivel === false) {
-        toast.show(result?.avisoIa || 'A página foi coletada, mas a IA não conseguiu normalizar os dados.', 'alerta')
+      if (!result?.cadastroSugerido?.payload && !result?.normalizacao) {
+        toast.show(result?.avisoIa || 'A página foi coletada, mas não foi possível montar uma prévia de PC Montado.', 'alerta')
         return
       }
       applyImportPreview(result, false)
-      toast.show('Dados encontrados pela IA foram preenchidos no PC Montado. Revise antes de salvar.')
+      toast.show('A IA do backend preencheu o PC Montado. Revise os componentes antes de salvar.')
     } catch (err) {
       toast.show(err?.message || 'Não foi possível analisar o link com a IA.', 'erro')
     } finally {
@@ -305,50 +315,48 @@ export default function AdminMountedForm() {
     }
   }
 
-  function makeOfferBody(produtoId) {
-    const parceiroId = Number(offerForm.parceiroId)
-    const preco = Number(offerForm.preco)
-    const precoAnterior = cleanText(offerForm.precoAnterior) ? Number(offerForm.precoAnterior) : undefined
-    const frete = cleanText(offerForm.frete) ? Number(offerForm.frete) : undefined
-    const urlOriginal = cleanText(offerForm.urlOriginal)
+  function buildOfferEntry(row, produtoId) {
+    const parceiroId = Number(row.parceiroId)
+    const preco = Number(row.preco)
+    const precoAnterior = cleanText(row.precoAnterior) ? Number(row.precoAnterior) : undefined
+    const frete = cleanText(row.frete) ? Number(row.frete) : undefined
+    const urlOriginal = cleanText(row.urlOriginal)
 
-    if (!Number.isInteger(parceiroId) || parceiroId < 1) throw new Error('Selecione o parceiro da oferta.')
-    if (!Number.isFinite(preco) || preco <= 0) throw new Error('Informe um preço válido para a oferta do PC Montado.')
-    if (precoAnterior !== undefined && (!Number.isFinite(precoAnterior) || precoAnterior <= 0)) throw new Error('Preço anterior da oferta é inválido.')
-    if (frete !== undefined && (!Number.isFinite(frete) || frete < 0)) throw new Error('Frete da oferta é inválido.')
-    if (!urlOriginal) throw new Error('Informe a URL original da oferta.')
+    if (!Number.isInteger(parceiroId) || parceiroId < 1) throw new Error('Selecione o parceiro de todas as ofertas.')
+    if (!Number.isFinite(preco) || preco <= 0) throw new Error('Informe um preço válido em todas as ofertas.')
+    if (!urlOriginal) throw new Error('Informe a URL original em todas as ofertas.')
+    if (precoAnterior !== undefined && (!Number.isFinite(precoAnterior) || precoAnterior <= 0)) throw new Error('Revise o preço anterior das ofertas.')
+    if (frete !== undefined && (!Number.isFinite(frete) || frete < 0)) throw new Error('Revise o frete das ofertas.')
 
-    return {
-      produtoId: Number(produtoId),
-      parceiroId,
+    const common = {
       preco,
-      ...(precoAnterior !== undefined ? { precoAnterior } : {}),
-      ...(frete !== undefined ? { frete } : {}),
+      precoAnterior: precoAnterior ?? null,
+      frete: frete ?? null,
       urlOriginal,
-      ...(cleanText(offerForm.urlAfiliada) ? { urlAfiliada: cleanText(offerForm.urlAfiliada) } : {}),
-      ...(cleanText(offerForm.vendedorNome) ? { vendedorNome: cleanText(offerForm.vendedorNome) } : {}),
-      ...(cleanText(offerForm.vendedorIdentificador) ? { vendedorIdentificador: cleanText(offerForm.vendedorIdentificador) } : {}),
-      ...(toIsoDate(offerForm.validoAte) ? { validoAte: toIsoDate(offerForm.validoAte) } : {}),
+      urlAfiliada: cleanText(row.urlAfiliada) || null,
+      vendedorNome: cleanText(row.vendedorNome) || null,
+      vendedorIdentificador: cleanText(row.vendedorIdentificador) || null,
+      validoAte: toIsoDate(row.validoAte) ?? null,
     }
+    return row.id
+      ? { id: row.id, update: common }
+      : { create: { produtoId: Number(produtoId), parceiroId, ...common } }
   }
 
-  async function ensureProductImages(saved) {
-    const produtoId = Number(saved?.produtoId ?? saved?.produto?.id)
-    if (!Number.isInteger(produtoId) || produtoId < 1) return null
-
-    const desiredImage = cleanText(form.imagemUrl)
-    const desiredHover = cleanText(form.imagemHoverUrl)
-    const savedImage = cleanText(saved?.imagemUrl ?? saved?.produto?.imagemUrl)
-    const savedHover = cleanText(saved?.imagemHoverUrl ?? saved?.produto?.imagemHoverUrl)
-
-    if (desiredImage === savedImage && desiredHover === savedHover) return null
-    if (!desiredImage && !desiredHover) return null
-
-    await adminService.products.update(produtoId, {
-      imagemUrl: desiredImage || null,
-      imagemHoverUrl: desiredHover || null,
-    })
-    return produtoId
+  async function saveOffers(produtoId) {
+    for (const row of offerRows) {
+      if (row._removed) {
+        if (row.id) await adminService.offers.setStatus(row.id, 'INDISPONIVEL')
+        continue
+      }
+      const entry = buildOfferEntry(row, produtoId)
+      if (entry.id) {
+        await adminService.offers.update(entry.id, entry.update)
+        if (String(row.status || 'ATIVA').toUpperCase() !== 'ATIVA') await adminService.offers.setStatus(entry.id, 'ATIVA')
+      } else {
+        await adminService.offers.create(entry.create)
+      }
+    }
   }
 
   async function submit(event) {
@@ -389,39 +397,29 @@ export default function AdminMountedForm() {
         configuracao3D,
       }
 
-      // Valida a oferta antes de criar/atualizar a Build, para evitar salvar parcialmente por erro de formulário.
-      if (includeOffer) makeOfferBody(1)
+      // Valida as ofertas antes de criar/atualizar a Build, reduzindo salvamento parcial por erro de formulário.
+      for (const row of offerRows) if (!row._removed) buildOfferEntry(row, 1)
 
       const saved = editing
         ? await adminService.builds.update(id, body)
         : await adminService.builds.create(body)
 
       const postSaveWarnings = []
-
-      try {
-        await ensureProductImages(saved)
-      } catch (imageErr) {
-        postSaveWarnings.push(`Imagem: ${imageErr?.message || 'não foi possível sincronizar com o Produto.'}`)
-      }
-
-      if (includeOffer) {
-        const produtoId = Number(saved?.produtoId ?? saved?.produto?.id)
+      const produtoId = Number(saved?.produtoId ?? saved?.produto?.id)
+      if (offerRows.length) {
         if (!Number.isInteger(produtoId) || produtoId < 1) {
-          postSaveWarnings.push('Oferta: o PC foi salvo, mas o backend não retornou produtoId para vincular a oferta.')
+          postSaveWarnings.push('Ofertas: o backend não retornou produtoId para vincular as ofertas.')
         } else {
           try {
-            await adminService.offers.create(makeOfferBody(produtoId))
+            await saveOffers(produtoId)
           } catch (offerErr) {
-            postSaveWarnings.push(`Oferta: ${offerErr?.message || 'não foi possível criar a oferta.'}`)
+            postSaveWarnings.push(`Ofertas: ${offerErr?.message || 'não foi possível salvar.'}`)
           }
         }
       }
 
-      if (postSaveWarnings.length) {
-        toast.show(`PC montado salvo. ${postSaveWarnings.join(' ')}`, 'alerta')
-      } else {
-        toast.show(includeOffer ? 'PC montado e oferta salvos.' : 'PC montado salvo.')
-      }
+      if (postSaveWarnings.length) toast.show(`PC montado salvo. ${postSaveWarnings.join(' ')}`, 'alerta')
+      else toast.show(offerRows.some((row) => !row._removed) ? 'PC montado e ofertas salvos.' : 'PC montado salvo.')
       navigate(`/admin/montados/${saved?.id || id}`, { replace: true })
     } catch (err) {
       setError(err)
@@ -476,16 +474,18 @@ export default function AdminMountedForm() {
         </div></section>
 
         <section className="admin-form-section">
-          <div className="admin-section-heading"><div><h2>Componentes do PC</h2><p>Pesquise o Hardware já cadastrado e adicione as peças da máquina.</p></div><strong>{selectedComponents.length} item(ns)</strong></div>
-          <div className="admin-field full admin-mounted-hardware-picker">
-            <label>Pesquisar Hardware</label>
-            <input className="admin-input" type="search" value={hardwareSearch} onChange={(e) => setHardwareSearch(e.target.value)} placeholder="Ex.: Ryzen 7 5700X3D, RTX 4070, B650, DDR5..." autoComplete="off" />
-            {hardwareSearch.trim().length >= 2 && <div className="admin-mounted-hardware-results" role="listbox">
-              {hardwareResults.length ? hardwareResults.map((hardware) => <button key={hardware.id} type="button" className="admin-mounted-hardware-result" onClick={() => addHardware(hardware)}>
-                <span><strong>{hardware.nome || `Hardware #${hardware.id}`}</strong><small>{[hardware.marca, hardware.modelo].filter(Boolean).join(' · ') || `ID ${hardware.id}`}</small></span>
-                <em>{hardware.categoria || 'HARDWARE'}</em>
-              </button>) : <div className="admin-mounted-hardware-empty">Nenhum Hardware encontrado.</div>}
-            </div>}
+          <div className="admin-section-heading"><div><h2>Componentes do PC</h2><p>O catálogo administrativo de Hardware é carregado aqui. Você pode navegar por categoria ou pesquisar por nome/modelo.</p></div><strong>{selectedComponents.length} item(ns)</strong></div>
+          {hardwareLoadError && <p className="admin-inline-warning">{hardwareLoadError}</p>}
+          <div className="admin-form-grid admin-mounted-hardware-toolbar">
+            <div className="admin-field"><label>Categoria</label><select className="admin-select" value={hardwareCategory} onChange={(event) => setHardwareCategory(event.target.value)}><option value="TODOS">Todas</option>{hardwareCategories.map((category) => <option key={category} value={category}>{category.replaceAll('_', ' ')}</option>)}</select></div>
+            <div className="admin-field"><label>Pesquisar Hardware</label><input className="admin-input" type="search" value={hardwareSearch} onChange={(event) => setHardwareSearch(event.target.value)} placeholder="Ryzen 7, RTX 4070, B650, DDR5..." autoComplete="off" /></div>
+          </div>
+          <div className="admin-mounted-catalog-status"><span>{hardwares.length} Hardware(s) carregado(s)</span><span>{hardwareResults.length} resultado(s) nesta visualização</span></div>
+          <div className="admin-mounted-hardware-results" role="listbox">
+            {hardwareResults.length ? hardwareResults.map((hardware) => <button key={hardware.id} type="button" className="admin-mounted-hardware-result" onClick={() => addHardware(hardware)}>
+              <span><strong>{hardware.nome || `Hardware #${hardware.id}`}</strong><small>{[hardware.marca, hardware.modelo].filter(Boolean).join(' · ') || `ID ${hardware.id}`}</small></span>
+              <em>{hardware.categoria || 'HARDWARE'}</em>
+            </button>) : <div className="admin-mounted-hardware-empty">Nenhum Hardware encontrado. Tente outra categoria ou termo.</div>}
           </div>
 
           {selectedComponents.length ? <div className="admin-mounted-components">
@@ -508,32 +508,22 @@ export default function AdminMountedForm() {
           </details>
         </section>
 
-        <section className="admin-form-section">
-          <div className="admin-section-heading">
-            <div><h2>Oferta do PC Montado</h2><p>O preço comercial fica em Oferta e será vinculado ao Produto criado para este PC.</p></div>
-            <label className="admin-switch"><input type="checkbox" checked={includeOffer} onChange={(e) => setIncludeOffer(e.target.checked)} /> Incluir oferta</label>
-          </div>
-          {includeOffer && <div className="admin-offer-editor">
-            <div className="admin-form-grid">
-              <div className="admin-field"><label>Parceiro</label><select className="admin-select" required value={offerForm.parceiroId} onChange={(e) => updateOffer('parceiroId', e.target.value)}><option value="">Selecione</option>{partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.nome}</option>)}</select></div>
-              <div className="admin-field"><label>Preço atual</label><input className="admin-input" type="number" min="0.01" step="0.01" required value={offerForm.preco} onChange={(e) => updateOffer('preco', e.target.value)} placeholder="4999.90" /></div>
-              <div className="admin-field"><label>Preço anterior</label><input className="admin-input" type="number" min="0.01" step="0.01" value={offerForm.precoAnterior} onChange={(e) => updateOffer('precoAnterior', e.target.value)} placeholder="5499.90" /></div>
-              <div className="admin-field"><label>Frete</label><input className="admin-input" type="number" min="0" step="0.01" value={offerForm.frete} onChange={(e) => updateOffer('frete', e.target.value)} placeholder="0.00" /></div>
-              <div className="admin-field"><label>Vendedor</label><input className="admin-input" value={offerForm.vendedorNome} onChange={(e) => updateOffer('vendedorNome', e.target.value)} placeholder="Loja oficial" /></div>
-              <div className="admin-field"><label>ID do vendedor</label><input className="admin-input" value={offerForm.vendedorIdentificador} onChange={(e) => updateOffer('vendedorIdentificador', e.target.value)} placeholder="Opcional" /></div>
-              <div className="admin-field full"><label>URL original</label><input className="admin-input" type="url" required value={offerForm.urlOriginal} onChange={(e) => updateOffer('urlOriginal', e.target.value)} placeholder="https://loja.com/produto" /></div>
-              <div className="admin-field full"><label>URL afiliada</label><input className="admin-input" type="url" value={offerForm.urlAfiliada} onChange={(e) => updateOffer('urlAfiliada', e.target.value)} placeholder="https://link-afiliado..." /></div>
-              <div className="admin-field"><label>Validade</label><input className="admin-input" type="datetime-local" value={offerForm.validoAte} onChange={(e) => updateOffer('validoAte', e.target.value)} /></div>
-            </div>
-          </div>}
-        </section>
+        <AdminMultiOfferEditor
+          rows={offerRows}
+          partners={partners}
+          onChange={updateOffer}
+          onAdd={() => addOffer()}
+          onRemove={removeOffer}
+          title="Ofertas do PC Montado"
+          description="Cadastre ou edite várias ofertas do mesmo PC. Cada oferta pode ter parceiro, preço, vendedor e links próprios."
+        />
 
         <section className="admin-form-section"><h2>Configuração 3D</h2><textarea className="admin-textarea admin-code-area" value={form.configuracao3D} onChange={(e) => update('configuracao3D', e.target.value)} placeholder={'{\n  "camera": {},\n  "pecas": []\n}'} /></section>
         {error && <section className="admin-form-section"><p className="admin-form-error">{error.message}</p></section>}
-        <footer className="admin-form-footer"><button className="btn btn-primario" type="submit" disabled={saving}>{saving ? 'Salvando...' : (includeOffer ? 'Salvar PC e oferta' : 'Salvar PC montado')}</button></footer>
+        <footer className="admin-form-footer"><button className="btn btn-primario" type="submit" disabled={saving}>{saving ? 'Salvando...' : (offerRows.some((row) => !row._removed) ? 'Salvar PC e ofertas' : 'Salvar PC montado')}</button></footer>
       </div>
       <aside className="admin-sticky-side"><div className="admin-card"><header className="admin-card-header"><h2>Prévia</h2></header><div className="admin-card-body">
-        <div className="admin-mounted-side-preview">{form.imagemUrl && !imageError ? <img src={form.imagemUrl} alt="" onError={() => setImageError(true)} /> : <div className="admin-empty">Sem imagem</div>}<div><small>{form.categoria || 'PC Montado'}</small><h3>{form.nome || 'Nome do PC'}</h3><strong>{includeOffer ? formatMoney(offerForm.preco) : `${selectedComponents.length} componente(s)`}</strong></div></div>
+        <div className="admin-mounted-side-preview">{form.imagemUrl && !imageError ? <img src={form.imagemUrl} alt="" onError={() => setImageError(true)} /> : <div className="admin-empty">Sem imagem</div>}<div><small>{form.categoria || 'PC Montado'}</small><h3>{form.nome || 'Nome do PC'}</h3><strong>{offerRows.filter((row) => !row._removed).length ? `${offerRows.filter((row) => !row._removed).length} oferta(s)` : `${selectedComponents.length} componente(s)`}</strong></div></div>
         <hr className="admin-divider" />
         <label className="admin-switch"><input type="checkbox" checked={form.publicado} onChange={(e) => update('publicado', e.target.checked)} /> Publicado</label><br /><br />
         <label className="admin-switch"><input type="checkbox" checked={form.ativo} onChange={(e) => update('ativo', e.target.checked)} /> Ativo</label>

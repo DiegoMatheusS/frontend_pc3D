@@ -59,13 +59,13 @@ export default function MountedPcDetails() {
     <div className="mounted-detail">
       <section className="mounted-detail__hero">
         <div className="page-container mounted-detail__hero-grid">
-          <div className="mounted-detail__visual" aria-hidden="true">
-            <span>{asText(pc.highlight, '')}</span>
-            <div className="mounted-detail__case">
+          <div className="mounted-detail__visual">
+            {pc.highlight ? <span>{asText(pc.highlight, '')}</span> : null}
+            {pc.image ? <img className="mounted-detail__image" src={pc.image} alt={pc.name} /> : <div className="mounted-detail__case" aria-hidden="true">
               <i className="mounted-detail__fan mounted-detail__fan--1" />
               <i className="mounted-detail__fan mounted-detail__fan--2" />
               <i className="mounted-detail__gpu" />
-            </div>
+            </div>}
           </div>
 
           <div className="mounted-detail__intro">

@@ -99,7 +99,7 @@ export default function AdminModels3D() {
       NUMERIC.forEach((key) => { if (form[key] !== '' && form[key] != null) body[key] = Number(form[key]) })
       if (form.id) await adminService.hardwares.updateModel(form.id, body)
       else await adminService.hardwares.createModel(Number(form.hardwareId), body)
-      toast.show(form.id ? 'Modelo 3D atualizado.' : 'Modelo 3D cadastrado.')
+      toast.show(form.id ? 'Modelo 3D atualizado.' : (canReview ? 'Modelo 3D cadastrado como PENDENTE. Clique em Aprovar para liberar no 3D público.' : 'Modelo 3D cadastrado e enviado para aprovação.'))
       const hardwareId = form.hardwareId
       clearForm()
       await reloadHardware(hardwareId)
@@ -129,7 +129,7 @@ export default function AdminModels3D() {
         <div className="admin-field"><label>Formato</label><select className="admin-select" value={form.formato ?? 'GLB'} onChange={(e) => update('formato', e.target.value)}><option>GLB</option><option>GLTF</option><option>FBX</option><option>OBJ</option></select></div>
         <div className="admin-field"><label>Versão</label><input className="admin-input" value={form.versao ?? ''} onChange={(e) => update('versao', e.target.value)} /></div>
         <div className="admin-vector-group full"><strong>Dimensões reais</strong>{[['alturaRealMm','Altura'],['larguraRealMm','Largura'],['profundidadeRealMm','Profund.']].map(([key,label]) => <label key={key}>{label}<input className="admin-input" type="number" min="0" step="0.01" value={form[key] ?? ''} onChange={(e) => update(key, e.target.value)} /></label>)}</div>
-        <div className="admin-vector-group full"><strong>Escala</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.01" value={form[`escalaCorrecao${axis}`] ?? ''} onChange={(e) => update(`escalaCorrecao${axis}`, e.target.value)} /></label>)}</div>
+        <div className="admin-vector-group full"><strong>Escala</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.00001" value={form[`escalaCorrecao${axis}`] ?? ''} onChange={(e) => update(`escalaCorrecao${axis}`, e.target.value)} /></label>)}</div>
         <div className="admin-vector-group full"><strong>Rotação</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.01" value={form[`rotacaoCorrecao${axis}`] ?? ''} onChange={(e) => update(`rotacaoCorrecao${axis}`, e.target.value)} /></label>)}</div>
         <div className="admin-vector-group full"><strong>Posição</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.01" value={form[`posicaoCorrecao${axis}`] ?? ''} onChange={(e) => update(`posicaoCorrecao${axis}`, e.target.value)} /></label>)}</div>
       </div>
@@ -140,7 +140,7 @@ export default function AdminModels3D() {
         <td data-label="Hardware">{model.hardwareNome || hardwareMap.get(Number(model.hardwareId))}</td>
         <td data-label="Modelo"><strong>{model.nome || model.arquivoUrl}</strong><br/><small>{model.arquivoUrl}</small></td>
         <td data-label="Formato">{model.formato}</td><td data-label="Escala">{[model.escalaCorrecaoX,model.escalaCorrecaoY,model.escalaCorrecaoZ].map((value) => value ?? 1).join(' / ')}</td>
-        <td data-label="Aprovação"><span className={`admin-status ${model.aprovado ? 'status-publicado' : 'status-rascunho'}`}>{model.aprovado ? 'APROVADO' : 'PENDENTE'}</span></td>
+        <td data-label="Aprovação"><span className={`admin-status ${model.aprovado ? 'status-publicado' : 'status-rascunho'}`}>{model.aprovado ? 'APROVADO' : 'PENDENTE · NÃO APARECE NO 3D'}</span></td>
         <td data-label="Status"><span className={`admin-status ${model.ativo === false ? 'status-inativo' : 'status-ativo'}`}>{model.ativo === false ? 'INATIVO' : 'ATIVO'}</span></td>
         <td data-label="Atualização">{formatDate(model.atualizadoEm)}</td>
         <td data-label="Ações"><div className="admin-row-actions">{canEdit && <button className="admin-action-button" type="button" onClick={() => edit(model)}>Editar</button>}{canReview && !model.aprovado && <button className="admin-action-button" type="button" onClick={() => approve(model)}>Aprovar</button>}{canReview && <button className="admin-action-button" type="button" onClick={() => toggle(model)}>{model.ativo === false ? 'Ativar' : 'Desativar'}</button>}</div></td>

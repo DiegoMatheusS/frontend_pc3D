@@ -125,6 +125,13 @@ export const adminService = {
 
   hardwares: {
     list: () => list('/api/admin/hardwares'),
+    listForBuild: async () => {
+      try {
+        const adminItems = await list('/api/admin/hardwares')
+        if (adminItems.length) return adminItems
+      } catch { /* fallback público abaixo */ }
+      return list('/api/hardwares')
+    },
     get: (id) => one(`/api/admin/hardwares/${id}`),
     create: (body) => oneRequest('/api/hardwares', 'POST', body),
     update: (id, body) => oneRequest(`/api/admin/hardwares/${id}`, 'PATCH', body),
@@ -222,7 +229,7 @@ export const adminService = {
 
   ai: {
     chat: (body) => oneRequest('/api/admin/ia/chat', 'POST', body),
-    importLink: (url) => oneRequest('/api/admin/ia/importar-link', 'POST', { url }),
+    importLink: (url, categoriaEsperada) => oneRequest('/api/admin/ia/importar-link', 'POST', { url, ...(categoriaEsperada ? { categoriaEsperada } : {}) }),
     analyzeProduct: (produtoId) => oneRequest('/api/admin/ia/analisar-produto', 'POST', { produtoId: Number(produtoId) }),
     generateProductDescription: (produtoId) => oneRequest('/api/admin/ia/gerar-descricao', 'POST', { produtoId: Number(produtoId) }),
     normalizeProduct: (conteudoBruto, urlOrigem) => oneRequest('/api/admin/ia/normalizar-produto', 'POST', { conteudoBruto, ...(urlOrigem ? { urlOrigem } : {}) }),

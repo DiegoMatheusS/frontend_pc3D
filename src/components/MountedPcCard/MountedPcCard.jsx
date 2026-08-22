@@ -12,7 +12,8 @@ export default function MountedPcCard({ pc = {}, onCompare, selected = false, co
     <article className={`mounted-card ${selected ? 'mounted-card--selected' : ''} ${compact ? 'mounted-card--compact' : ''}`}>
       <div className="mounted-card__visual" aria-hidden="true">
         {pc.highlight ? <span className="mounted-card__chip">{asText(pc.highlight, '')}</span> : null}
-        <div className="mounted-card__case"><span className="mounted-card__fan mounted-card__fan--one" /><span className="mounted-card__fan mounted-card__fan--two" /><span className="mounted-card__gpu" /></div>
+        {pc.image ? <img className="mounted-card__image" src={pc.image} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true; event.currentTarget.nextElementSibling?.removeAttribute('hidden') }} /> : null}
+        <div className="mounted-card__case" hidden={Boolean(pc.image)}><span className="mounted-card__fan mounted-card__fan--one" /><span className="mounted-card__fan mounted-card__fan--two" /><span className="mounted-card__gpu" /></div>
       </div>
 
       <div className="mounted-card__content">

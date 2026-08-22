@@ -329,7 +329,15 @@ export function normalizeProduct(item) {
   const offers = normalizeOffers(item.ofertas || item.offers || (item.melhorOferta ? [item.melhorOferta] : []))
   const price = offers[0]?.price ?? number(item.precoAtual ?? item.preco ?? item.price)
   const previousPrice = offers.find((offer) => offer.previousPrice)?.previousPrice ?? (number(item.precoAnterior ?? item.previousPrice, 0) || null)
-  const has3d = Boolean(item.possuiModelo3D || item.modelo3D || item.modelo3d || item.modelo3DId || item.builderCompatible)
+  const has3d = Boolean(
+    item.possuiModelo3D
+    || item.modelo3D
+    || item.modelo3d
+    || item.modelo3DId
+    || item.builderCompatible
+    || (Array.isArray(item.modelos3D) && item.modelos3D.length)
+    || (Array.isArray(hardware?.modelos3D) && hardware.modelos3D.length)
+  )
 
   return {
     id: item.id,
@@ -362,32 +370,39 @@ export function normalizeProduct(item) {
 
 function normalizeNotebookSpecs(rawSpecs = {}) {
   const spec = rawSpecs && typeof rawSpecs === 'object' ? rawSpecs : {}
+  const width = number(spec.resolucaoLargura ?? spec.resolutionWidth, 0)
+  const height = number(spec.resolucaoAltura ?? spec.resolutionHeight, 0)
+  const resolution = text(spec.resolution ?? spec.resolucaoTela ?? spec.resolucao, '') || (width && height ? `${width}x${height}` : '')
+  const upgradeRamRaw = spec.upgradeRam ?? spec.ramExpansivel
+  const upgradeStorageRaw = spec.upgradeArmazenamento ?? spec.upgradeStorage ?? spec.armazenamentoExpansivel
+  const yesNo = (value) => typeof value === 'boolean' ? (value ? 'Sim' : 'Não') : text(value, '—')
   return {
     ...spec,
-    cpu: text(spec.cpu ?? spec.processador ?? spec.processadorModelo),
+    cpu: text(spec.cpu ?? spec.processador ?? spec.processadorModelo ?? spec.processadorNome),
     cpuBrand: text(spec.cpuBrand ?? spec.marcaProcessador ?? spec.processadorMarca, ''),
-    cpuGeneration: text(spec.cpuGeneration ?? spec.geracaoProcessador, ''),
+    cpuGeneration: text(spec.cpuGeneration ?? spec.geracaoProcessador ?? spec.processadorGeracao, ''),
     cpuCores: number(spec.cpuCores ?? spec.nucleosProcessador ?? spec.nucleos, 0),
     cpuThreads: number(spec.cpuThreads ?? spec.threadsProcessador ?? spec.threads, 0),
-    cpuTdpWatts: number(spec.cpuTdpWatts ?? spec.tdpProcessador ?? spec.tdpCpu, 0),
-    gpu: text(spec.gpu ?? spec.placaVideo ?? spec.placaDeVideo, 'Vídeo integrado'),
+    cpuTdpWatts: number(spec.cpuTdpWatts ?? spec.tdpProcessador ?? spec.tdpCpu ?? spec.tdpWatts, 0),
+    gpu: text(spec.gpu ?? spec.placaVideo ?? spec.placaDeVideo ?? spec.gpuNome, 'Vídeo integrado'),
     dedicatedGpu: Boolean(spec.dedicatedGpu ?? spec.gpuDedicada ?? spec.placaVideoDedicada),
     vramGb: number(spec.vramGb ?? spec.memoriaVideoGb ?? spec.vram, 0),
-    gpuTgpWatts: number(spec.gpuTgpWatts ?? spec.tgpGpu ?? spec.tgp, 0),
-    ramGb: number(spec.ramGb ?? spec.memoriaRamGb ?? spec.memoriaInstaladaGb, 0),
+    gpuTgpWatts: number(spec.gpuTgpWatts ?? spec.tgpGpu ?? spec.tgp ?? spec.tgpWatts, 0),
+    ramGb: number(spec.ramGb ?? spec.memoriaRamGb ?? spec.memoriaInstaladaGb ?? spec.ramInstaladaGb, 0),
     ramType: text(spec.ramType ?? spec.tipoMemoria ?? spec.tipoRam, ''),
     maxRamGb: number(spec.maxRamGb ?? spec.memoriaMaximaGb ?? spec.ramMaximaGb, 0),
     storageGb: number(spec.storageGb ?? spec.armazenamentoGb ?? spec.capacidadeArmazenamentoGb, 0),
-    m2Slots: number(spec.m2Slots ?? spec.slotsM2, 0),
-    screenInches: number(spec.screenInches ?? spec.telaPolegadas ?? spec.polegadas, 0),
-    resolution: text(spec.resolution ?? spec.resolucaoTela ?? spec.resolucao, ''),
+    storageType: text(spec.storageType ?? spec.tipoArmazenamento, ''),
+    m2Slots: number(spec.m2Slots ?? spec.slotsM2 ?? spec.slotsM2Total, 0),
+    screenInches: number(spec.screenInches ?? spec.telaPolegadas ?? spec.polegadas ?? spec.tamanhoTelaPolegadas, 0),
+    resolution,
     refreshRateHz: number(spec.refreshRateHz ?? spec.taxaAtualizacaoHz ?? spec.hz, 0),
     panel: text(spec.panel ?? spec.painelTela ?? spec.tipoPainel, ''),
     brightnessNits: number(spec.brightnessNits ?? spec.brilhoNits, 0),
     batteryWh: number(spec.batteryWh ?? spec.bateriaWh, 0),
     weightKg: number(spec.weightKg ?? spec.pesoKg, 0),
-    upgradeRam: text(spec.upgradeRam ?? spec.ramExpansivel, '—'),
-    upgradeStorage: text(spec.upgradeStorage ?? spec.armazenamentoExpansivel, '—'),
+    upgradeRam: yesNo(upgradeRamRaw),
+    upgradeStorage: yesNo(upgradeStorageRaw),
   }
 }
 

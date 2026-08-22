@@ -14,7 +14,12 @@ export default function NotebookCard({ notebook = {}, onCompare, selected = fals
     <article className={`notebook-card ${selected ? 'notebook-card--selected' : ''}`}>
       <Link className="notebook-card__visual" to={`/notebooks/${notebook.id}`} aria-label={`Ver ${name}`}>
         {discount > 0 && <span className="notebook-card__discount">-{discount}%</span>}
-        <div className="notebook-card__device" aria-hidden="true"><span>NB</span></div>
+        {notebook.image ? <img className={`notebook-card__image ${notebook.hoverImage ? 'has-hover' : ''}`} src={notebook.image} alt="" loading="lazy" onError={(event) => {
+          event.currentTarget.hidden = true
+          event.currentTarget.parentElement?.querySelector('.notebook-card__device')?.removeAttribute('hidden')
+        }} /> : null}
+        {notebook.hoverImage ? <img className="notebook-card__image notebook-card__image--hover" src={notebook.hoverImage} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true }} /> : null}
+        <div className="notebook-card__device" aria-hidden="true" hidden={Boolean(notebook.image)}><span>NB</span></div>
       </Link>
 
       <div className="notebook-card__content">

@@ -49,7 +49,6 @@ export default function AdminNotebooks() {
     try {
       const nextPublished = !item.publicado
       await adminService.notebooks.update(item.id, { publicado: nextPublished })
-      if (item.produtoId) await adminService.products.update(item.produtoId, { publicado: nextPublished, ativo: item.ativo !== false })
       toast.show(item.publicado ? 'Notebook despublicado.' : 'Notebook publicado.')
       await load()
     } catch (err) {
@@ -61,7 +60,6 @@ export default function AdminNotebooks() {
     if (!window.confirm(`Arquivar “${item.nome}”? O notebook deixará de aparecer no site.`)) return
     try {
       await adminService.notebooks.remove(item.id)
-      if (item.produtoId) await adminService.products.update(item.produtoId, { ativo: false, publicado: false })
       setItems((current) => (current || []).map((entry) => entry.id === item.id
         ? {
             ...entry,
@@ -80,7 +78,6 @@ export default function AdminNotebooks() {
   async function reactivate(item) {
     try {
       await adminService.notebooks.update(item.id, { ativo: true, publicado: false })
-      if (item.produtoId) await adminService.products.update(item.produtoId, { ativo: true, publicado: false })
       setItems((current) => (current || []).map((entry) => entry.id === item.id
         ? {
             ...entry,

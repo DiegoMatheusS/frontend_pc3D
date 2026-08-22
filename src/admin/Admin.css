@@ -990,3 +990,7 @@
   .admin-mounted-component-main { grid-column:1 / -1; }
   .admin-mounted-component .admin-action-button { grid-column:1 / -1; }
 }
+
+.admin-mounted-hardware-toolbar { align-items:end; margin-bottom:10px; }
+.admin-mounted-catalog-status { display:flex; flex-wrap:wrap; gap:8px 16px; margin:0 0 10px; color:var(--admin-muted); font-size:12px; }
+@media (max-width:720px) { .admin-mounted-catalog-status { display:grid; gap:4px; } }
