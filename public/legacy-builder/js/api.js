@@ -386,6 +386,78 @@ async function obterJsonLocal(caminho) {
   return requisitar(caminho, { method: "GET" });
 }
 
+const cacheModelo3DHardwarePublico = new Map();
+
+function extrairModelos3DPublicos(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.modelos)) return payload.modelos;
+  if (Array.isArray(payload?.modelos3D)) return payload.modelos3D;
+  if (Array.isArray(payload?.itens)) return payload.itens;
+  if (Array.isArray(payload?.dados)) return payload.dados;
+  return [];
+}
+
+function normalizarModelo3DPublico(modelo) {
+  if (!modelo || typeof modelo !== "object") return null;
+  const modelo3dUrl = resolverUrlModelo3D(
+    modelo.arquivoUrl
+      || modelo.urlArquivo
+      || modelo.cdnUrl
+      || modelo.cloudflareUrl
+      || modelo.url
+      || "",
+  );
+  if (!modelo3dUrl) return null;
+
+  return {
+    modelo3dUrl,
+    modelo3D: modelo3dUrl,
+    transform3D: {
+      posicao: [
+        Number(modelo.posicaoCorrecaoX) || 0,
+        Number(modelo.posicaoCorrecaoY) || 0,
+        Number(modelo.posicaoCorrecaoZ) || 0,
+      ],
+      rotacao: [
+        Number(modelo.rotacaoCorrecaoX) || 0,
+        Number(modelo.rotacaoCorrecaoY) || 0,
+        Number(modelo.rotacaoCorrecaoZ) || 0,
+      ],
+      escala: [
+        Number(modelo.escalaCorrecaoX) || 1,
+        Number(modelo.escalaCorrecaoY) || 1,
+        Number(modelo.escalaCorrecaoZ) || 1,
+      ],
+      centralizarNoPonto: true,
+    },
+    modelo,
+  };
+}
+
+async function obterModelo3DHardwarePublico(hardwareId) {
+  const id = Number(hardwareId);
+  if (!Number.isInteger(id) || id <= 0) return null;
+
+  if (!cacheModelo3DHardwarePublico.has(id)) {
+    cacheModelo3DHardwarePublico.set(id, (async () => {
+      try {
+        const payload = await requisitar(`/api/hardwares/${id}/modelos-3d`);
+        const modelos = extrairModelos3DPublicos(payload);
+        const modelo = modelos.find((item) => item?.ativo !== false && item?.aprovado !== false)
+          || modelos.find((item) => item?.ativo !== false)
+          || modelos[0]
+          || null;
+        return normalizarModelo3DPublico(modelo);
+      } catch (erro) {
+        console.warn(`Não foi possível consultar o modelo 3D público do Hardware #${id}.`, erro);
+        return null;
+      }
+    })());
+  }
+
+  return cacheModelo3DHardwarePublico.get(id);
+}
+
 export const api = Object.freeze({
   get modo() {
     return configuracao.modo;
@@ -396,6 +468,11 @@ export const api = Object.freeze({
   },
 
   requisitar,
+
+  obterModelo3DHardware(hardwareId) {
+    if (configuracao.modo === "local") return Promise.resolve(null);
+    return obterModelo3DHardwarePublico(hardwareId);
+  },
 
   async listarPecas() {
     if (configuracao.modo === "local") {

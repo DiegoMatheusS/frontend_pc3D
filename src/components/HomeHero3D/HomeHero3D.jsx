@@ -69,8 +69,27 @@ async function getHeroGpuModelUrl() {
     if (url) return url
   }
 
-  // Algumas versões da API entregam o modelo 3D somente no detalhe do Hardware.
-  // Consulta apenas GPUs, em sequência, e para assim que encontrar um GLB válido.
+  // O endpoint público específico é a fonte mais confiável quando /api/hardwares
+  // não inclui modelos3D na listagem geral. Consulta só GPUs e para no primeiro GLB.
+  for (const gpu of gpus.slice(0, 12)) {
+    if (!gpu?.id) continue
+    try {
+      const modelPayload = await apiRequest(`/api/hardwares/${encodeURIComponent(gpu.id)}/modelos-3d`)
+      const models = Array.isArray(modelPayload?.modelos)
+        ? modelPayload.modelos
+        : Array.isArray(modelPayload?.modelos3D)
+          ? modelPayload.modelos3D
+          : Array.isArray(modelPayload)
+            ? modelPayload
+            : []
+      const url = modelFromHardware({ modelos3D: models })
+      if (url) return url
+    } catch {
+      // Tenta a próxima GPU pública.
+    }
+  }
+
+  // Fallback para versões da API que entregam o modelo somente no detalhe.
   for (const gpu of gpus.slice(0, 12)) {
     if (!gpu?.id) continue
     try {

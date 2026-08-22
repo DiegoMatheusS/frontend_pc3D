@@ -10,7 +10,7 @@ import {
 } from "./renderer.js";
 
 import { verificarCompatibilidade } from "./compatibilidade.js";
-import { api } from "./api.js?v=react-v43-r2-glb";
+import { api } from "./api.js?v=react-v44-r2-glb-direct";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {
@@ -4645,6 +4645,28 @@ function atualizarPecaNo3D(categoria, estadoDaCategoria) {
 
   selecionadas.forEach(({ peca, index }) => {
     const urlModelo = String(peca.modelo3D || peca.modelo3dUrl || "").trim();
+
+    // A listagem pública de /api/hardwares pode não trazer modelos3D.
+    // Nesse caso consultamos o endpoint público específico somente quando a
+    // peça é realmente selecionada no PC 3D, evitando dezenas de requests no catálogo.
+    if (!urlModelo && carregador && peca.hardwareId && peca.__modelo3dConsultado !== true) {
+      peca.__modelo3dConsultado = true;
+      adicionarProcedural(peca, index, "consultando-modelo");
+      publicarGrupoSeNecessario();
+
+      api.obterModelo3DHardware(peca.hardwareId)
+        .then((resultado) => {
+          if (versaoCarregamento3D[categoria] !== versaoAtual || !resultado?.modelo3dUrl) return;
+          peca.modelo3D = resultado.modelo3dUrl;
+          peca.modelo3dUrl = resultado.modelo3dUrl;
+          if (resultado.transform3D) peca.transform3D = resultado.transform3D;
+          atualizarPecaNo3D(categoria, estadoDaCategoria);
+        })
+        .catch((erro) => {
+          console.warn(`Não foi possível localizar o GLB de "${peca.nome}".`, erro);
+        });
+      return;
+    }
 
     if (!urlModelo || !carregador) {
       adicionarProcedural(peca, index, !urlModelo ? "sem-modelo" : "loader-indisponivel");
