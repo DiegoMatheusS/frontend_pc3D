@@ -15,6 +15,8 @@ export default function AdminOffers() {
   const [partnerId, setPartnerId] = useState('')
   const [status, setStatus] = useState('')
   const [checkingPrices, setCheckingPrices] = useState(false)
+  const [checkingOfferId, setCheckingOfferId] = useState(null)
+  const [offerCheckResults, setOfferCheckResults] = useState({})
   const [priceReport, setPriceReport] = useState(() => {
     try {
       const saved = sessionStorage.getItem('criabyteUltimoRelatorioPrecos')
@@ -173,6 +175,51 @@ export default function AdminOffers() {
     }
   }
 
+  function normalizeSingleCheck(payload, offerId) {
+    if (!payload) return null
+    if (Array.isArray(payload?.resultados)) {
+      return payload.resultados.find((item) => Number(item?.ofertaId) === Number(offerId)) || payload.resultados[0] || null
+    }
+    return payload?.resultado || payload?.dados || payload
+  }
+
+  function checkDetail(result) {
+    if (!result) return ''
+    const parts = [
+      result.motivo,
+      result.detalhe,
+      result.mensagem,
+      result.erro,
+      result.origemPreco ? `Origem: ${result.origemPreco}` : '',
+      result.httpStatus ? `HTTP ${result.httpStatus}` : '',
+      result.urlFinal ? `URL final: ${result.urlFinal}` : '',
+    ].filter(Boolean)
+    return [...new Set(parts)].join(' · ')
+  }
+
+  async function verifyOnePrice(item) {
+    const offerId = Number(item.id)
+    setCheckingOfferId(offerId)
+    setOfferCheckResults((current) => ({ ...current, [offerId]: { loading: true } }))
+    try {
+      const payload = await adminService.offers.verifyPrice(offerId)
+      const result = normalizeSingleCheck(payload, offerId) || { ofertaId: offerId, status: 'VERIFICADA' }
+      setOfferCheckResults((current) => ({ ...current, [offerId]: { result } }))
+      await load()
+      const statusText = String(result.status || 'VERIFICADA').replaceAll('_', ' ')
+      toast.show(`Oferta #${offerId}: ${statusText}.`, result.status === 'FALHOU' ? 'erro' : 'sucesso')
+    } catch (err) {
+      const endpointMissing = Number(err?.status) === 404
+      const message = endpointMissing
+        ? 'A verificação individual ainda não está disponível no backend. É necessário o endpoint POST /api/admin/ofertas/:id/verificar-preco.'
+        : (err?.message || 'Não foi possível verificar esta oferta.')
+      setOfferCheckResults((current) => ({ ...current, [offerId]: { error: message, status: err?.status || 0 } }))
+      toast.show(message, 'erro')
+    } finally {
+      setCheckingOfferId(null)
+    }
+  }
+
   if (error) return <AdminError error={error} />
   if (!data) return <AdminLoading />
 
@@ -219,7 +266,7 @@ export default function AdminOffers() {
                 <td data-label="Frete">{item.frete != null ? formatMoney(item.frete) : '—'}</td>
                 <td data-label="Status"><AdminStatus value={item.status || 'ATIVA'} /></td>
                 <td data-label="Validade">{formatDate(item.validoAte)}</td>
-                <td data-label="Ações"><div className="admin-row-actions">{canWriteCatalog && <Link className="admin-action-button" to={`/admin/ofertas/${item.id}`}>Editar</Link>}{canWriteCatalog && offerStatus(item) !== 'ATIVA' && <button className="admin-action-button admin-action-button--success" type="button" onClick={() => reactivate(item)}>Reativar</button>}{canDeleteCatalog && offerStatus(item) !== 'DESCONTINUADA' && <button className="admin-action-button" type="button" onClick={() => remove(item)}>Descontinuar</button>}{!canWriteCatalog && !canDeleteCatalog && <span className="admin-muted">Somente leitura</span>}</div></td>
+                <td data-label="Ações"><div className="admin-offer-row-actions"><div className="admin-row-actions">{canWriteCatalog && <button className="admin-action-button" type="button" disabled={checkingOfferId === Number(item.id) || checkingPrices} onClick={() => verifyOnePrice(item)}>{checkingOfferId === Number(item.id) ? 'Verificando...' : 'Verificar preço'}</button>}{canWriteCatalog && <Link className="admin-action-button" to={`/admin/ofertas/${item.id}`}>Editar</Link>}{canWriteCatalog && offerStatus(item) !== 'ATIVA' && <button className="admin-action-button admin-action-button--success" type="button" onClick={() => reactivate(item)}>Reativar</button>}{canDeleteCatalog && offerStatus(item) !== 'DESCONTINUADA' && <button className="admin-action-button" type="button" onClick={() => remove(item)}>Descontinuar</button>}{!canWriteCatalog && !canDeleteCatalog && <span className="admin-muted">Somente leitura</span>}</div>{offerCheckResults[Number(item.id)]?.result && <div className="admin-offer-check-result"><AdminStatus value={offerCheckResults[Number(item.id)].result.status || 'VERIFICADA'} /><small>{offerCheckResults[Number(item.id)].result.precoAnterior != null || offerCheckResults[Number(item.id)].result.precoAtual != null ? `${offerCheckResults[Number(item.id)].result.precoAnterior == null ? '—' : formatMoney(offerCheckResults[Number(item.id)].result.precoAnterior)} → ${offerCheckResults[Number(item.id)].result.precoAtual == null ? '—' : formatMoney(offerCheckResults[Number(item.id)].result.precoAtual)}` : ''}</small>{checkDetail(offerCheckResults[Number(item.id)].result) && <small>{checkDetail(offerCheckResults[Number(item.id)].result)}</small>}</div>}{offerCheckResults[Number(item.id)]?.error && <div className="admin-offer-check-result admin-offer-check-result--error"><strong>Não verificado</strong><small>{offerCheckResults[Number(item.id)].error}</small></div>}</div></td>
               </tr>
             }) : <EmptyRow columns={8} />}
           </tbody>

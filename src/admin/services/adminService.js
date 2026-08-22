@@ -179,6 +179,7 @@ export const adminService = {
       method: 'POST',
       body: { limite: Number(limite) || 50 },
     }),
+    verifyPrice: (id) => apiRequest(`/api/admin/ofertas/${id}/verificar-preco`, { method: 'POST' }),
   },
 
   users: {

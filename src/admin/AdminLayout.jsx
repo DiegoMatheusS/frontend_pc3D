@@ -43,7 +43,7 @@ const ROUTE_META = [
 ]
 
 function initials(name = '') {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
+  const parts = String(name ?? '').trim().split(/\s+/).filter(Boolean)
   return `${parts[0]?.[0] || 'A'}${parts[1]?.[0] || 'D'}`.toUpperCase()
 }
 
@@ -61,7 +61,7 @@ function AdminShell() {
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('pcBuilderTema')
     if (saved === 'dark' || saved === 'light') return saved
-    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    return 'light'
   })
 
   const role = String(user?.papel || '').toUpperCase()

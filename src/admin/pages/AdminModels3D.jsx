@@ -4,6 +4,8 @@ import { adminService } from '../services/adminService'
 import { AdminError, AdminLoading, AdminPageHeader, EmptyRow, formatDate } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 
+const R2_PUBLIC_BASE_URL = 'https://pub-f75dfbdc12814aea925f2615df4d32a5.r2.dev/'
+
 const EMPTY = {
   id: null, hardwareId: '', nome: '', arquivoUrl: '', formato: 'GLB', versao: '',
   alturaRealMm: '', larguraRealMm: '', profundidadeRealMm: '', tamanhoBytes: '',
@@ -12,19 +14,14 @@ const EMPTY = {
   escalaCorrecaoX: 1, escalaCorrecaoY: 1, escalaCorrecaoZ: 1,
 }
 
-const R2_PUBLIC_BASE_URL = 'https://pub-f75dfbdc12814aea925f2615df4d32a5.r2.dev/'
-
-function montarUrlR2(valor) {
-  const caminho = String(valor || '').trim()
-
-  if (/^https?:\/\//i.test(caminho)) {
-    return caminho
-  }
-
-  return `${R2_PUBLIC_BASE_URL}${caminho.replace(/^\/+/, '')}`
-}
-
 const NUMERIC = ['alturaRealMm','larguraRealMm','profundidadeRealMm','tamanhoBytes','posicaoCorrecaoX','posicaoCorrecaoY','posicaoCorrecaoZ','rotacaoCorrecaoX','rotacaoCorrecaoY','rotacaoCorrecaoZ','escalaCorrecaoX','escalaCorrecaoY','escalaCorrecaoZ']
+
+function montarUrlR2(value) {
+  const path = String(value ?? '').trim()
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path)) return path
+  return `${R2_PUBLIC_BASE_URL}${path.replace(/^\/+/, '')}`
+}
 
 export default function AdminModels3D() {
   const { user } = useAuth()
@@ -35,6 +32,7 @@ export default function AdminModels3D() {
   const [hardwares, setHardwares] = useState(null)
   const [models, setModels] = useState([])
   const [form, setForm] = useState(EMPTY)
+  const [hardwareSearch, setHardwareSearch] = useState('')
   const [error, setError] = useState(null)
   const [loadingModels, setLoadingModels] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -51,14 +49,39 @@ export default function AdminModels3D() {
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }))
   const hardwareMap = useMemo(() => new Map((hardwares || []).map((hardware) => [Number(hardware.id), hardware.nome])), [hardwares])
+  const filteredHardwares = useMemo(() => {
+    const term = hardwareSearch.trim().toLocaleLowerCase('pt-BR')
+    if (!term) return hardwares || []
+    return (hardwares || []).filter((hardware) => [hardware.nome, hardware.marca, hardware.modelo, hardware.categoria, hardware.id]
+      .filter((value) => value !== undefined && value !== null)
+      .join(' ')
+      .toLocaleLowerCase('pt-BR')
+      .includes(term))
+  }, [hardwares, hardwareSearch])
+  const arquivoUrlFinal = useMemo(() => montarUrlR2(form.arquivoUrl), [form.arquivoUrl])
 
   async function reloadHardware(hardwareId) {
     const updated = (await adminService.hardwares.models(Number(hardwareId))).map((model) => ({ ...model, hardwareId: Number(hardwareId), hardwareNome: hardwareMap.get(Number(hardwareId)) }))
     setModels((current) => [...current.filter((model) => Number(model.hardwareId) !== Number(hardwareId)), ...updated])
   }
 
+  function clearForm() {
+    setForm(EMPTY)
+    setHardwareSearch('')
+  }
+
   function edit(model) {
-    setForm({ ...EMPTY, ...model, id: model.id, hardwareId: model.hardwareId })
+    setForm({
+      ...EMPTY,
+      ...model,
+      id: model.id,
+      hardwareId: model.hardwareId,
+      nome: model.nome ?? '',
+      arquivoUrl: model.arquivoUrl ?? '',
+      formato: model.formato ?? 'GLB',
+      versao: model.versao ?? '',
+    })
+    setHardwareSearch(model.hardwareNome || hardwareMap.get(Number(model.hardwareId)) || '')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -67,13 +90,18 @@ export default function AdminModels3D() {
     if (!canEdit) return
     setSaving(true)
     try {
-      const body = { nome: form.nome.trim() || undefined, arquivoUrl: montarUrlR2(form.arquivoUrl), formato: form.formato, versao: form.versao.trim() || undefined }
+      const body = {
+        nome: String(form.nome ?? '').trim() || undefined,
+        arquivoUrl: montarUrlR2(form.arquivoUrl),
+        formato: String(form.formato ?? 'GLB'),
+        versao: String(form.versao ?? '').trim() || undefined,
+      }
       NUMERIC.forEach((key) => { if (form[key] !== '' && form[key] != null) body[key] = Number(form[key]) })
       if (form.id) await adminService.hardwares.updateModel(form.id, body)
       else await adminService.hardwares.createModel(Number(form.hardwareId), body)
       toast.show(form.id ? 'Modelo 3D atualizado.' : 'Modelo 3D cadastrado.')
       const hardwareId = form.hardwareId
-      setForm(EMPTY)
+      clearForm()
       await reloadHardware(hardwareId)
     } catch (err) { toast.show(err.message, 'erro') } finally { setSaving(false) }
   }
@@ -92,17 +120,18 @@ export default function AdminModels3D() {
   return <>
     <AdminPageHeader title="Modelos 3D" description="Gerencie GLB/GLTF, dimensões, transformação e aprovação dos modelos ligados ao Hardware." />
     {canEdit && <section className="admin-form-card" style={{ marginBottom: 18 }}><form onSubmit={submit}><section className="admin-form-section">
-      <div className="admin-section-heading"><div><h2>{form.id ? 'Editar modelo 3D' : 'Cadastrar modelo 3D'}</h2><p>Escala, rotação e posição são independentes por eixo.</p></div>{form.id && <button className="btn btn-secundario btn-pequeno" type="button" onClick={() => setForm(EMPTY)}>Cancelar edição</button>}</div>
+      <div className="admin-section-heading"><div><h2>{form.id ? 'Editar modelo 3D' : 'Cadastrar modelo 3D'}</h2><p>Escala, rotação e posição são independentes por eixo.</p></div>{form.id && <button className="btn btn-secundario btn-pequeno" type="button" onClick={clearForm}>Cancelar edição</button>}</div>
       <div className="admin-form-grid">
-        <div className="admin-field"><label>Hardware</label><select className="admin-select" required disabled={Boolean(form.id)} value={form.hardwareId} onChange={(e) => update('hardwareId', e.target.value)}><option value="">Selecione</option>{hardwares.map((hardware) => <option key={hardware.id} value={hardware.id}>{hardware.nome}</option>)}</select></div>
-        <div className="admin-field"><label>Nome do modelo</label><input className="admin-input" value={form.nome} onChange={(e) => update('nome', e.target.value)} /></div>
-        <div className="admin-field full"><label>URL/arquivo servido pelo projeto</label><input className="admin-input" required value={form.arquivoUrl} onChange={(e) => update('arquivoUrl', e.target.value)} placeholder="modelos/cpu/processador_generico.glb" /><small className="admin-help">O backend cadastra a URL e os metadados. O arquivo binário continua sendo servido separadamente.</small></div>
-        <div className="admin-field"><label>Formato</label><select className="admin-select" value={form.formato} onChange={(e) => update('formato', e.target.value)}><option>GLB</option><option>GLTF</option><option>FBX</option><option>OBJ</option></select></div>
-        <div className="admin-field"><label>Versão</label><input className="admin-input" value={form.versao} onChange={(e) => update('versao', e.target.value)} /></div>
-        <div className="admin-vector-group full"><strong>Dimensões reais</strong>{[['alturaRealMm','Altura'],['larguraRealMm','Largura'],['profundidadeRealMm','Profund.']].map(([key,label]) => <label key={key}>{label}<input className="admin-input" type="number" min="0" step="0.01" value={form[key]} onChange={(e) => update(key, e.target.value)} /></label>)}</div>
-        <div className="admin-vector-group full"><strong>Escala</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.01" value={form[`escalaCorrecao${axis}`]} onChange={(e) => update(`escalaCorrecao${axis}`, e.target.value)} /></label>)}</div>
-        <div className="admin-vector-group full"><strong>Rotação</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.01" value={form[`rotacaoCorrecao${axis}`]} onChange={(e) => update(`rotacaoCorrecao${axis}`, e.target.value)} /></label>)}</div>
-        <div className="admin-vector-group full"><strong>Posição</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.01" value={form[`posicaoCorrecao${axis}`]} onChange={(e) => update(`posicaoCorrecao${axis}`, e.target.value)} /></label>)}</div>
+        <div className="admin-field"><label>Pesquisar Hardware</label><input className="admin-input" type="search" disabled={Boolean(form.id)} value={hardwareSearch} onChange={(e) => setHardwareSearch(e.target.value)} placeholder="Nome, modelo, marca ou ID" /><small className="admin-help">{hardwareSearch.trim() ? `${filteredHardwares.length} resultado(s)` : `${hardwares.length} hardware(s) disponíveis`}</small></div>
+        <div className="admin-field"><label>Hardware</label><select className="admin-select" required disabled={Boolean(form.id)} value={form.hardwareId} onChange={(e) => update('hardwareId', e.target.value)}><option value="">Selecione</option>{filteredHardwares.map((hardware) => <option key={hardware.id} value={hardware.id}>{hardware.nome}{hardware.modelo ? ` · ${hardware.modelo}` : ''}</option>)}</select></div>
+        <div className="admin-field"><label>Nome do modelo</label><input className="admin-input" value={form.nome ?? ''} onChange={(e) => update('nome', e.target.value)} /></div>
+        <div className="admin-field full"><label>Caminho do arquivo no Cloudflare R2</label><input className="admin-input" required value={form.arquivoUrl ?? ''} onChange={(e) => update('arquivoUrl', e.target.value)} placeholder="modelos/cpu/processador_generico.glb" /><small className="admin-help">Você pode informar só o caminho. O frontend envia a URL completa do R2 automaticamente.{arquivoUrlFinal ? <> URL final: <strong>{arquivoUrlFinal}</strong></> : null}</small></div>
+        <div className="admin-field"><label>Formato</label><select className="admin-select" value={form.formato ?? 'GLB'} onChange={(e) => update('formato', e.target.value)}><option>GLB</option><option>GLTF</option><option>FBX</option><option>OBJ</option></select></div>
+        <div className="admin-field"><label>Versão</label><input className="admin-input" value={form.versao ?? ''} onChange={(e) => update('versao', e.target.value)} /></div>
+        <div className="admin-vector-group full"><strong>Dimensões reais</strong>{[['alturaRealMm','Altura'],['larguraRealMm','Largura'],['profundidadeRealMm','Profund.']].map(([key,label]) => <label key={key}>{label}<input className="admin-input" type="number" min="0" step="0.01" value={form[key] ?? ''} onChange={(e) => update(key, e.target.value)} /></label>)}</div>
+        <div className="admin-vector-group full"><strong>Escala</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.01" value={form[`escalaCorrecao${axis}`] ?? ''} onChange={(e) => update(`escalaCorrecao${axis}`, e.target.value)} /></label>)}</div>
+        <div className="admin-vector-group full"><strong>Rotação</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.01" value={form[`rotacaoCorrecao${axis}`] ?? ''} onChange={(e) => update(`rotacaoCorrecao${axis}`, e.target.value)} /></label>)}</div>
+        <div className="admin-vector-group full"><strong>Posição</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.01" value={form[`posicaoCorrecao${axis}`] ?? ''} onChange={(e) => update(`posicaoCorrecao${axis}`, e.target.value)} /></label>)}</div>
       </div>
     </section><footer className="admin-form-footer"><button className="btn btn-primario" type="submit" disabled={saving}>{saving ? 'Salvando...' : form.id ? 'Salvar alterações' : 'Cadastrar modelo'}</button></footer></form></section>}
 

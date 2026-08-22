@@ -47,20 +47,20 @@ export default function AdminOfferForm() {
       if (!active) return
       setData({ partners, products, hardwares })
       if (item) {
-       setForm({
-  ...EMPTY,
-  ...item,
-  targetType: item.hardwareId ? 'hardware' : 'produto',
-  targetId: item.hardwareId || item.produtoId || '',
-  vendedorNome: item.vendedorNome ?? '',
-  vendedorIdentificador: item.vendedorIdentificador ?? '',
-  urlOriginal: item.urlOriginal ?? '',
-  urlAfiliada: item.urlAfiliada ?? '',
-  validoAte: toLocal(item.validoAte),
-  preco: item.preco ?? '',
-  precoAnterior: item.precoAnterior ?? '',
-  frete: item.frete ?? '',
-})
+        setForm({
+          ...EMPTY,
+          ...item,
+          targetType: item.hardwareId ? 'hardware' : 'produto',
+          targetId: item.hardwareId || item.produtoId || '',
+          vendedorNome: item.vendedorNome ?? '',
+          vendedorIdentificador: item.vendedorIdentificador ?? '',
+          urlOriginal: item.urlOriginal ?? '',
+          urlAfiliada: item.urlAfiliada ?? '',
+          validoAte: toLocal(item.validoAte),
+          preco: item.preco ?? '',
+          precoAnterior: item.precoAnterior ?? '',
+          frete: item.frete ?? '',
+        })
       } else if (suggestion) {
         setForm((current) => ({
           ...current,

@@ -940,3 +940,15 @@
   .admin-suggestion-primary-actions { grid-template-columns:1fr; }
   .admin-price-report-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
+
+
+/* Verificação individual de preço em /admin/ofertas */
+.admin-offer-row-actions { display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:220px; }
+.admin-offer-check-result { display:flex; flex-direction:column; gap:3px; max-width:360px; padding:8px 10px; border:1px solid var(--admin-border); border-radius:9px; background:var(--admin-surface-2); }
+.admin-offer-check-result small { color:var(--admin-muted); line-height:1.35; overflow-wrap:anywhere; }
+.admin-offer-check-result--error { border-color:color-mix(in srgb, var(--admin-danger) 32%, var(--admin-border)); background:var(--admin-danger-soft); }
+.admin-offer-check-result--error strong { color:var(--admin-danger); }
+@media (max-width: 760px) {
+  .admin-offer-row-actions { align-items:flex-end; min-width:0; }
+  .admin-offer-check-result { max-width:min(100%, 360px); text-align:right; }
+}
