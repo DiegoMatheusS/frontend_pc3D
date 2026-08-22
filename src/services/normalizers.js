@@ -1,4 +1,4 @@
-import { getCommunityOfferCreatorName, getOfferCreatorId, getOfferCreatorName } from '../utils/offerCreator'
+import { getCommunityOfferCreatorName, getOfferCreatorId } from '../utils/offerCreator'
 import { configurationFromComponents, inferMountedPcConfiguration } from '../utils/builderConfiguration'
 import { safeHttpUrl } from '../utils/safeUrl'
 
@@ -317,7 +317,8 @@ function normalizeSpecs(item, category) {
 
 export function normalizeProduct(item) {
   const hardware = item?.hardware && typeof item.hardware === 'object' ? item.hardware : null
-  const rawCategory = hardware?.categoria ?? item.categoria ?? item.category ?? ''
+  const notebook = item?.notebook && typeof item.notebook === 'object' ? item.notebook : null
+  const rawCategory = hardware?.categoria ?? item.categoria ?? item.category ?? item.tipo ?? ''
   const enumCategory = categoryCode(rawCategory)
   const [knownGroup, knownCategory, knownCategoryKey] = CATEGORY_META[enumCategory] || []
   const rawGroup = typeof rawCategory === 'object' && rawCategory ? rawCategory.grupo : undefined
@@ -333,6 +334,10 @@ export function normalizeProduct(item) {
   return {
     id: item.id,
     slug: item.slug || String(item.id),
+    type: text(item.tipo ?? item.type, ''),
+    active: item.ativo !== false && notebook?.ativo !== false,
+    published: item.publicado !== false && notebook?.publicado !== false,
+    notebookId: notebook?.id ?? item.notebookId ?? null,
     group,
     category,
     categoryKey,
@@ -387,16 +392,25 @@ function normalizeNotebookSpecs(rawSpecs = {}) {
 }
 
 export function normalizeNotebook(item) {
-  const offers = normalizeOffers(item.ofertas || item.offers)
-  const specs = normalizeNotebookSpecs(item.especificacoes || item.especificacaoNotebook || item.specs || {})
+  if (!item || typeof item !== 'object') return null
+  const product = item?.produto && typeof item.produto === 'object' ? item.produto : {}
+  const offers = normalizeOffers(item.ofertas || item.offers || product.ofertas || product.offers)
+  const specs = normalizeNotebookSpecs(
+    item.especificacoes || item.especificacao || item.especificacaoNotebook || item.specs || {},
+  )
   return {
     id: item.id,
-    slug: item.slug || String(item.id),
-    name: item.nome || item.name || `${item.marca || ''} ${item.modelo || ''}`.trim() || 'Notebook',
-    brand: text(item.marca ?? item.brand),
-    model: text(item.modelo ?? item.model, ''),
+    productId: item.produtoId ?? product.id ?? null,
+    slug: product.slug || item.slug || String(item.id),
+    active: item.ativo !== false && product.ativo !== false,
+    published: item.publicado !== false && product.publicado !== false,
+    name: product.nome || item.nome || item.name || `${product.marca || item.marca || ''} ${product.modelo || item.modelo || ''}`.trim() || 'Notebook',
+    brand: text(product.marca ?? item.marca ?? item.brand),
+    model: text(product.modelo ?? item.modelo ?? item.model, ''),
     use: text(item.finalidade ?? item.uso ?? item.use, 'Uso geral'),
-    description: item.descricao || item.description || '',
+    description: product.descricao || item.descricao || item.description || '',
+    image: product.imagemUrl || item.imagemUrl || item.imagem || item.image || null,
+    hoverImage: product.imagemHoverUrl || item.imagemHoverUrl || item.hoverImage || null,
     rating: number(item.mediaAvaliacoes ?? item.rating),
     reviewsCount: number(item.quantidadeAvaliacoes ?? item.reviewsCount),
     price: offers[0]?.price ?? number(item.precoAtual ?? item.preco ?? item.price),

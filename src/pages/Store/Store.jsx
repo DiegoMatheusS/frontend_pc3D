@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import ProductCard from '../../components/ProductCard/ProductCard'
 import CatalogState from '../../components/CatalogState/CatalogState'
 import { getProductById, getProductGroups, getProducts } from '../../services/productsService'
+import { getNotebooks } from '../../services/notebooksService'
 import useAccessibleDialog from '../../hooks/useAccessibleDialog'
 import './Store.css'
 
@@ -126,10 +127,29 @@ export default function Store({ defaultGroup = 'todos' }) {
 
   useEffect(() => {
     let active = true
-    Promise.all([getProductGroups(), getProducts()]).then(([groupItems, productItems]) => {
+    Promise.all([
+      getProductGroups(),
+      getProducts(),
+      getNotebooks().catch(() => null),
+    ]).then(([groupItems, productItems, notebookItems]) => {
       if (!active) return
       const safeGroups = Array.isArray(groupItems) ? groupItems : []
-      const safeProducts = Array.isArray(productItems) ? productItems : []
+      const rawProducts = Array.isArray(productItems) ? productItems : []
+      const publicNotebooks = Array.isArray(notebookItems) ? notebookItems : null
+      const publicNotebookProductIds = new Set((publicNotebooks || []).map((item) => item.productId).filter((value) => value !== null && value !== undefined).map(String))
+      const publicNotebookIds = new Set((publicNotebooks || []).map((item) => item.id).filter((value) => value !== null && value !== undefined).map(String))
+      const publicNotebookNames = new Set((publicNotebooks || []).map((item) => normalize(item.name)).filter(Boolean))
+      const safeProducts = rawProducts.filter((product) => {
+        if (product.active === false || product.published === false) return false
+        if (product.group !== 'notebooks' || publicNotebooks === null) return true
+        if (product.notebookId !== null && product.notebookId !== undefined) {
+          return publicNotebookIds.has(String(product.notebookId))
+        }
+        if (publicNotebookProductIds.size > 0) {
+          return publicNotebookProductIds.has(String(product.id))
+        }
+        return publicNotebookNames.has(normalize(product.name))
+      })
       setGroups(safeGroups)
       setProducts(safeProducts)
       setVisibleCount(20)

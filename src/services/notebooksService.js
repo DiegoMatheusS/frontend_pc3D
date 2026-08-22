@@ -7,7 +7,7 @@ export function getNotebooks() {
     key: 'notebooks',
     path: '/api/notebooks',
     fallback: () => structuredClone(notebooksMock),
-    transform: (payload) => extractList(payload, ['notebooks']).map(normalizeNotebook),
+    transform: (payload) => extractList(payload, ['notebooks']).map(normalizeNotebook).filter((item) => item && item.active !== false && item.published !== false),
   })
 }
 
@@ -16,6 +16,9 @@ export function getNotebookById(id) {
     key: 'notebook',
     path: `/api/notebooks/${encodeURIComponent(id)}`,
     fallback: () => structuredClone(notebooksMock.find((item) => String(item.id) === String(id) || item.slug === String(id)) ?? null),
-    transform: (payload) => normalizeNotebook(payload?.notebook || payload),
+    transform: (payload) => {
+      const notebook = normalizeNotebook(payload?.notebook || payload)
+      return notebook?.active !== false && notebook?.published !== false ? notebook : null
+    },
   })
 }

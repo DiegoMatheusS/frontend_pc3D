@@ -7,7 +7,7 @@ import { useAdminToast } from '../components/AdminToast'
 
 const EMPTY = {
   nome: '', marca: '', modelo: '', descricao: '', mpn: '', gtin: '', imagemUrl: '', imagemHoverUrl: '',
-  publicado: false, ativo: true, especificacao: '{}',
+  publicado: true, ativo: true, especificacao: '{}',
 }
 
 const NOTEBOOK_SPEC_FIELDS = new Set([
@@ -188,7 +188,24 @@ export default function AdminNotebookForm() {
       const saved = editing
         ? await adminService.notebooks.update(id, body)
         : await adminService.notebooks.create(body)
-      toast.show('Notebook salvo.')
+
+      const produtoId = saved?.produtoId ?? saved?.produto?.id
+      if (produtoId) {
+        await adminService.products.update(produtoId, {
+          nome: body.nome,
+          marca: body.marca,
+          modelo: body.modelo,
+          descricao: body.descricao,
+          mpn: body.mpn,
+          gtin: body.gtin,
+          imagemUrl: body.imagemUrl,
+          imagemHoverUrl: body.imagemHoverUrl,
+          publicado: body.publicado,
+          ativo: body.ativo,
+        })
+      }
+
+      toast.show(body.publicado && body.ativo ? 'Notebook salvo e publicado.' : 'Notebook salvo.')
       navigate(`/admin/notebooks/${saved?.id || id}`, { replace: true })
     } catch (err) {
       setError(err)

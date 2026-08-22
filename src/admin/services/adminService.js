@@ -51,8 +51,8 @@ function normalizeNotebook(item) {
     gtin: produto.gtin ?? item.gtin ?? '',
     imagemUrl: produto.imagemUrl ?? item.imagemUrl ?? '',
     imagemHoverUrl: produto.imagemHoverUrl ?? item.imagemHoverUrl ?? '',
-    publicado: produto.publicado ?? item.publicado ?? false,
-    ativo: produto.ativo ?? item.ativo ?? true,
+    publicado: item.publicado !== false && produto.publicado !== false,
+    ativo: item.ativo !== false && produto.ativo !== false,
     slug: produto.slug ?? item.slug,
   }
 }
@@ -70,8 +70,8 @@ function normalizeBuild(item) {
     descricao: produto.descricao ?? item.descricao ?? '',
     imagemUrl: produto.imagemUrl ?? item.imagemUrl ?? '',
     imagemHoverUrl: produto.imagemHoverUrl ?? item.imagemHoverUrl ?? '',
-    publicado: produto.publicado ?? item.publicado ?? false,
-    ativo: produto.ativo ?? item.ativo ?? true,
+    publicado: item.publicado !== false && produto.publicado !== false,
+    ativo: item.ativo !== false && produto.ativo !== false,
     slug: produto.slug ?? item.slug,
   }
 }
