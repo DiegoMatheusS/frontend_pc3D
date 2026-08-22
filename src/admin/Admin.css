@@ -70,6 +70,8 @@
 .admin-topbar-title span { color: var(--admin-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .admin-topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 .admin-icon-button { width: 42px; height: 42px; border: 1px solid var(--admin-border); border-radius: 11px; background: var(--admin-surface); color: var(--admin-text); }
+.admin-notification-button { position: relative; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-size: 20px; }
+.admin-notification-badge { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; padding: 0 5px; border: 2px solid var(--admin-surface); border-radius: 999px; background: #dc2626; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; line-height: 1; }
 .admin-user-menu { position: relative; }
 .admin-user-button { display: flex; align-items: center; gap: 10px; border: 1px solid var(--admin-border); border-radius: 13px; padding: 7px 10px 7px 7px; background: var(--admin-surface); color: var(--admin-text); }
 .admin-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--admin-primary); color: white; font-weight: 800; font-size: 12px; }
@@ -951,4 +953,40 @@
 @media (max-width: 760px) {
   .admin-offer-row-actions { align-items:flex-end; min-width:0; }
   .admin-offer-check-result { max-width:min(100%, 360px); text-align:right; }
+}
+
+/* PC Montado: seletor de Hardware, oferta e prévia de imagem */
+.admin-mounted-hardware-picker { position: relative; }
+.admin-mounted-hardware-results { display:grid; gap:6px; max-height:330px; overflow:auto; margin-top:7px; padding:6px; border:1px solid var(--admin-border); border-radius:11px; background:var(--admin-surface-2); }
+.admin-mounted-hardware-result { width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 11px; border:1px solid transparent; border-radius:9px; color:var(--admin-text); background:var(--admin-surface); text-align:left; cursor:pointer; }
+.admin-mounted-hardware-result:hover { border-color:var(--admin-primary); background:var(--admin-primary-soft); }
+.admin-mounted-hardware-result > span { min-width:0; display:grid; gap:2px; }
+.admin-mounted-hardware-result strong { font-size:12px; overflow-wrap:anywhere; }
+.admin-mounted-hardware-result small { color:var(--admin-muted); font-size:10px; }
+.admin-mounted-hardware-result em { flex:0 0 auto; color:var(--admin-primary); font-size:9px; font-style:normal; font-weight:800; }
+.admin-mounted-hardware-empty, .admin-mounted-components-empty { margin:0; padding:13px; color:var(--admin-muted); font-size:11px; text-align:center; }
+.admin-mounted-components { display:grid; gap:8px; margin-top:12px; }
+.admin-mounted-component { display:grid; grid-template-columns:minmax(180px,1fr) 90px minmax(120px,180px) auto; align-items:end; gap:10px; padding:11px; border:1px solid var(--admin-border); border-radius:10px; background:var(--admin-surface-2); }
+.admin-mounted-component-main { align-self:center; min-width:0; display:grid; gap:2px; }
+.admin-mounted-component-main strong { font-size:12px; overflow-wrap:anywhere; }
+.admin-mounted-component-main small { color:var(--admin-muted); font-size:10px; }
+.admin-mounted-component label { display:grid; gap:4px; }
+.admin-mounted-component label > span { color:var(--admin-muted); font-size:9px; font-weight:700; }
+.admin-mounted-advanced { margin-top:13px; padding:10px 12px; border:1px dashed var(--admin-border); border-radius:10px; }
+.admin-mounted-advanced summary { cursor:pointer; color:var(--admin-muted); font-size:11px; font-weight:750; }
+.admin-mounted-advanced[open] summary { margin-bottom:10px; }
+.admin-mounted-image-preview { min-height:110px; display:grid; place-items:center; overflow:hidden; border:1px solid var(--admin-border); border-radius:11px; background:var(--admin-surface-2); }
+.admin-mounted-image-preview img { display:block; width:100%; max-height:260px; object-fit:contain; }
+.admin-mounted-image-preview span { padding:18px; color:var(--admin-danger); font-size:11px; text-align:center; }
+.admin-mounted-side-preview { display:grid; gap:10px; }
+.admin-mounted-side-preview > img, .admin-mounted-side-preview > .admin-empty { width:100%; aspect-ratio:16/10; object-fit:contain; border-radius:10px; background:var(--admin-surface-2); }
+.admin-mounted-side-preview > div:not(.admin-empty) { display:grid; gap:4px; }
+.admin-mounted-side-preview small { color:var(--admin-muted); font-size:10px; }
+.admin-mounted-side-preview h3 { margin:0; font-size:14px; }
+.admin-mounted-side-preview strong { color:var(--admin-primary); font-size:13px; }
+.admin-divider { margin:16px 0; border:0; border-top:1px solid var(--admin-border); }
+@media (max-width:760px) {
+  .admin-mounted-component { grid-template-columns:1fr 90px; }
+  .admin-mounted-component-main { grid-column:1 / -1; }
+  .admin-mounted-component .admin-action-button { grid-column:1 / -1; }
 }

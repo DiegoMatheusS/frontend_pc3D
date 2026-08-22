@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/authContext'
 import AdminAccess from './components/AdminAccess'
-import { AdminToastProvider } from './components/AdminToast'
+import { AdminToastProvider, useAdminToast } from './components/AdminToast'
 import AdminAssistant from './components/AdminAssistant'
+import { adminService } from './services/adminService'
 import './Admin.css'
 
 const NAV_ITEMS = [
@@ -53,11 +54,14 @@ function AdminShell() {
   const navigate = useNavigate()
   const userMenuRef = useRef(null)
   const quickSearchRef = useRef(null)
+  const suggestionCountRef = useRef(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
   const [quickOpen, setQuickOpen] = useState(false)
   const [quickQuery, setQuickQuery] = useState('')
+  const [pendingSuggestions, setPendingSuggestions] = useState(0)
+  const toast = useAdminToast()
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('pcBuilderTema')
     if (saved === 'dark' || saved === 'light') return saved
@@ -84,6 +88,40 @@ function AdminShell() {
     if (!query) return availableNav
     return availableNav.filter((item) => `${item.label} ${item.group}`.toLocaleLowerCase('pt-BR').includes(query))
   }, [availableNav, quickQuery])
+
+  useEffect(() => {
+    if (role !== 'ADMIN') {
+      suggestionCountRef.current = null
+      return undefined
+    }
+
+    let active = true
+    const checkSuggestions = async () => {
+      try {
+        const payload = await adminService.offerSuggestions.list({ status: 'EM_ANALISE' })
+        if (!active) return
+        const items = Array.isArray(payload?.sugestoes) ? payload.sugestoes : []
+        const explicitCount = Number(payload?.emAnalise)
+        const count = Number.isFinite(explicitCount) ? explicitCount : items.filter((item) => item?.status === 'EM_ANALISE').length
+        const previous = suggestionCountRef.current
+        setPendingSuggestions(count)
+        suggestionCountRef.current = count
+        if (previous !== null && count > previous) {
+          const newItems = count - previous
+          toast.show(`${newItems} nova${newItems > 1 ? 's' : ''} sugestão${newItems > 1 ? 'ões' : ''} de oferta recebida${newItems > 1 ? 's' : ''}.`, 'info')
+        }
+      } catch {
+        // A notificação é auxiliar; falhas aqui não bloqueiam o painel.
+      }
+    }
+
+    checkSuggestions()
+    const interval = window.setInterval(checkSuggestions, 60000)
+    return () => {
+      active = false
+      window.clearInterval(interval)
+    }
+  }, [role, toast])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -178,6 +216,7 @@ function AdminShell() {
             <div className="admin-topbar-title"><strong>{meta[0]}</strong><span>{meta[1]}</span></div>
             <div className="admin-topbar-actions">
               <button className="admin-quick-search-button" type="button" onClick={() => setQuickOpen(true)} aria-label="Pesquisar no painel" title="Pesquisar no painel (Ctrl+K)"><span aria-hidden="true">⌕</span><span>Pesquisar</span><kbd>Ctrl K</kbd></button>
+              {role === 'ADMIN' && <Link className="admin-icon-button admin-notification-button" to="/admin/sugestoes-ofertas" aria-label={pendingSuggestions ? `${pendingSuggestions} sugestão(ões) de oferta em análise` : 'Nenhuma sugestão de oferta pendente'} title="Sugestões de ofertas"><span aria-hidden="true">♢</span>{pendingSuggestions > 0 && <span className="admin-notification-badge">{pendingSuggestions > 99 ? '99+' : pendingSuggestions}</span>}</Link>}
               <button className="admin-icon-button admin-ia-btn-topbar" data-ativo={aiOpen ? 'true' : 'false'} type="button" onClick={() => setAiOpen((value) => !value)} aria-label="Abrir assistente administrativo" title="Assistente Admin">✦</button>
               <button className="admin-icon-button" type="button" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label="Alternar tema" title="Alternar tema">{theme === 'dark' ? '☀' : '◐'}</button>
               <div className={`admin-user-menu ${userOpen ? 'aberto' : ''}`} ref={userMenuRef}>
