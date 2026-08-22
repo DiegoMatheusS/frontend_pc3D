@@ -10,7 +10,7 @@ import {
 } from "./renderer.js";
 
 import { verificarCompatibilidade } from "./compatibilidade.js";
-import { api } from "./api.js?v=react-v46-glb-fisico-mobile-left";
+import { api } from "./api.js?v=react-v47-gpu-lateral-cpu-size";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {
@@ -1650,15 +1650,22 @@ function atualizarAncorasGabinete3D(pecaGabinete = estadoMontagem.gabinete) {
 
   slotM2.position.set(mbX + 0.10, mbY - Math.min(0.48, mb.altura * 0.16), mbZ + Math.min(0.22, mb.profundidade * 0.10));
 
-  // GPU: mantem comprimento/altura/espessura reais e alinha a traseira no PCIe.
+  // GPU: orientacao lateral/vertical. A espessura aponta para o vidro (X),
+  // a altura sobe no gabinete (Y) e o comprimento segue o PCIe (Z). Com isso
+  // as ventoinhas ficam visiveis de lado em vez de apontarem para baixo.
   const gpu = obterDimensoesGpuLayout3D();
-  const gpuX = -meiaL + margem + gpu.altura / 2;
-  const gpuY = centroDentroDosLimites(gpu.espessura, alturaShroud + margem, altura - margem, mbY - Math.min(0.82, mb.altura * 0.27));
+  const gpuX = -meiaL + margem + gpu.espessura / 2;
+  const gpuY = centroDentroDosLimites(
+    gpu.altura,
+    alturaShroud + margem,
+    altura - margem,
+    mbY - Math.min(0.58, mb.altura * 0.19),
+  );
   // A traseira da GPU permanece presa ao bracket PCIe. Se for longa demais,
   // ela ultrapassa a frente do gabinete em vez de ser encolhida/centralizada.
   const gpuZ = meiaP - margem - gpu.comprimento / 2;
   slotGpu.position.set(gpuX, gpuY, gpuZ);
-  atualizarGeometriaCaixa3D(slotGpu, gpu.altura, gpu.espessura, gpu.comprimento);
+  atualizarGeometriaCaixa3D(slotGpu, gpu.espessura, gpu.altura, gpu.comprimento);
 
   // Fonte: fundo/traseira, preservando as dimensoes reais.
   const psu = obterDimensoesFonteLayout3D();
@@ -4068,15 +4075,15 @@ function criarGpuProcedural(peca, basePos) {
   grupo.position.copy(basePos);
 
   const shroud = criarMeshProcedural(
-    new THREE.BoxGeometry(altura, espessura, comprimento),
+    new THREE.BoxGeometry(espessura, altura, comprimento),
     criarMaterialProcedural(0x202733, { roughness: 0.48, metalness: 0.32 }),
   );
   grupo.add(shroud);
 
   const pcb = criarMeshProcedural(
-    new THREE.BoxGeometry(altura * 0.88, 0.035, comprimento * 0.94),
+    new THREE.BoxGeometry(0.035, altura * 0.88, comprimento * 0.94),
     criarMaterialProcedural(0x173a2a, { roughness: 0.72, metalness: 0.08 }),
-    [0, espessura * 0.42, 0],
+    [espessura * 0.42, 0, 0],
   );
   grupo.add(pcb);
 
@@ -4096,15 +4103,15 @@ function criarGpuProcedural(peca, basePos) {
       corPas: 0x475569,
       velocidade: 0.23,
     });
-    // A face das ventoinhas fica no lado oposto ao PCB. Isso evita que
-    // o fallback apareca com as fans voltadas para baixo no gabinete.
-    fan.position.set(0, -(espessura / 2 + 0.055), -comprimento / 2 + intervalo * (indice + 0.5));
-    fan.rotation.x = Math.PI;
+    // Ventoinhas voltadas para a lateral/vidro, acompanhando a mesma
+    // orientacao usada pelos GLBs de GPU no montador.
+    fan.position.set(-(espessura / 2 + 0.055), 0, -comprimento / 2 + intervalo * (indice + 0.5));
+    fan.rotation.z = Math.PI / 2;
     grupo.add(fan);
   }
 
   const bracket = criarMeshProcedural(
-    new THREE.BoxGeometry(altura * 1.03, espessura * 1.02, 0.05),
+    new THREE.BoxGeometry(espessura * 1.02, altura * 1.03, 0.05),
     criarMaterialProcedural(0x94a3b8, { roughness: 0.35, metalness: 0.75 }),
     [0, 0, comprimento / 2 + 0.03],
   );
@@ -4516,7 +4523,10 @@ function dimensoesFisicasAlvoModelo3D(categoria, peca = {}, indice = 0) {
 
   if (categoria === "placavideo") {
     const gpu = obterDimensoesGpuLayout3D();
-    return new THREE.Vector3(gpu.altura, gpu.espessura, gpu.comprimento);
+    // GPU em orientacao vertical/lateral no gabinete: a espessura fica no eixo X
+    // (em direcao ao vidro), a altura no eixo Y e o comprimento no eixo Z.
+    // Assim a face das ventoinhas fica voltada para a lateral, nao para baixo.
+    return new THREE.Vector3(gpu.espessura, gpu.altura, gpu.comprimento);
   }
 
   if (categoria === "placamae") {
@@ -4644,6 +4654,30 @@ function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transfo
   const caixa = new THREE.Box3().setFromObject(modelo);
   if (caixa.isEmpty()) return;
   const tamanho = caixa.getSize(new THREE.Vector3());
+
+  if (categoria === "processador") {
+    // Alguns GLBs de CPU possuem uma espessura exportada muito maior que a real.
+    // O ajuste uniforme anterior usava essa espessura como limite e acabava
+    // reduzindo o processador inteiro a poucos milimetros visuais. Para CPU,
+    // corrige cada eixo de forma independente para preservar o footprint real
+    // aproximado de 40 x 40 mm no socket sem deixar o modelo minúsculo.
+    const fatorX = alvo.x / Math.max(0.000001, tamanho.x);
+    const fatorY = alvo.y / Math.max(0.000001, tamanho.y);
+    const fatorZ = alvo.z / Math.max(0.000001, tamanho.z);
+    if ([fatorX, fatorY, fatorZ].every((valor) => Number.isFinite(valor) && valor > 0)) {
+      modelo.scale.set(
+        modelo.scale.x * fatorX,
+        modelo.scale.y * fatorY,
+        modelo.scale.z * fatorZ,
+      );
+      modelo.updateMatrixWorld(true);
+      modelo.userData.escalaFisicaAutomatica = true;
+      modelo.userData.ajusteCpuPorEixo = true;
+      modelo.userData.dimensoesFisicasAlvo = { x: alvo.x, y: alvo.y, z: alvo.z };
+    }
+    return;
+  }
+
   const razoes = [
     alvo.x / Math.max(0.000001, tamanho.x),
     alvo.y / Math.max(0.000001, tamanho.y),
