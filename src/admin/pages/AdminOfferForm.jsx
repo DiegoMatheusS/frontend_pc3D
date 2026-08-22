@@ -47,16 +47,20 @@ export default function AdminOfferForm() {
       if (!active) return
       setData({ partners, products, hardwares })
       if (item) {
-        setForm({
-          ...EMPTY,
-          ...item,
-          targetType: item.hardwareId ? 'hardware' : 'produto',
-          targetId: item.hardwareId || item.produtoId || '',
-          validoAte: toLocal(item.validoAte),
-          preco: item.preco ?? '',
-          precoAnterior: item.precoAnterior ?? '',
-          frete: item.frete ?? '',
-        })
+       setForm({
+  ...EMPTY,
+  ...item,
+  targetType: item.hardwareId ? 'hardware' : 'produto',
+  targetId: item.hardwareId || item.produtoId || '',
+  vendedorNome: item.vendedorNome ?? '',
+  vendedorIdentificador: item.vendedorIdentificador ?? '',
+  urlOriginal: item.urlOriginal ?? '',
+  urlAfiliada: item.urlAfiliada ?? '',
+  validoAte: toLocal(item.validoAte),
+  preco: item.preco ?? '',
+  precoAnterior: item.precoAnterior ?? '',
+  frete: item.frete ?? '',
+})
       } else if (suggestion) {
         setForm((current) => ({
           ...current,
@@ -82,10 +86,10 @@ export default function AdminOfferForm() {
     try {
       const body = {
         ...(!editing ? { parceiroId: Number(form.parceiroId) } : {}),
-        vendedorNome: form.vendedorNome.trim() || (editing ? null : undefined),
-        vendedorIdentificador: form.vendedorIdentificador.trim() || (editing ? null : undefined),
-        urlOriginal: form.urlOriginal.trim(),
-        urlAfiliada: form.urlAfiliada.trim() || (editing ? null : undefined),
+        vendedorNome: String(form.vendedorNome ?? '').trim() || (editing ? null : undefined),
+        vendedorIdentificador: String(form.vendedorIdentificador ?? '').trim() || (editing ? null : undefined),
+        urlOriginal: String(form.urlOriginal ?? '').trim(),
+        urlAfiliada: String(form.urlAfiliada ?? '').trim() || (editing ? null : undefined),
         preco: Number(form.preco),
         precoAnterior: form.precoAnterior === '' ? (editing ? null : undefined) : Number(form.precoAnterior),
         frete: form.frete === '' ? (editing ? null : undefined) : Number(form.frete),
