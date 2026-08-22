@@ -8,7 +8,7 @@ const CHAVE_TEMA = 'pcBuilderTema'
 function obterTemaInicial() {
   const salvo = localStorage.getItem(CHAVE_TEMA)
   if (salvo === 'dark' || salvo === 'light') return salvo
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  return 'light'
 }
 
 function getStoreSectionLabel(location) {
