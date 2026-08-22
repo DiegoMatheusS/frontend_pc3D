@@ -16,6 +16,17 @@ const configuracao = {
 };
 
 
+const R2_PUBLIC_BASE_URL = "https://pub-f75dfbdc12814aea925f2615df4d32a5.r2.dev/";
+
+function resolverUrlModelo3D(valor) {
+  const url = String(valor ?? "").trim();
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith("//")) return `https:${url}`;
+  if (url.startsWith("/")) return new URL(url, window.location.origin).href;
+  return `${R2_PUBLIC_BASE_URL}${url.replace(/^\/+/, "")}`;
+}
+
 const CATEGORIA_HARDWARE_PARA_BUILDER = Object.freeze({
   PROCESSADOR: "processador",
   COOLER: "cooler",
@@ -224,12 +235,13 @@ function normalizarHardwareParaBuilder(hardware) {
     || modelos3D.find((modelo) => modelo?.ativo !== false && modelo?.aprovado !== false)
     || modelos3D[0]
     || null;
-  const modelo3dUrl = String(
+  const modelo3dUrl = resolverUrlModelo3D(
     hardware?.modelo3dUrl
       || hardware?.modelo3DUrl
       || hardware?.model3dUrl
       || hardware?.urlModelo3d
       || hardware?.urlModelo3D
+      || (typeof hardware?.modelo3D === "string" ? hardware.modelo3D : "")
       || modelo3DAtivo?.arquivoUrl
       || modelo3DAtivo?.urlArquivo
       || modelo3DAtivo?.cdnUrl

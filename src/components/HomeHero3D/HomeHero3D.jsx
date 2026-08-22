@@ -1,9 +1,89 @@
 import { useEffect, useRef, useState } from 'react'
-import { rotaLegada } from '../../utils/legacyRoutes'
+import { apiRequest } from '../../services/httpClient'
 
 const THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'
 const ORBIT_URL = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js'
 const GLTF_URL = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'
+
+const R2_PUBLIC_BASE_URL = 'https://pub-f75dfbdc12814aea925f2615df4d32a5.r2.dev/'
+
+function resolveModelUrl(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  if (/^https?:\/\//i.test(raw)) return raw
+  if (raw.startsWith('//')) return `https:${raw}`
+  if (raw.startsWith('/')) return new URL(raw, window.location.origin).href
+  return `${R2_PUBLIC_BASE_URL}${raw.replace(/^\/+/, '')}`
+}
+
+function hardwareItems(payload) {
+  if (Array.isArray(payload)) return payload
+  for (const key of ['itens', 'items', 'hardwares', 'dados', 'data', 'resultados', 'results']) {
+    if (Array.isArray(payload?.[key])) return payload[key]
+  }
+  return []
+}
+
+function modelFromHardware(hardware) {
+  const directUrl = hardware?.modelo3dUrl
+    || hardware?.modelo3DUrl
+    || hardware?.model3dUrl
+    || hardware?.urlModelo3d
+    || hardware?.urlModelo3D
+    || (typeof hardware?.modelo3D === 'string' ? hardware.modelo3D : '')
+  if (directUrl) return resolveModelUrl(directUrl)
+
+  const explicit = [hardware?.modelo3DAtivo, hardware?.modelo3D]
+    .filter((item) => item && typeof item === 'object')
+  const models = [
+    ...explicit,
+    ...(Array.isArray(hardware?.modelos3D) ? hardware.modelos3D : []),
+  ]
+  const model = models.find((item) => item?.ativo !== false && item?.aprovado !== false)
+    || models.find((item) => item?.ativo !== false)
+    || models[0]
+  return resolveModelUrl(
+    model?.arquivoUrl
+      || model?.urlArquivo
+      || model?.cdnUrl
+      || model?.cloudflareUrl
+      || model?.url,
+  )
+}
+
+async function getHeroGpuModelUrl() {
+  let payload
+  try {
+    payload = await apiRequest('/api/hardwares?categoria=PLACA_VIDEO&pagina=1&limite=100')
+  } catch {
+    payload = await apiRequest('/api/hardwares')
+  }
+
+  const gpus = hardwareItems(payload).filter((hardware) => {
+    const category = String(hardware?.categoria ?? hardware?.category ?? '').toUpperCase()
+    return category === 'PLACA_VIDEO' && hardware?.ativo !== false && hardware?.publicado !== false
+  })
+
+  for (const gpu of gpus) {
+    const url = modelFromHardware(gpu)
+    if (url) return url
+  }
+
+  // Algumas versões da API entregam o modelo 3D somente no detalhe do Hardware.
+  // Consulta apenas GPUs, em sequência, e para assim que encontrar um GLB válido.
+  for (const gpu of gpus.slice(0, 12)) {
+    if (!gpu?.id) continue
+    try {
+      const detailPayload = await apiRequest(`/api/hardwares/${encodeURIComponent(gpu.id)}`)
+      const detail = detailPayload?.hardware || detailPayload?.dado || detailPayload
+      const url = modelFromHardware(detail)
+      if (url) return url
+    } catch {
+      // Continua procurando outra GPU pública.
+    }
+  }
+  return ''
+}
 
 function loadScript(src) {
   const existing = document.querySelector(`script[data-home-three-src="${src}"]`)
@@ -128,29 +208,10 @@ export default function HomeHero3D() {
         let heroVisible = true
 
         const loader = new THREE.GLTFLoader()
-        loader.load(
-          rotaLegada('modelos/rtx3090.glb'),
-          (gltf) => {
-            if (cancelled) return
-            model = gltf.scene
-            model.scale.setScalar(1.42)
-            model.position.set(0, 0.2, 0)
-            model.rotation.set(-0.05, -0.38, 0.06)
-            model.traverse((object) => {
-              if (!object.isMesh) return
-              object.castShadow = false
-              object.receiveShadow = false
-            })
-            scene.add(model)
-            setStatus('ready')
-          },
-          undefined,
-          () => {
-            if (cancelled) return
 
-            // Em produção, a home continua com uma prévia 3D interativa mesmo
-            // quando o GLB promocional não estiver publicado/disponível.
-            const fallback = new THREE.Group()
+        function showFallback() {
+          if (cancelled) return
+          const fallback = new THREE.Group()
             const corpo = new THREE.Mesh(
               new THREE.BoxGeometry(4.8, 2.25, 0.62),
               new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.72, roughness: 0.28 }),
@@ -172,13 +233,52 @@ export default function HomeHero3D() {
               fallback.add(fan)
             })
 
-            model = fallback
-            model.position.set(0, 0.2, 0)
-            model.rotation.set(-0.05, -0.38, 0.06)
-            scene.add(model)
-            setStatus('ready')
-          },
-        )
+          model = fallback
+          model.position.set(0, 0.2, 0)
+          model.rotation.set(-0.05, -0.38, 0.06)
+          scene.add(model)
+          setStatus('ready')
+        }
+
+        const modelUrl = await getHeroGpuModelUrl().catch(() => '')
+        if (cancelled) return
+        if (!modelUrl) {
+          showFallback()
+        } else {
+          loader.load(
+            modelUrl,
+            (gltf) => {
+              if (cancelled) return
+              const asset = gltf.scene
+              asset.updateMatrixWorld(true)
+              const initialBox = new THREE.Box3().setFromObject(asset)
+              const size = initialBox.getSize(new THREE.Vector3())
+              const largest = Math.max(size.x, size.y, size.z)
+              if (Number.isFinite(largest) && largest > 0) {
+                asset.scale.setScalar(5.25 / largest)
+                asset.updateMatrixWorld(true)
+                const fittedBox = new THREE.Box3().setFromObject(asset)
+                const center = fittedBox.getCenter(new THREE.Vector3())
+                asset.position.sub(center)
+              }
+              asset.traverse((object) => {
+                if (!object.isMesh) return
+                object.castShadow = false
+                object.receiveShadow = false
+                object.frustumCulled = false
+              })
+
+              model = new THREE.Group()
+              model.add(asset)
+              model.position.set(0, 0.2, 0)
+              model.rotation.set(-0.05, -0.38, 0.06)
+              scene.add(model)
+              setStatus('ready')
+            },
+            undefined,
+            showFallback,
+          )
+        }
 
         function resize() {
           if (!container || !renderer) return

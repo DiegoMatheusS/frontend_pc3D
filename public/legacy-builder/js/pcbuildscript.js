@@ -10,7 +10,7 @@ import {
 } from "./renderer.js";
 
 import { verificarCompatibilidade } from "./compatibilidade.js";
-import { api } from "./api.js?v=react-v42-price-case-fit";
+import { api } from "./api.js?v=react-v43-r2-glb";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {
