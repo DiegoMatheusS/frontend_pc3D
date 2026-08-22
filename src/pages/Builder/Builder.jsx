@@ -384,7 +384,11 @@ export default function Builder() {
     globalThis.PC_BUILDER_REACT_FILTER = true
     globalThis.PC_BUILDER_REACT_LIST = true
     globalThis.PC_BUILDER_REACT_ACTIONS = true
-    globalThis.PC_BUILDER_API_CONFIG = { baseUrl: '', modo: 'api', timeoutMs: 12000 }
+    globalThis.PC_BUILDER_API_CONFIG = {
+      baseUrl: (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, ''),
+      modo: 'api',
+      timeoutMs: 12000,
+    }
 
     function sincronizarEstadoReact(evento) {
       if (cancelado || !evento?.detail) return
@@ -668,7 +672,6 @@ export default function Builder() {
         <div className="builder-react-alert" role="alert">
           <strong>3D não carregou.</strong>
           <span>{erroMotor}</span>
-          <a href={rotaLegada('pcbuild.html')}>Abrir montador antigo</a>
         </div>
       )}
 

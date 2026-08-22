@@ -146,7 +146,37 @@ export default function HomeHero3D() {
           },
           undefined,
           () => {
-            if (!cancelled) setStatus('error')
+            if (cancelled) return
+
+            // Em produção, a home continua com uma prévia 3D interativa mesmo
+            // quando o GLB promocional não estiver publicado/disponível.
+            const fallback = new THREE.Group()
+            const corpo = new THREE.Mesh(
+              new THREE.BoxGeometry(4.8, 2.25, 0.62),
+              new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.72, roughness: 0.28 }),
+            )
+            fallback.add(corpo)
+
+            const detalhe = new THREE.Mesh(
+              new THREE.BoxGeometry(4.25, 1.65, 0.67),
+              new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.55, roughness: 0.4 }),
+            )
+            detalhe.position.z = 0.05
+            fallback.add(detalhe)
+
+            const materialFan = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.38, roughness: 0.45 })
+            ;[-1.28, 0, 1.28].forEach((x) => {
+              const fan = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.18, 36), materialFan)
+              fan.rotation.x = Math.PI / 2
+              fan.position.set(x, 0, 0.42)
+              fallback.add(fan)
+            })
+
+            model = fallback
+            model.position.set(0, 0.2, 0)
+            model.rotation.set(-0.05, -0.38, 0.06)
+            scene.add(model)
+            setStatus('ready')
           },
         )
 
@@ -227,7 +257,6 @@ export default function HomeHero3D() {
         </div>
       </div>
       {status === 'loading' && <span className="home-preview__3d-status">Carregando visualização 3D…</span>}
-      {status === 'error' && <span className="home-preview__3d-status home-preview__3d-status--error">Prévia local ativa · inicie o Live Server :5500 para o modelo 3D</span>}
     </div>
   )
 }

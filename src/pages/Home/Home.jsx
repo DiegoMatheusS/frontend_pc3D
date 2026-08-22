@@ -122,7 +122,7 @@ export default function Home() {
               <HomeHero3D />
             </div>
             <div className="home-preview__bottom">
-              <span>Modelo carregado somente quando necessário</span>
+              <span>Visualização 3D interativa</span>
               <strong>CriaByte 3D</strong>
             </div>
           </div>

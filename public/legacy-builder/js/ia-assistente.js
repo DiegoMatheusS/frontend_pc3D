@@ -116,7 +116,7 @@ function _componentesParaApi(componentes = []) {
 async function _requisitar(caminho, corpo) {
   const resposta = await fetch(`${API_BASE}${caminho}`, {
     method: "POST",
-    credentials: "same-origin",
+    credentials: "include",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(corpo),
   });

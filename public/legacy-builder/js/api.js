@@ -332,7 +332,7 @@ async function requisitar(caminho, opcoes = {}) {
 
   try {
     const resposta = await fetch(url, {
-      credentials: "same-origin",
+      credentials: "include",
       headers: {
         Accept: "application/json",
         ...(opcoes.body ? { "Content-Type": "application/json" } : {}),
