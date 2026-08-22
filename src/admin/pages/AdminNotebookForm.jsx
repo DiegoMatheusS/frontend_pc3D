@@ -31,7 +31,11 @@ function cleanText(value) {
 function sanitizeNotebookSpec(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   return Object.fromEntries(
-    Object.entries(value).filter(([key, fieldValue]) => NOTEBOOK_SPEC_FIELDS.has(key) && fieldValue !== undefined),
+    Object.entries(value).filter(([key, fieldValue]) => {
+      if (!NOTEBOOK_SPEC_FIELDS.has(key) || fieldValue === undefined || fieldValue === null || fieldValue === '') return false
+      if ((key === 'ramInstaladaGb' || key === 'ramMaximaGb') && (!Number.isFinite(Number(fieldValue)) || Number(fieldValue) <= 0)) return false
+      return true
+    }),
   )
 }
 
@@ -389,6 +393,7 @@ export default function AdminNotebookForm() {
             <div className="admin-field full"><label>CPU / Processador</label><input className="admin-input" value={specification.processadorNome ?? ''} onChange={(event) => updateSpec('processadorNome', event.target.value)} placeholder="Intel Core i5-1235U" /></div>
             <div className="admin-field"><label>Memória RAM (GB)</label><input className="admin-input" type="number" min="1" step="1" value={specification.ramInstaladaGb ?? ''} onChange={(event) => updateSpec('ramInstaladaGb', event.target.value, 'number')} placeholder="16" /></div>
             <div className="admin-field"><label>Tipo de memória</label><select className="admin-select" value={specification.tipoMemoria ?? ''} onChange={(event) => updateSpec('tipoMemoria', event.target.value)}><option value="">Selecione</option><option value="DDR3">DDR3</option><option value="DDR4">DDR4</option><option value="DDR5">DDR5</option></select></div>
+            <div className="admin-field"><label>Memória máxima (GB)</label><input className="admin-input" type="number" min="1" step="1" value={specification.ramMaximaGb ?? ''} onChange={(event) => updateSpec('ramMaximaGb', event.target.value, 'number')} placeholder="32" /><small className="admin-help">Opcional. Deixe vazio se a capacidade máxima não for conhecida.</small></div>
             <div className="admin-field"><label>Armazenamento (GB)</label><input className="admin-input" type="number" min="1" step="1" value={specification.armazenamentoGb ?? ''} onChange={(event) => updateSpec('armazenamentoGb', event.target.value, 'number')} placeholder="512" /></div>
             <div className="admin-field"><label>Tipo de armazenamento</label><input className="admin-input" value={specification.tipoArmazenamento ?? ''} onChange={(event) => updateSpec('tipoArmazenamento', event.target.value)} placeholder="SSD NVMe M.2" /></div>
             <div className="admin-field"><label>Tela (polegadas)</label><input className="admin-input" type="number" min="1" step="0.1" value={specification.tamanhoTelaPolegadas ?? ''} onChange={(event) => updateSpec('tamanhoTelaPolegadas', event.target.value, 'number')} placeholder="15.6" /></div>

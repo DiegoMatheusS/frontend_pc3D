@@ -19,7 +19,7 @@ export default function NotebookCard({ notebook = {}, onCompare, selected = fals
           event.currentTarget.parentElement?.querySelector('.notebook-card__device')?.removeAttribute('hidden')
         }} /> : null}
         {notebook.hoverImage ? <img className="notebook-card__image notebook-card__image--hover" src={notebook.hoverImage} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true }} /> : null}
-        <div className="notebook-card__device" aria-hidden="true" hidden={Boolean(notebook.image)}><span>NB</span></div>
+        <div className="notebook-card__device" aria-hidden="true" hidden={Boolean(notebook.image)}><span className="notebook-card__device-screen" /></div>
       </Link>
 
       <div className="notebook-card__content">

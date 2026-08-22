@@ -9,6 +9,7 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
   const navigate = useNavigate()
   const category = asText(product.category, 'Produto')
   const name = asText(product.name, 'Produto')
+  const group = asText(product.group, 'hardwares')
   const price = asNumber(product.price, 0)
   const previousPrice = asNumber(product.previousPrice, 0)
   const offers = asArray(product.offers)
@@ -50,6 +51,10 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
               alt=""
               loading="lazy"
               decoding="async"
+              onError={(event) => {
+                event.currentTarget.hidden = true
+                event.currentTarget.parentElement?.querySelector('.product-card__symbol')?.removeAttribute('hidden')
+              }}
             />
             {hoverImage && (
               <img
@@ -58,14 +63,14 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
                 alt=""
                 loading="lazy"
                 decoding="async"
+                onError={(event) => { event.currentTarget.hidden = true }}
               />
             )}
           </>
-        ) : (
-          <div className={`product-card__symbol product-card__symbol--${asText(product.group, 'hardwares')}`} aria-hidden="true">
-            <span>{category.slice(0, 2).toUpperCase()}</span>
-          </div>
-        )}
+        ) : null}
+        <div className={`product-card__symbol product-card__symbol--${group}`} aria-hidden="true" hidden={Boolean(product.image)}>
+          {group === 'notebooks' ? <span className="product-card__laptop-placeholder" /> : <span>{category.slice(0, 2).toUpperCase()}</span>}
+        </div>
       </Link>
 
       <div className="product-card__content">

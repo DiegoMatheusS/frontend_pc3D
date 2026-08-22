@@ -136,10 +136,27 @@ export default function Store({ defaultGroup = 'todos' }) {
       const safeGroups = Array.isArray(groupItems) ? groupItems : []
       const rawProducts = Array.isArray(productItems) ? productItems : []
       const publicNotebooks = Array.isArray(notebookItems) ? notebookItems : null
-      const publicNotebookProductIds = new Set((publicNotebooks || []).map((item) => item.productId).filter((value) => value !== null && value !== undefined).map(String))
-      const publicNotebookIds = new Set((publicNotebooks || []).map((item) => item.id).filter((value) => value !== null && value !== undefined).map(String))
-      const publicNotebookNames = new Set((publicNotebooks || []).map((item) => normalize(item.name)).filter(Boolean))
-      const safeProducts = rawProducts.filter((product) => {
+      const notebookByProductId = new Map((publicNotebooks || []).filter((item) => item.productId !== null && item.productId !== undefined).map((item) => [String(item.productId), item]))
+      const notebookById = new Map((publicNotebooks || []).filter((item) => item.id !== null && item.id !== undefined).map((item) => [String(item.id), item]))
+      const notebookByName = new Map((publicNotebooks || []).map((item) => [normalize(item.name), item]).filter(([key]) => Boolean(key)))
+      const publicNotebookProductIds = new Set(notebookByProductId.keys())
+      const publicNotebookIds = new Set(notebookById.keys())
+      const publicNotebookNames = new Set(notebookByName.keys())
+      const enrichedProducts = rawProducts.map((product) => {
+        if (product.group !== 'notebooks' || publicNotebooks === null) return product
+        const notebook = (product.notebookId !== null && product.notebookId !== undefined ? notebookById.get(String(product.notebookId)) : null)
+          || notebookByProductId.get(String(product.id))
+          || notebookByName.get(normalize(product.name))
+        if (!notebook) return product
+        return {
+          ...product,
+          notebookId: product.notebookId ?? notebook.id ?? null,
+          image: product.image || notebook.image || null,
+          hoverImage: product.hoverImage || notebook.hoverImage || null,
+          description: product.description || notebook.description || '',
+        }
+      })
+      const safeProducts = enrichedProducts.filter((product) => {
         if (product.active === false || product.published === false) return false
         if (product.group !== 'notebooks' || publicNotebooks === null) return true
         if (product.notebookId !== null && product.notebookId !== undefined) {

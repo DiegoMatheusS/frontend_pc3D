@@ -5,7 +5,7 @@
 .notebook-card__discount { position: absolute; top: 12px; left: 12px; padding: 5px 8px; color: #fff; background: #b42318; border-radius: 999px; font-size: 11px; font-weight: 800; }
 .notebook-card__device { position: relative; width: 126px; height: 80px; display: grid; place-items: center; color: var(--color-primary); background: color-mix(in srgb, var(--color-surface) 84%, transparent); border: 2px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border)); border-radius: 10px 10px 5px 5px; box-shadow: inset 0 0 0 7px color-mix(in srgb, var(--color-primary) 6%, transparent); }
 .notebook-card__device::after { content: ''; position: absolute; width: 150px; height: 8px; left: 50%; bottom: -13px; transform: translateX(-50%); background: color-mix(in srgb, var(--color-text-soft) 24%, var(--color-surface)); border-radius: 2px 2px 8px 8px; }
-.notebook-card__device span { font-size: 21px; font-weight: 900; }
+.notebook-card__device-screen { width: 88px; height: 52px; display: block; border: 2px solid color-mix(in srgb, var(--color-primary) 38%, var(--color-border)); border-radius: 6px 6px 3px 3px; background: linear-gradient(145deg, color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)), var(--color-surface)); box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--color-primary) 4%, transparent); }
 .notebook-card__content { flex: 1; display: flex; flex-direction: column; padding: 17px; }
 .notebook-card__topline { display: flex; justify-content: space-between; gap: 10px; color: var(--color-text-soft); font-size: 11px; font-weight: 800; }
 .notebook-card__topline span:last-child { color: var(--color-star); }

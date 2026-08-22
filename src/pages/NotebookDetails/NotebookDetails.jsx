@@ -80,7 +80,7 @@ export default function NotebookDetails() {
     <main className="notebook-details">
       <section className="notebook-details__hero">
         <div className="page-container notebook-details__hero-grid">
-          <div className="notebook-details__visual">{notebook.image ? <img className="notebook-details__image" src={notebook.image} alt={notebook.name} /> : <div className="notebook-details__device"><span>NB</span></div>}</div>
+          <div className="notebook-details__visual">{notebook.image ? <img className="notebook-details__image" src={notebook.image} alt={notebook.name} /> : <div className="notebook-details__device"><span aria-hidden="true" /></div>}</div>
           <div className="notebook-details__intro">
             <Link className="notebook-details__back" to="/notebooks">← Notebooks</Link>
             <span className="eyebrow">{asText(notebook.brand)} · {asText(notebook.use, 'Uso geral')}</span>
