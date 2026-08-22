@@ -12,6 +12,18 @@ const EMPTY = {
   escalaCorrecaoX: 1, escalaCorrecaoY: 1, escalaCorrecaoZ: 1,
 }
 
+const R2_PUBLIC_BASE_URL = 'https://pub-f75dfbdc12814aea925f2615df4d32a5.r2.dev/'
+
+function montarUrlR2(valor) {
+  const caminho = String(valor || '').trim()
+
+  if (/^https?:\/\//i.test(caminho)) {
+    return caminho
+  }
+
+  return `${R2_PUBLIC_BASE_URL}${caminho.replace(/^\/+/, '')}`
+}
+
 const NUMERIC = ['alturaRealMm','larguraRealMm','profundidadeRealMm','tamanhoBytes','posicaoCorrecaoX','posicaoCorrecaoY','posicaoCorrecaoZ','rotacaoCorrecaoX','rotacaoCorrecaoY','rotacaoCorrecaoZ','escalaCorrecaoX','escalaCorrecaoY','escalaCorrecaoZ']
 
 export default function AdminModels3D() {
@@ -55,7 +67,7 @@ export default function AdminModels3D() {
     if (!canEdit) return
     setSaving(true)
     try {
-      const body = { nome: form.nome.trim() || undefined, arquivoUrl: form.arquivoUrl.trim(), formato: form.formato, versao: form.versao.trim() || undefined }
+      const body = { nome: form.nome.trim() || undefined, arquivoUrl: montarUrlR2(form.arquivoUrl), formato: form.formato, versao: form.versao.trim() || undefined }
       NUMERIC.forEach((key) => { if (form[key] !== '' && form[key] != null) body[key] = Number(form[key]) })
       if (form.id) await adminService.hardwares.updateModel(form.id, body)
       else await adminService.hardwares.createModel(Number(form.hardwareId), body)
@@ -84,7 +96,7 @@ export default function AdminModels3D() {
       <div className="admin-form-grid">
         <div className="admin-field"><label>Hardware</label><select className="admin-select" required disabled={Boolean(form.id)} value={form.hardwareId} onChange={(e) => update('hardwareId', e.target.value)}><option value="">Selecione</option>{hardwares.map((hardware) => <option key={hardware.id} value={hardware.id}>{hardware.nome}</option>)}</select></div>
         <div className="admin-field"><label>Nome do modelo</label><input className="admin-input" value={form.nome} onChange={(e) => update('nome', e.target.value)} /></div>
-        <div className="admin-field full"><label>URL/arquivo servido pelo projeto</label><input className="admin-input" required value={form.arquivoUrl} onChange={(e) => update('arquivoUrl', e.target.value)} placeholder="/modelos/gabinete.glb ou https://..." /><small className="admin-help">O backend cadastra a URL e os metadados. O arquivo binário continua sendo servido separadamente.</small></div>
+        <div className="admin-field full"><label>URL/arquivo servido pelo projeto</label><input className="admin-input" required value={form.arquivoUrl} onChange={(e) => update('arquivoUrl', e.target.value)} placeholder="modelos/cpu/processador_generico.glb" /><small className="admin-help">O backend cadastra a URL e os metadados. O arquivo binário continua sendo servido separadamente.</small></div>
         <div className="admin-field"><label>Formato</label><select className="admin-select" value={form.formato} onChange={(e) => update('formato', e.target.value)}><option>GLB</option><option>GLTF</option><option>FBX</option><option>OBJ</option></select></div>
         <div className="admin-field"><label>Versão</label><input className="admin-input" value={form.versao} onChange={(e) => update('versao', e.target.value)} /></div>
         <div className="admin-vector-group full"><strong>Dimensões reais</strong>{[['alturaRealMm','Altura'],['larguraRealMm','Largura'],['profundidadeRealMm','Profund.']].map(([key,label]) => <label key={key}>{label}<input className="admin-input" type="number" min="0" step="0.01" value={form[key]} onChange={(e) => update(key, e.target.value)} /></label>)}</div>
