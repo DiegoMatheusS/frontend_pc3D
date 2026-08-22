@@ -399,8 +399,8 @@ export default function Builder() {
     window.addEventListener('pcbuilder:statechange', sincronizarEstadoReact)
 
     const estilos = [
-      '/legacy-builder/css/pcbuildstyle.css?v=react-v47-gpu-lateral-cpu-size',
-      '/legacy-builder/css/montador-extras.css?v=react-v47-gpu-lateral-cpu-size',
+      '/legacy-builder/css/pcbuildstyle.css?v=react-v48-gpu-flip-cpu-socket',
+      '/legacy-builder/css/montador-extras.css?v=react-v48-gpu-flip-cpu-socket',
       '/legacy-builder/css/ia-assistente.css?v=react-v40-1',
       '/legacy-builder/css/react-overrides.css?v=react-v40-1',
     ]
@@ -414,7 +414,7 @@ export default function Builder() {
         await carregarScript('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js')
         if (cancelado) return
 
-        await carregarScript('/legacy-builder/js/pcbuildscript.js?v=react-v47-gpu-lateral-cpu-size', { modulo: true })
+        await carregarScript('/legacy-builder/js/pcbuildscript.js?v=react-v48-gpu-flip-cpu-socket', { modulo: true })
         if (cancelado) return
 
         const inicializar = globalThis.inicializarMontadorLegado

@@ -10,7 +10,7 @@ import {
 } from "./renderer.js";
 
 import { verificarCompatibilidade } from "./compatibilidade.js";
-import { api } from "./api.js?v=react-v47-gpu-lateral-cpu-size";
+import { api } from "./api.js?v=react-v48-gpu-flip-cpu-socket";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {
@@ -4523,10 +4523,10 @@ function dimensoesFisicasAlvoModelo3D(categoria, peca = {}, indice = 0) {
 
   if (categoria === "placavideo") {
     const gpu = obterDimensoesGpuLayout3D();
-    // GPU em orientacao vertical/lateral no gabinete: a espessura fica no eixo X
-    // (em direcao ao vidro), a altura no eixo Y e o comprimento no eixo Z.
-    // Assim a face das ventoinhas fica voltada para a lateral, nao para baixo.
-    return new THREE.Vector3(gpu.espessura, gpu.altura, gpu.comprimento);
+    // Mantem a orientacao fisica que ja estava correta no PC 3D: altura em X,
+    // espessura em Y e comprimento em Z. A inversao de cima/baixo e aplicada
+    // depois, sem trocar os eixos nem colocar a GPU na vertical.
+    return new THREE.Vector3(gpu.altura, gpu.espessura, gpu.comprimento);
   }
 
   if (categoria === "placamae") {
@@ -4535,10 +4535,13 @@ function dimensoesFisicasAlvoModelo3D(categoria, peca = {}, indice = 0) {
   }
 
   if (categoria === "processador") {
+    // O socket procedural usa cerca de 42 x 42 mm. Para CPU nao usamos medidas
+    // opcionais vindas do catalogo porque campos genericos de altura/largura
+    // podem representar embalagem ou outra referencia e deformar o GLB.
     return new THREE.Vector3(
-      mm(specs.alturaMm ?? specs.espessuraMm, 4.5),
-      mm(specs.larguraMm, 40),
-      mm(specs.comprimentoMm ?? specs.profundidadeMm, 40),
+      0.065,
+      42 * ESCALA_MM_3D,
+      42 * ESCALA_MM_3D,
     );
   }
 
@@ -4641,6 +4644,56 @@ function orientarModelo3DParaPeca(modelo, alvo, permitirAutoRotacao = true) {
   modelo.updateMatrixWorld(true);
 }
 
+function rotacionarModelo3DAoRedorDoCentro(modelo, eixo, angulo) {
+  if (!modelo || !eixo || !Number.isFinite(angulo)) return;
+  modelo.updateMatrixWorld(true);
+  const caixaAntes = new THREE.Box3().setFromObject(modelo);
+  if (caixaAntes.isEmpty()) return;
+  const centroAntes = caixaAntes.getCenter(new THREE.Vector3());
+
+  const giro = new THREE.Quaternion().setFromAxisAngle(eixo.clone().normalize(), angulo);
+  modelo.quaternion.premultiply(giro);
+  modelo.updateMatrixWorld(true);
+
+  const caixaDepois = new THREE.Box3().setFromObject(modelo);
+  if (!caixaDepois.isEmpty()) {
+    const centroDepois = caixaDepois.getCenter(new THREE.Vector3());
+    modelo.position.add(centroAntes.sub(centroDepois));
+    modelo.updateMatrixWorld(true);
+  }
+}
+
+function ajustarEspessuraCpuNoEixoDoSocket(modelo, espessuraAlvo) {
+  if (!modelo || !Number.isFinite(espessuraAlvo) || espessuraAlvo <= 0) return;
+  modelo.updateMatrixWorld(true);
+  const caixaAntes = new THREE.Box3().setFromObject(modelo);
+  if (caixaAntes.isEmpty()) return;
+  const tamanhoAntes = caixaAntes.getSize(new THREE.Vector3());
+  if (!Number.isFinite(tamanhoAntes.x) || tamanhoAntes.x <= espessuraAlvo * 1.12) return;
+
+  const centroAntes = caixaAntes.getCenter(new THREE.Vector3());
+  const eixosLocais = [
+    { chave: "x", mundo: new THREE.Vector3(1, 0, 0).applyQuaternion(modelo.quaternion) },
+    { chave: "y", mundo: new THREE.Vector3(0, 1, 0).applyQuaternion(modelo.quaternion) },
+    { chave: "z", mundo: new THREE.Vector3(0, 0, 1).applyQuaternion(modelo.quaternion) },
+  ];
+  eixosLocais.sort((a, b) => Math.abs(b.mundo.x) - Math.abs(a.mundo.x));
+  const eixo = eixosLocais[0]?.chave || "x";
+  const fator = espessuraAlvo / Math.max(0.000001, tamanhoAntes.x);
+
+  if (eixo === "x") modelo.scale.x *= fator;
+  else if (eixo === "y") modelo.scale.y *= fator;
+  else modelo.scale.z *= fator;
+
+  modelo.updateMatrixWorld(true);
+  const caixaDepois = new THREE.Box3().setFromObject(modelo);
+  if (!caixaDepois.isEmpty()) {
+    const centroDepois = caixaDepois.getCenter(new THREE.Vector3());
+    modelo.position.add(centroAntes.sub(centroDepois));
+    modelo.updateMatrixWorld(true);
+  }
+}
+
 function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transform = {}) {
   if (!modelo || categoria === "gabinete") return;
   const alvo = dimensoesFisicasAlvoModelo3D(categoria, peca, indice);
@@ -4656,25 +4709,28 @@ function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transfo
   const tamanho = caixa.getSize(new THREE.Vector3());
 
   if (categoria === "processador") {
-    // Alguns GLBs de CPU possuem uma espessura exportada muito maior que a real.
-    // O ajuste uniforme anterior usava essa espessura como limite e acabava
-    // reduzindo o processador inteiro a poucos milimetros visuais. Para CPU,
-    // corrige cada eixo de forma independente para preservar o footprint real
-    // aproximado de 40 x 40 mm no socket sem deixar o modelo minúsculo.
-    const fatorX = alvo.x / Math.max(0.000001, tamanho.x);
+    // CPU deve ocupar o socket como uma peca quadrada, sem ser achatada/esticada
+    // em todos os eixos. Primeiro normalizamos apenas o footprint Y/Z de forma
+    // uniforme; depois limitamos a espessura X sem alterar o tamanho da face.
     const fatorY = alvo.y / Math.max(0.000001, tamanho.y);
     const fatorZ = alvo.z / Math.max(0.000001, tamanho.z);
-    if ([fatorX, fatorY, fatorZ].every((valor) => Number.isFinite(valor) && valor > 0)) {
-      modelo.scale.set(
-        modelo.scale.x * fatorX,
-        modelo.scale.y * fatorY,
-        modelo.scale.z * fatorZ,
-      );
+    let fator = Math.min(fatorY, fatorZ);
+    if (!Number.isFinite(fator) || fator <= 0) return;
+
+    const centroAntes = caixa.getCenter(new THREE.Vector3());
+    modelo.scale.multiplyScalar(fator);
+    modelo.updateMatrixWorld(true);
+    const caixaEscalada = new THREE.Box3().setFromObject(modelo);
+    if (!caixaEscalada.isEmpty()) {
+      const centroDepois = caixaEscalada.getCenter(new THREE.Vector3());
+      modelo.position.add(centroAntes.sub(centroDepois));
       modelo.updateMatrixWorld(true);
-      modelo.userData.escalaFisicaAutomatica = true;
-      modelo.userData.ajusteCpuPorEixo = true;
-      modelo.userData.dimensoesFisicasAlvo = { x: alvo.x, y: alvo.y, z: alvo.z };
     }
+
+    ajustarEspessuraCpuNoEixoDoSocket(modelo, alvo.x);
+    modelo.userData.escalaFisicaAutomatica = true;
+    modelo.userData.ajusteCpuSocket = true;
+    modelo.userData.dimensoesFisicasAlvo = { x: alvo.x, y: alvo.y, z: alvo.z };
     return;
   }
 
@@ -4686,8 +4742,8 @@ function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transfo
   let fator = medianaNumeros3D(razoes);
   if (!Number.isFinite(fator) || fator <= 0) return;
 
-  // Mantém a proporção do GLB. Se algum eixo ainda ultrapassar muito a medida
-  // física, reduz uniformemente em vez de deformar a peça.
+  // Mantem a proporcao do GLB. Se algum eixo ainda ultrapassar muito a medida
+  // fisica, reduz uniformemente em vez de deformar a peca.
   const depois = new THREE.Vector3(tamanho.x * fator, tamanho.y * fator, tamanho.z * fator);
   const excesso = Math.max(
     depois.x / Math.max(0.000001, alvo.x),
@@ -4698,6 +4754,14 @@ function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transfo
 
   modelo.scale.multiplyScalar(fator);
   modelo.updateMatrixWorld(true);
+
+  // A GPU ja estava com os eixos corretos. Apenas inverte a orientacao
+  // cima/baixo em 180 graus, preservando centro, tamanho e posicao no PCIe.
+  if (categoria === "placavideo" && !possuiRotacaoCalibrada) {
+    rotacionarModelo3DAoRedorDoCentro(modelo, new THREE.Vector3(0, 1, 0), Math.PI);
+    modelo.userData.inversaoGpuCimaBaixo = true;
+  }
+
   modelo.userData.escalaFisicaAutomatica = true;
   modelo.userData.dimensoesFisicasAlvo = { x: alvo.x, y: alvo.y, z: alvo.z };
 }
