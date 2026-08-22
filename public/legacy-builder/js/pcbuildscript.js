@@ -10,7 +10,7 @@ import {
 } from "./renderer.js";
 
 import { verificarCompatibilidade } from "./compatibilidade.js";
-import { api } from "./api.js?v=react-v45-r2-csp-blob";
+import { api } from "./api.js?v=react-v46-glb-fisico-mobile-left";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {
@@ -4510,6 +4510,164 @@ function normalizarGabineteGlbForaDeEscala(modelo, peca, basePos, transform = {}
   modelo.updateMatrixWorld(true);
 }
 
+function dimensoesFisicasAlvoModelo3D(categoria, peca = {}, indice = 0) {
+  const specs = especificacoesProcedurais(peca);
+  const mm = (valor, fallback, minimo = 1) => Math.max(minimo, numero3DSeguro(valor, fallback)) * ESCALA_MM_3D;
+
+  if (categoria === "placavideo") {
+    const gpu = obterDimensoesGpuLayout3D();
+    return new THREE.Vector3(gpu.altura, gpu.espessura, gpu.comprimento);
+  }
+
+  if (categoria === "placamae") {
+    const placaMae = obterDimensoesPlacaMaeLayout3D();
+    return new THREE.Vector3(0.05, placaMae.altura, placaMae.profundidade);
+  }
+
+  if (categoria === "processador") {
+    return new THREE.Vector3(
+      mm(specs.alturaMm ?? specs.espessuraMm, 4.5),
+      mm(specs.larguraMm, 40),
+      mm(specs.comprimentoMm ?? specs.profundidadeMm, 40),
+    );
+  }
+
+  if (categoria === "memoria") {
+    return new THREE.Vector3(
+      mm(specs.espessuraMm ?? specs.profundidadeMm, 7),
+      mm(specs.comprimentoMm ?? specs.larguraMm, 135),
+      mm(specs.alturaMm, 40),
+    );
+  }
+
+  if (categoria === "armazenamento") {
+    const formato = `${specs.formato || ""} ${specs.interface || ""} ${peca.nome || ""}`.toUpperCase();
+    const m2 = indice === 0 || formato.includes("M.2") || formato.includes("M2") || formato.includes("NVME");
+    if (m2) {
+      return new THREE.Vector3(
+        mm(specs.espessuraMm, 2.4),
+        mm(specs.larguraMm, 22),
+        mm(specs.comprimentoMm ?? specs.profundidadeMm, 80),
+      );
+    }
+    return new THREE.Vector3(
+      mm(specs.espessuraMm, 7),
+      mm(specs.comprimentoMm ?? specs.profundidadeMm, 100),
+      mm(specs.larguraMm, 70),
+    );
+  }
+
+  if (categoria === "fonte") {
+    const fonte = obterDimensoesFonteLayout3D();
+    return new THREE.Vector3(fonte.largura, fonte.altura, fonte.profundidade);
+  }
+
+  if (categoria === "ventoinhas") {
+    const tamanho = mm(specs.tamanhoMm ?? specs.larguraMm, 120);
+    const espessura = mm(specs.espessuraMm ?? specs.profundidadeMm, 25);
+    return new THREE.Vector3(tamanho, tamanho, espessura);
+  }
+
+  if (categoria === "cooler") {
+    return new THREE.Vector3(
+      mm(specs.profundidadeMm, 95),
+      mm(specs.alturaMm, 155),
+      mm(specs.larguraMm, 125),
+    );
+  }
+
+  return null;
+}
+
+function medianaNumeros3D(valores = []) {
+  const validos = valores.filter((valor) => Number.isFinite(valor) && valor > 0).sort((a, b) => a - b);
+  if (!validos.length) return 1;
+  const meio = Math.floor(validos.length / 2);
+  return validos.length % 2 ? validos[meio] : (validos[meio - 1] + validos[meio]) / 2;
+}
+
+function pontuarProporcao3D(tamanho, alvo) {
+  const razoes = [
+    alvo.x / Math.max(0.000001, tamanho.x),
+    alvo.y / Math.max(0.000001, tamanho.y),
+    alvo.z / Math.max(0.000001, tamanho.z),
+  ];
+  const escalaIdeal = medianaNumeros3D(razoes);
+  return razoes.reduce((soma, razao) => soma + Math.abs(Math.log(Math.max(0.000001, razao / escalaIdeal))), 0);
+}
+
+function orientarModelo3DParaPeca(modelo, alvo, permitirAutoRotacao = true) {
+  if (!modelo || !alvo || !permitirAutoRotacao) return;
+
+  const quaternionBase = modelo.quaternion.clone();
+  const candidatos = [
+    [0, 0, 0],
+    [Math.PI / 2, 0, 0],
+    [0, Math.PI / 2, 0],
+    [0, 0, Math.PI / 2],
+    [Math.PI / 2, Math.PI / 2, 0],
+    [Math.PI / 2, 0, Math.PI / 2],
+  ];
+
+  let melhor = candidatos[0];
+  let melhorPontuacao = Infinity;
+
+  candidatos.forEach(([x, y, z]) => {
+    const adicional = new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, "XYZ"));
+    modelo.quaternion.copy(quaternionBase).multiply(adicional);
+    modelo.updateMatrixWorld(true);
+    const caixa = new THREE.Box3().setFromObject(modelo);
+    if (caixa.isEmpty()) return;
+    const tamanho = caixa.getSize(new THREE.Vector3());
+    const pontuacao = pontuarProporcao3D(tamanho, alvo);
+    if (pontuacao < melhorPontuacao) {
+      melhorPontuacao = pontuacao;
+      melhor = [x, y, z];
+    }
+  });
+
+  const adicionalFinal = new THREE.Quaternion().setFromEuler(new THREE.Euler(...melhor, "XYZ"));
+  modelo.quaternion.copy(quaternionBase).multiply(adicionalFinal);
+  modelo.updateMatrixWorld(true);
+}
+
+function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transform = {}) {
+  if (!modelo || categoria === "gabinete") return;
+  const alvo = dimensoesFisicasAlvoModelo3D(categoria, peca, indice);
+  if (!alvo) return;
+
+  const rotacao = Array.isArray(transform.rotacao) ? transform.rotacao : [0, 0, 0];
+  const possuiRotacaoCalibrada = rotacao.some((valor) => Math.abs(Number(valor) || 0) > 0.0001);
+  orientarModelo3DParaPeca(modelo, alvo, !possuiRotacaoCalibrada);
+
+  modelo.updateMatrixWorld(true);
+  const caixa = new THREE.Box3().setFromObject(modelo);
+  if (caixa.isEmpty()) return;
+  const tamanho = caixa.getSize(new THREE.Vector3());
+  const razoes = [
+    alvo.x / Math.max(0.000001, tamanho.x),
+    alvo.y / Math.max(0.000001, tamanho.y),
+    alvo.z / Math.max(0.000001, tamanho.z),
+  ];
+  let fator = medianaNumeros3D(razoes);
+  if (!Number.isFinite(fator) || fator <= 0) return;
+
+  // Mantém a proporção do GLB. Se algum eixo ainda ultrapassar muito a medida
+  // física, reduz uniformemente em vez de deformar a peça.
+  const depois = new THREE.Vector3(tamanho.x * fator, tamanho.y * fator, tamanho.z * fator);
+  const excesso = Math.max(
+    depois.x / Math.max(0.000001, alvo.x),
+    depois.y / Math.max(0.000001, alvo.y),
+    depois.z / Math.max(0.000001, alvo.z),
+  );
+  if (excesso > 1.12) fator /= excesso / 1.06;
+
+  modelo.scale.multiplyScalar(fator);
+  modelo.updateMatrixWorld(true);
+  modelo.userData.escalaFisicaAutomatica = true;
+  modelo.userData.dimensoesFisicasAlvo = { x: alvo.x, y: alvo.y, z: alvo.z };
+}
+
 function removerModelo3D(categoria) {
   const modeloAtual = modelos3DAtivos[categoria];
   if (!modeloAtual) return;
@@ -4739,6 +4897,11 @@ function atualizarPecaNo3D(categoria, estadoDaCategoria) {
         } else {
           modelo.scale.setScalar(Number(escala) || 1);
         }
+
+        // GLBs de fornecedores diferentes chegam em metros, centímetros,
+        // milímetros e com eixos distintos. O PC 3D normaliza cada categoria
+        // para a dimensão física esperada antes de encaixá-la no slot.
+        normalizarEscalaFisicaModelo3D(modelo, categoria, peca, index, transform);
 
         if (transform.centralizarNoPonto === true) {
           modelo.updateMatrixWorld(true);

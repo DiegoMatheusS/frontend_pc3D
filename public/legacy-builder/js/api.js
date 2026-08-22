@@ -390,11 +390,32 @@ const cacheModelo3DHardwarePublico = new Map();
 
 function extrairModelos3DPublicos(payload) {
   if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.modelos)) return payload.modelos;
-  if (Array.isArray(payload?.modelos3D)) return payload.modelos3D;
-  if (Array.isArray(payload?.itens)) return payload.itens;
-  if (Array.isArray(payload?.dados)) return payload.dados;
-  return [];
+
+  const listas = [
+    payload?.modelos,
+    payload?.modelos3D,
+    payload?.itens,
+    payload?.dados,
+    payload?.hardware?.modelos3D,
+    payload?.item?.modelos3D,
+    payload?.dado?.modelos3D,
+    payload?.data?.modelos3D,
+  ];
+  const lista = listas.find(Array.isArray);
+  if (lista) return lista;
+
+  const unicos = [
+    payload?.modelo3DAtivo,
+    payload?.modelo3D,
+    payload?.hardware?.modelo3DAtivo,
+    payload?.hardware?.modelo3D,
+    payload?.item?.modelo3DAtivo,
+    payload?.item?.modelo3D,
+    payload?.dado?.modelo3DAtivo,
+    payload?.dado?.modelo3D,
+  ].filter((item) => item && typeof item === "object" && !Array.isArray(item));
+
+  return unicos;
 }
 
 function normalizarModelo3DPublico(modelo) {
@@ -440,18 +461,47 @@ async function obterModelo3DHardwarePublico(hardwareId) {
 
   if (!cacheModelo3DHardwarePublico.has(id)) {
     cacheModelo3DHardwarePublico.set(id, (async () => {
-      try {
-        const payload = await requisitar(`/api/hardwares/${id}/modelos-3d`);
+      const escolherModelo = (payload) => {
         const modelos = extrairModelos3DPublicos(payload);
         const modelo = modelos.find((item) => item?.ativo !== false && item?.aprovado !== false)
           || modelos.find((item) => item?.ativo !== false)
           || modelos[0]
           || null;
         return normalizarModelo3DPublico(modelo);
-      } catch (erro) {
-        console.warn(`Não foi possível consultar o modelo 3D público do Hardware #${id}.`, erro);
-        return null;
+      };
+
+      // Algumas versões da API expõem uma rota dedicada; outras incluem o
+      // modelo aprovado no detalhe do Hardware. Tentar as duas evita que CPU,
+      // RAM, placa-mãe, SSD, fonte e fans dependam do formato da listagem geral.
+      try {
+        const payload = await requisitar(`/api/hardwares/${id}/modelos-3d`);
+        const normalizado = escolherModelo(payload);
+        if (normalizado) return normalizado;
+      } catch {
+        // Continua pelo detalhe público do Hardware.
       }
+
+      try {
+        const payload = await requisitar(`/api/hardwares/${id}`);
+        const hardware = payload?.hardware || payload?.item || payload?.dado || payload?.data || payload;
+
+        const modelosDiretos = escolherModelo(hardware);
+        if (modelosDiretos) return modelosDiretos;
+
+        const hardwareNormalizado = normalizarHardwareParaBuilder(hardware);
+        if (hardwareNormalizado?.modelo3dUrl) {
+          return {
+            modelo3dUrl: hardwareNormalizado.modelo3dUrl,
+            modelo3D: hardwareNormalizado.modelo3dUrl,
+            transform3D: hardwareNormalizado.transform3D,
+            modelo: null,
+          };
+        }
+      } catch (erro) {
+        console.warn(`Não foi possível consultar o GLB público do Hardware #${id}.`, erro);
+      }
+
+      return null;
     })());
   }
 

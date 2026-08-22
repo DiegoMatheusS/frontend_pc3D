@@ -130,6 +130,36 @@ function loadScript(src) {
   })
 }
 
+function orientGpuSideways(asset, THREE) {
+  asset.updateMatrixWorld(true)
+  let box = new THREE.Box3().setFromObject(asset)
+  if (box.isEmpty()) return
+
+  let size = box.getSize(new THREE.Vector3())
+  // Na Home a GPU é uma peça de destaque, não um objeto em escala física.
+  // Coloca o maior eixo no horizontal (X) e o eixo mais fino em profundidade (Z),
+  // deixando a placa claramente "de lado" mesmo que o GLB tenha sido exportado
+  // com X/Y/Z diferentes.
+  const entries = [
+    ['x', size.x],
+    ['y', size.y],
+    ['z', size.z],
+  ].sort((a, b) => b[1] - a[1])
+  const longest = entries[0][0]
+
+  if (longest === 'z') asset.rotateY(Math.PI / 2)
+  else if (longest === 'y') asset.rotateZ(-Math.PI / 2)
+
+  asset.updateMatrixWorld(true)
+  box = new THREE.Box3().setFromObject(asset)
+  size = box.getSize(new THREE.Vector3())
+
+  // Depois do comprimento estar horizontal, a segunda maior dimensão deve ser
+  // a altura. Se ela estiver em Z, gira a peça para deixar a face lateral visível.
+  if (size.z > size.y) asset.rotateX(Math.PI / 2)
+  asset.updateMatrixWorld(true)
+}
+
 function disposeScene(scene) {
   scene?.traverse?.((object) => {
     if (!object?.isMesh) return
@@ -254,7 +284,7 @@ export default function HomeHero3D() {
 
           model = fallback
           model.position.set(0, 0.2, 0)
-          model.rotation.set(-0.05, -0.38, 0.06)
+          model.rotation.set(-0.04, -0.22, 0.03)
           scene.add(model)
           setStatus('ready')
         }
@@ -269,12 +299,15 @@ export default function HomeHero3D() {
             (gltf) => {
               if (cancelled) return
               const asset = gltf.scene
+              orientGpuSideways(asset, THREE)
               asset.updateMatrixWorld(true)
               const initialBox = new THREE.Box3().setFromObject(asset)
               const size = initialBox.getSize(new THREE.Vector3())
               const largest = Math.max(size.x, size.y, size.z)
               if (Number.isFinite(largest) && largest > 0) {
-                asset.scale.setScalar(5.25 / largest)
+                // Escala visual exclusiva da Home. Não interfere na escala física
+                // usada pelo PC 3D para encaixar a mesma placa no gabinete.
+                asset.scale.multiplyScalar(6.15 / largest)
                 asset.updateMatrixWorld(true)
                 const fittedBox = new THREE.Box3().setFromObject(asset)
                 const center = fittedBox.getCenter(new THREE.Vector3())
@@ -290,7 +323,7 @@ export default function HomeHero3D() {
               model = new THREE.Group()
               model.add(asset)
               model.position.set(0, 0.2, 0)
-              model.rotation.set(-0.05, -0.38, 0.06)
+              model.rotation.set(-0.04, -0.22, 0.03)
               scene.add(model)
               setStatus('ready')
             },
