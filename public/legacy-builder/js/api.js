@@ -262,10 +262,15 @@ function normalizarHardwareParaBuilder(hardware) {
           Number(modelo3DAtivo.rotacaoCorrecaoZ) || 0,
         ],
         escala: [
-          Number(modelo3DAtivo.escalaCorrecaoX) || 1,
-          Number(modelo3DAtivo.escalaCorrecaoY) || 1,
-          Number(modelo3DAtivo.escalaCorrecaoZ) || 1,
+          Number.isFinite(Number(modelo3DAtivo.escalaCorrecaoX)) ? Number(modelo3DAtivo.escalaCorrecaoX) : 1,
+          Number.isFinite(Number(modelo3DAtivo.escalaCorrecaoY)) ? Number(modelo3DAtivo.escalaCorrecaoY) : 1,
+          Number.isFinite(Number(modelo3DAtivo.escalaCorrecaoZ)) ? Number(modelo3DAtivo.escalaCorrecaoZ) : 1,
         ],
+        dimensoesReaisMm: {
+          altura: Number(modelo3DAtivo.alturaRealMm) || 0,
+          largura: Number(modelo3DAtivo.larguraRealMm) || 0,
+          profundidade: Number(modelo3DAtivo.profundidadeRealMm) || 0,
+        },
         centralizarNoPonto: true,
       }
     : undefined;
@@ -445,10 +450,15 @@ function normalizarModelo3DPublico(modelo) {
         Number(modelo.rotacaoCorrecaoZ) || 0,
       ],
       escala: [
-        Number(modelo.escalaCorrecaoX) || 1,
-        Number(modelo.escalaCorrecaoY) || 1,
-        Number(modelo.escalaCorrecaoZ) || 1,
+        Number.isFinite(Number(modelo.escalaCorrecaoX)) ? Number(modelo.escalaCorrecaoX) : 1,
+        Number.isFinite(Number(modelo.escalaCorrecaoY)) ? Number(modelo.escalaCorrecaoY) : 1,
+        Number.isFinite(Number(modelo.escalaCorrecaoZ)) ? Number(modelo.escalaCorrecaoZ) : 1,
       ],
+      dimensoesReaisMm: {
+        altura: Number(modelo.alturaRealMm) || 0,
+        largura: Number(modelo.larguraRealMm) || 0,
+        profundidade: Number(modelo.profundidadeRealMm) || 0,
+      },
       centralizarNoPonto: true,
     },
     modelo,

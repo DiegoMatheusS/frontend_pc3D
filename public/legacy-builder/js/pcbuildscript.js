@@ -10,7 +10,7 @@ import {
 } from "./renderer.js";
 
 import { verificarCompatibilidade } from "./compatibilidade.js";
-import { api } from "./api.js?v=react-v51-mb90-gpu115-pizza90";
+import { api } from "./api.js?v=react-v52-model-transform-values";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {
@@ -4517,7 +4517,83 @@ function normalizarGabineteGlbForaDeEscala(modelo, peca, basePos, transform = {}
   modelo.updateMatrixWorld(true);
 }
 
-function dimensoesFisicasAlvoModelo3D(categoria, peca = {}, indice = 0) {
+function dimensoesReaisCadastradasModelo3D(categoria, transform = {}) {
+  const dimensoes = transform?.dimensoesReaisMm;
+  if (!dimensoes || typeof dimensoes !== "object") return null;
+
+  const altura = Number(dimensoes.altura);
+  const largura = Number(dimensoes.largura);
+  const profundidade = Number(dimensoes.profundidade);
+  const valores = [altura, largura, profundidade];
+  if (!valores.some((valor) => Number.isFinite(valor) && valor > 0)) return null;
+
+  const mm = (valor, fallback) => {
+    const numero = Number(valor);
+    return (Number.isFinite(numero) && numero > 0 ? numero : fallback) * ESCALA_MM_3D;
+  };
+
+  // Os eixos do montador não representam sempre Altura/Largura/Profundidade
+  // na mesma ordem. Aqui convertemos as medidas cadastradas para o plano físico
+  // de cada categoria. Medidas ausentes continuam usando o alvo automático.
+  const automatico = dimensoesFisicasAlvoModelo3D(categoria, {}, 0, true);
+  const fallbackX = automatico?.x / ESCALA_MM_3D || 1;
+  const fallbackY = automatico?.y / ESCALA_MM_3D || 1;
+  const fallbackZ = automatico?.z / ESCALA_MM_3D || 1;
+
+  if (categoria === "placavideo") {
+    return new THREE.Vector3(
+      mm(altura, fallbackX),
+      mm(profundidade, fallbackY),
+      mm(largura, fallbackZ),
+    );
+  }
+  if (categoria === "memoria") {
+    return new THREE.Vector3(
+      mm(profundidade, fallbackX),
+      mm(largura, fallbackY),
+      mm(altura, fallbackZ),
+    );
+  }
+  if (categoria === "fonte") {
+    return new THREE.Vector3(
+      mm(largura, fallbackX),
+      mm(altura, fallbackY),
+      mm(profundidade, fallbackZ),
+    );
+  }
+  if (categoria === "ventoinhas") {
+    return new THREE.Vector3(
+      mm(largura || altura, fallbackX),
+      mm(altura || largura, fallbackY),
+      mm(profundidade, fallbackZ),
+    );
+  }
+
+  // Placa-mãe, CPU, SSD/M.2 e coolers usam profundidade no eixo X,
+  // altura no Y e largura no Z dentro do gabinete.
+  return new THREE.Vector3(
+    mm(profundidade, fallbackX),
+    mm(altura, fallbackY),
+    mm(largura, fallbackZ),
+  );
+}
+
+function aplicarEscalaCorrecaoCadastrada(modelo, transform = {}) {
+  if (!modelo) return;
+  const escala = Array.isArray(transform.escala)
+    ? transform.escala
+    : [transform.escala ?? 1, transform.escala ?? 1, transform.escala ?? 1];
+
+  const sx = Number(escala[0]);
+  const sy = Number(escala[1]);
+  const sz = Number(escala[2]);
+  modelo.scale.x *= Number.isFinite(sx) ? sx : 1;
+  modelo.scale.y *= Number.isFinite(sy) ? sy : 1;
+  modelo.scale.z *= Number.isFinite(sz) ? sz : 1;
+  modelo.updateMatrixWorld(true);
+}
+
+function dimensoesFisicasAlvoModelo3D(categoria, peca = {}, indice = 0, ignorarCadastro = false) {
   const specs = especificacoesProcedurais(peca);
   const mm = (valor, fallback, minimo = 1) => Math.max(minimo, numero3DSeguro(valor, fallback)) * ESCALA_MM_3D;
 
@@ -4822,7 +4898,8 @@ function ajustarCpuParaDimensoesExatasDoSocket(modelo, alvo) {
 
 function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transform = {}) {
   if (!modelo || categoria === "gabinete") return;
-  const alvo = dimensoesFisicasAlvoModelo3D(categoria, peca, indice);
+  const alvoCadastrado = dimensoesReaisCadastradasModelo3D(categoria, transform);
+  const alvo = alvoCadastrado || dimensoesFisicasAlvoModelo3D(categoria, peca, indice);
   if (!alvo) return;
 
   const rotacao = Array.isArray(transform.rotacao) ? transform.rotacao : [0, 0, 0];
@@ -4844,6 +4921,7 @@ function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transfo
       modelo.userData.rotacaoPlacaMae90 = true;
     }
 
+    aplicarEscalaCorrecaoCadastrada(modelo, transform);
     modelo.userData.escalaFisicaAutomatica = true;
     modelo.userData.ajustePlacaMaeWireframe = true;
     modelo.userData.dimensoesFisicasAlvo = { x: alvo.x, y: alvo.y, z: alvo.z };
@@ -4853,6 +4931,7 @@ function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transfo
   if (categoria === "processador") {
     orientarCpuDeitadoNoSocket(modelo, possuiRotacaoCalibrada);
     ajustarCpuParaDimensoesExatasDoSocket(modelo, alvo);
+    aplicarEscalaCorrecaoCadastrada(modelo, transform);
     modelo.userData.escalaFisicaAutomatica = true;
     modelo.userData.ajusteCpuSocket = true;
     modelo.userData.dimensoesFisicasAlvo = { x: alvo.x, y: alvo.y, z: alvo.z };
@@ -4905,6 +4984,7 @@ function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transfo
     modelo.userData.rotacaoGpuPizza90 = true;
   }
 
+  aplicarEscalaCorrecaoCadastrada(modelo, transform);
   modelo.userData.escalaFisicaAutomatica = true;
   modelo.userData.dimensoesFisicasAlvo = { x: alvo.x, y: alvo.y, z: alvo.z };
 }
@@ -5128,16 +5208,10 @@ function atualizarPecaNo3D(categoria, estadoDaCategoria) {
           ),
         );
 
-        const escala = transform.escala ?? 1;
-        if (Array.isArray(escala)) {
-          modelo.scale.set(
-            Number(escala[0]) || 1,
-            Number(escala[1]) || 1,
-            Number(escala[2]) || 1,
-          );
-        } else {
-          modelo.scale.setScalar(Number(escala) || 1);
-        }
+        // A escala cadastrada é uma correção final. Primeiro normalizamos o
+        // GLB para as dimensões físicas; depois aplicamos X/Y/Z exatamente como
+        // informado no Admin. Aplicá-la antes fazia a normalização anulá-la.
+        modelo.scale.set(1, 1, 1);
 
         // GLBs de fornecedores diferentes chegam em metros, centímetros,
         // milímetros e com eixos distintos. O PC 3D normaliza cada categoria

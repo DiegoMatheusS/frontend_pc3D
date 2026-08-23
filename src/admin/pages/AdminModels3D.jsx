@@ -16,6 +16,15 @@ const EMPTY = {
 
 const NUMERIC = ['alturaRealMm','larguraRealMm','profundidadeRealMm','tamanhoBytes','posicaoCorrecaoX','posicaoCorrecaoY','posicaoCorrecaoZ','rotacaoCorrecaoX','rotacaoCorrecaoY','rotacaoCorrecaoZ','escalaCorrecaoX','escalaCorrecaoY','escalaCorrecaoZ']
 
+
+function parseNumeroFormulario(value) {
+  if (value === '' || value === null || value === undefined) return undefined
+  const normalizado = String(value).trim().replace(',', '.')
+  if (!normalizado) return undefined
+  const numero = Number(normalizado)
+  return Number.isFinite(numero) ? numero : undefined
+}
+
 function montarUrlR2(value) {
   const path = String(value ?? '').trim()
   if (!path) return ''
@@ -106,7 +115,7 @@ export default function AdminModels3D() {
         formato: String(form.formato ?? 'GLB'),
         versao: String(form.versao ?? '').trim() || undefined,
       }
-      NUMERIC.forEach((key) => { if (form[key] !== '' && form[key] != null) body[key] = Number(form[key]) })
+      NUMERIC.forEach((key) => { const numero = parseNumeroFormulario(form[key]); if (numero !== undefined) body[key] = numero })
       if (form.id) await adminService.hardwares.updateModel(form.id, body)
       else await adminService.hardwares.createModel(Number(form.hardwareId), body)
       toast.show(form.id ? 'Modelo 3D atualizado.' : (canReview ? 'Modelo 3D cadastrado como PENDENTE. Clique em Aprovar para liberar no 3D público.' : 'Modelo 3D cadastrado e enviado para aprovação.'))
@@ -187,10 +196,11 @@ export default function AdminModels3D() {
         <div className="admin-field full"><label>Caminho do arquivo no Cloudflare R2</label><input className="admin-input" required value={form.arquivoUrl ?? ''} onChange={(e) => update('arquivoUrl', e.target.value)} placeholder="modelos/cpu/processador_generico.glb" /><small className="admin-help">Você pode informar só o caminho. O frontend envia a URL completa do R2 automaticamente.{arquivoUrlFinal ? <> URL final: <strong>{arquivoUrlFinal}</strong></> : null}</small></div>
         <div className="admin-field"><label>Formato</label><select className="admin-select" value={form.formato ?? 'GLB'} onChange={(e) => update('formato', e.target.value)}><option>GLB</option><option>GLTF</option><option>FBX</option><option>OBJ</option></select></div>
         <div className="admin-field"><label>Versão</label><input className="admin-input" value={form.versao ?? ''} onChange={(e) => update('versao', e.target.value)} /></div>
-        <div className="admin-vector-group full"><strong>Dimensões reais</strong>{[['alturaRealMm','Altura'],['larguraRealMm','Largura'],['profundidadeRealMm','Profund.']].map(([key,label]) => <label key={key}>{label}<input className="admin-input" type="number" min="0" step="0.01" value={form[key] ?? ''} onChange={(e) => update(key, e.target.value)} /></label>)}</div>
-        <div className="admin-vector-group full"><strong>Escala</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.00001" value={form[`escalaCorrecao${axis}`] ?? ''} onChange={(e) => update(`escalaCorrecao${axis}`, e.target.value)} /></label>)}</div>
-        <div className="admin-vector-group full"><strong>Rotação</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.01" value={form[`rotacaoCorrecao${axis}`] ?? ''} onChange={(e) => update(`rotacaoCorrecao${axis}`, e.target.value)} /></label>)}</div>
-        <div className="admin-vector-group full"><strong>Posição</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" step="0.01" value={form[`posicaoCorrecao${axis}`] ?? ''} onChange={(e) => update(`posicaoCorrecao${axis}`, e.target.value)} /></label>)}</div>
+        <div className="admin-vector-group full"><strong>Dimensões reais (mm)</strong>{[['alturaRealMm','Altura'],['larguraRealMm','Largura'],['profundidadeRealMm','Profund.']].map(([key,label]) => <label key={key}>{label}<input className="admin-input" type="number" inputMode="decimal" min="0" step="any" value={form[key] ?? ''} onChange={(e) => update(key, e.target.value)} /></label>)}</div>
+        <div className="admin-vector-group full"><strong>Escala</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" inputMode="decimal" step="any" value={form[`escalaCorrecao${axis}`] ?? ''} onChange={(e) => update(`escalaCorrecao${axis}`, e.target.value)} /></label>)}</div>
+        <div className="admin-vector-group full"><strong>Rotação (graus)</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" inputMode="decimal" step="any" value={form[`rotacaoCorrecao${axis}`] ?? ''} onChange={(e) => update(`rotacaoCorrecao${axis}`, e.target.value)} /></label>)}</div>
+        <div className="admin-vector-group full"><strong>Posição</strong>{['X','Y','Z'].map((axis) => <label key={axis}>{axis}<input className="admin-input" type="number" inputMode="decimal" step="any" value={form[`posicaoCorrecao${axis}`] ?? ''} onChange={(e) => update(`posicaoCorrecao${axis}`, e.target.value)} /></label>)}</div>
+        <div className="admin-field full"><small className="admin-help">Dimensões definem o tamanho físico do GLB. Escala X/Y/Z é aplicada depois como correção final. Rotação usa graus. Posição é somada ao ponto de encaixe.</small></div>
       </div>
     </section><footer className="admin-form-footer"><button className="btn btn-primario" type="submit" disabled={saving}>{saving ? 'Salvando...' : form.id ? 'Salvar alterações' : 'Cadastrar modelo'}</button></footer></form></section>}
 
