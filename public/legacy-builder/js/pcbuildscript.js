@@ -1650,13 +1650,20 @@ function atualizarAncorasGabinete3D(pecaGabinete = estadoMontagem.gabinete) {
 
   slotM2.position.set(mbX + 0.10, mbY - Math.min(0.48, mb.altura * 0.16), mbZ + Math.min(0.22, mb.profundidade * 0.10));
 
-  // GPU: orientacao lateral/vertical. A espessura aponta para o vidro (X),
-  // a altura sobe no gabinete (Y) e o comprimento segue o PCIe (Z). Com isso
-  // as ventoinhas ficam visiveis de lado em vez de apontarem para baixo.
+  // GPU: deitada como em um gabinete ATX real. O plano principal da placa
+  // fica paralelo ao fundo do gabinete (X/Z): a altura da GPU sai da placa-mae
+  // em direcao ao vidro (X), a espessura ocupa somente a altura vertical (Y)
+  // e o comprimento segue do bracket traseiro para a frente do gabinete (Z).
+  // Assim o wireframe acompanha uma GPU com as fans voltadas para baixo.
   const gpu = obterDimensoesGpuLayout3D();
-  const gpuX = -meiaL + margem + gpu.espessura / 2;
-  const gpuY = centroDentroDosLimites(
+  const gpuX = centroDentroDosLimites(
     gpu.altura,
+    -meiaL + margem,
+    meiaL - margem,
+    mbX + 0.10 + gpu.altura / 2,
+  );
+  const gpuY = centroDentroDosLimites(
+    gpu.espessura,
     alturaShroud + margem,
     altura - margem,
     mbY - Math.min(0.58, mb.altura * 0.19),
@@ -1665,7 +1672,7 @@ function atualizarAncorasGabinete3D(pecaGabinete = estadoMontagem.gabinete) {
   // ela ultrapassa a frente do gabinete em vez de ser encolhida/centralizada.
   const gpuZ = meiaP - margem - gpu.comprimento / 2;
   slotGpu.position.set(gpuX, gpuY, gpuZ);
-  atualizarGeometriaCaixa3D(slotGpu, gpu.espessura, gpu.altura, gpu.comprimento);
+  atualizarGeometriaCaixa3D(slotGpu, gpu.altura, gpu.espessura, gpu.comprimento);
 
   // Fonte: fundo/traseira, preservando as dimensoes reais.
   const psu = obterDimensoesFonteLayout3D();
