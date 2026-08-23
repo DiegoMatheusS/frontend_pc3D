@@ -305,9 +305,12 @@ export default function HomeHero3D() {
               const size = initialBox.getSize(new THREE.Vector3())
               const largest = Math.max(size.x, size.y, size.z)
               if (Number.isFinite(largest) && largest > 0) {
-                // Escala visual exclusiva da Home. Não interfere na escala física
-                // usada pelo PC 3D para encaixar a mesma placa no gabinete.
-                asset.scale.multiplyScalar(6.15 / largest)
+                // Escala visual exclusiva da Home. No desktop a GPU é um destaque
+                // propositalmente grande e pode ultrapassar visualmente o cartão.
+                // No celular preservamos a escala anterior para não cortar a peça.
+                const isMobileHero = window.matchMedia('(max-width: 620px)').matches
+                const heroTargetSize = isMobileHero ? 6.15 : 8.65
+                asset.scale.multiplyScalar(heroTargetSize / largest)
                 asset.updateMatrixWorld(true)
                 const fittedBox = new THREE.Box3().setFromObject(asset)
                 const center = fittedBox.getCenter(new THREE.Vector3())

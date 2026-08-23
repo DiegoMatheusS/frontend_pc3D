@@ -1170,3 +1170,23 @@
   .home-hero::before,
   .home-hero::after { animation: none; }
 }
+
+/* v49 — GPU da Home maior no desktop, sem alterar o tamanho no celular. */
+@media (min-width: 621px) {
+  .home-preview__stage { overflow: visible; }
+  .home-preview__webgl {
+    inset: -26px -84px;
+    overflow: visible;
+  }
+  .home-preview__top,
+  .home-preview__bottom {
+    position: relative;
+    z-index: 4;
+    background: rgba(255,255,255,.97);
+  }
+}
+
+@media (max-width: 620px) {
+  .home-preview__stage { overflow: hidden; }
+  .home-preview__webgl { inset: 0; overflow: hidden; }
+}

@@ -33,6 +33,7 @@ export default function AdminModels3D() {
   const [models, setModels] = useState([])
   const [form, setForm] = useState(EMPTY)
   const [hardwareSearch, setHardwareSearch] = useState('')
+  const [hardwareSearchOpen, setHardwareSearchOpen] = useState(false)
   const [error, setError] = useState(null)
   const [loadingModels, setLoadingModels] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -68,6 +69,14 @@ export default function AdminModels3D() {
   function clearForm() {
     setForm(EMPTY)
     setHardwareSearch('')
+    setHardwareSearchOpen(false)
+  }
+
+  function selectHardware(hardware) {
+    if (!hardware || form.id) return
+    update('hardwareId', String(hardware.id))
+    setHardwareSearch(hardware.nome || hardware.modelo || String(hardware.id))
+    setHardwareSearchOpen(false)
   }
 
   function edit(model) {
@@ -82,6 +91,7 @@ export default function AdminModels3D() {
       versao: model.versao ?? '',
     })
     setHardwareSearch(model.hardwareNome || hardwareMap.get(Number(model.hardwareId)) || '')
+    setHardwareSearchOpen(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -122,8 +132,57 @@ export default function AdminModels3D() {
     {canEdit && <section className="admin-form-card" style={{ marginBottom: 18 }}><form onSubmit={submit}><section className="admin-form-section">
       <div className="admin-section-heading"><div><h2>{form.id ? 'Editar modelo 3D' : 'Cadastrar modelo 3D'}</h2><p>Escala, rotação e posição são independentes por eixo.</p></div>{form.id && <button className="btn btn-secundario btn-pequeno" type="button" onClick={clearForm}>Cancelar edição</button>}</div>
       <div className="admin-form-grid">
-        <div className="admin-field"><label>Pesquisar Hardware</label><input className="admin-input" type="search" disabled={Boolean(form.id)} value={hardwareSearch} onChange={(e) => setHardwareSearch(e.target.value)} placeholder="Nome, modelo, marca ou ID" /><small className="admin-help">{hardwareSearch.trim() ? `${filteredHardwares.length} resultado(s)` : `${hardwares.length} hardware(s) disponíveis`}</small></div>
-        <div className="admin-field"><label>Hardware</label><select className="admin-select" required disabled={Boolean(form.id)} value={form.hardwareId} onChange={(e) => update('hardwareId', e.target.value)}><option value="">Selecione</option>{filteredHardwares.map((hardware) => <option key={hardware.id} value={hardware.id}>{hardware.nome}{hardware.modelo ? ` · ${hardware.modelo}` : ''}</option>)}</select></div>
+        <div className="admin-field admin-hardware-search-field">
+          <label>Pesquisar Hardware</label>
+          <div className="admin-hardware-search-wrap">
+            <input
+              className="admin-input"
+              type="search"
+              disabled={Boolean(form.id)}
+              value={hardwareSearch}
+              onFocus={() => !form.id && setHardwareSearchOpen(true)}
+              onBlur={() => window.setTimeout(() => setHardwareSearchOpen(false), 120)}
+              onChange={(e) => {
+                setHardwareSearch(e.target.value)
+                setHardwareSearchOpen(true)
+                if (form.hardwareId) update('hardwareId', '')
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setHardwareSearchOpen(false)
+                if (e.key === 'Enter' && hardwareSearchOpen && filteredHardwares.length === 1) {
+                  e.preventDefault()
+                  selectHardware(filteredHardwares[0])
+                }
+              }}
+              placeholder="Nome, modelo, marca ou ID"
+              autoComplete="off"
+            />
+            {hardwareSearchOpen && !form.id && hardwareSearch.trim() && (
+              <div className="admin-hardware-search-results" role="listbox" aria-label="Resultados da busca de Hardware">
+                {filteredHardwares.length ? filteredHardwares.slice(0, 12).map((hardware) => (
+                  <button
+                    key={hardware.id}
+                    type="button"
+                    className={`admin-hardware-search-result${Number(form.hardwareId) === Number(hardware.id) ? ' is-selected' : ''}`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => selectHardware(hardware)}
+                    role="option"
+                    aria-selected={Number(form.hardwareId) === Number(hardware.id)}
+                  >
+                    <span>
+                      <strong>{hardware.nome || hardware.modelo || `Hardware #${hardware.id}`}</strong>
+                      <small>{[hardware.marca, hardware.modelo].filter(Boolean).join(' · ') || `ID ${hardware.id}`}</small>
+                    </span>
+                    <em>{String(hardware.categoria || 'Hardware').replaceAll('_', ' ')}</em>
+                  </button>
+                )) : <div className="admin-hardware-search-empty">Nenhum Hardware encontrado para “{hardwareSearch.trim()}”.</div>}
+                {filteredHardwares.length > 12 && <div className="admin-hardware-search-more">Mostrando 12 de {filteredHardwares.length} resultados. Refine a pesquisa para encontrar mais rápido.</div>}
+              </div>
+            )}
+          </div>
+          <small className="admin-help">{hardwareSearch.trim() ? `${filteredHardwares.length} resultado(s)` : `${hardwares.length} hardware(s) disponíveis`}</small>
+        </div>
+        <div className="admin-field"><label>Hardware</label><select className="admin-select" required disabled={Boolean(form.id)} value={form.hardwareId} onChange={(e) => { const selected = (hardwares || []).find((hardware) => Number(hardware.id) === Number(e.target.value)); update('hardwareId', e.target.value); if (selected) setHardwareSearch(selected.nome || selected.modelo || String(selected.id)); setHardwareSearchOpen(false) }}><option value="">Selecione</option>{filteredHardwares.map((hardware) => <option key={hardware.id} value={hardware.id}>{hardware.nome}{hardware.modelo ? ` · ${hardware.modelo}` : ''}</option>)}</select></div>
         <div className="admin-field"><label>Nome do modelo</label><input className="admin-input" value={form.nome ?? ''} onChange={(e) => update('nome', e.target.value)} /></div>
         <div className="admin-field full"><label>Caminho do arquivo no Cloudflare R2</label><input className="admin-input" required value={form.arquivoUrl ?? ''} onChange={(e) => update('arquivoUrl', e.target.value)} placeholder="modelos/cpu/processador_generico.glb" /><small className="admin-help">Você pode informar só o caminho. O frontend envia a URL completa do R2 automaticamente.{arquivoUrlFinal ? <> URL final: <strong>{arquivoUrlFinal}</strong></> : null}</small></div>
         <div className="admin-field"><label>Formato</label><select className="admin-select" value={form.formato ?? 'GLB'} onChange={(e) => update('formato', e.target.value)}><option>GLB</option><option>GLTF</option><option>FBX</option><option>OBJ</option></select></div>
