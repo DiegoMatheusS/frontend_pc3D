@@ -10,7 +10,7 @@ import {
 } from "./renderer.js";
 
 import { verificarCompatibilidade } from "./compatibilidade.js";
-import { api } from "./api.js?v=react-v49-gpu-fans-down-cpu-exato";
+import { api } from "./api.js?v=react-v51-mb90-gpu115-pizza90";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {
@@ -4523,15 +4523,22 @@ function dimensoesFisicasAlvoModelo3D(categoria, peca = {}, indice = 0) {
 
   if (categoria === "placavideo") {
     const gpu = obterDimensoesGpuLayout3D();
-    // Mantem a orientacao fisica que ja estava correta no PC 3D: altura em X,
-    // espessura em Y e comprimento em Z. A inversao de cima/baixo e aplicada
-    // depois, sem trocar os eixos nem colocar a GPU na vertical.
-    return new THREE.Vector3(gpu.altura, gpu.espessura, gpu.comprimento);
+    // A GPU fica um pouco maior no PC 3D para ocupar melhor o volume visual
+    // do slot. A proporcao continua uniforme, sem deformar o GLB.
+    const escalaVisualGpu = 1.15;
+    return new THREE.Vector3(
+      gpu.altura * escalaVisualGpu,
+      gpu.espessura * escalaVisualGpu,
+      gpu.comprimento * escalaVisualGpu,
+    );
   }
 
   if (categoria === "placamae") {
     const placaMae = obterDimensoesPlacaMaeLayout3D();
-    return new THREE.Vector3(0.05, placaMae.altura, placaMae.profundidade);
+    // A espessura aqui representa o volume completo do GLB (PCB + dissipadores
+    // + conectores), e nao apenas a placa fina procedural. Usar 0.05 fazia o
+    // algoritmo encolher toda a placa-mae por causa dos componentes altos.
+    return new THREE.Vector3(0.50, placaMae.altura, placaMae.profundidade);
   }
 
   if (categoria === "processador") {
@@ -4663,9 +4670,86 @@ function rotacionarModelo3DAoRedorDoCentro(modelo, eixo, angulo) {
   }
 }
 
+function orientarPlacaMaeNoPlanoDoGabinete(modelo, alvo, possuiRotacaoCalibrada = false) {
+  if (!modelo || !alvo || possuiRotacaoCalibrada) return;
+
+  // Remove apenas a rotacao da raiz vinda do exportador. A geometria interna,
+  // materiais e escala cadastrada continuam intactos. A placa-mae precisa
+  // sempre terminar no plano Y/Z do gabinete, com a espessura em X.
+  modelo.rotation.set(0, 0, 0);
+  modelo.updateMatrixWorld(true);
+
+  let caixa = new THREE.Box3().setFromObject(modelo);
+  if (caixa.isEmpty()) return;
+  let tamanho = caixa.getSize(new THREE.Vector3());
+
+  const centroAntes = caixa.getCenter(new THREE.Vector3());
+  let adicional = null;
+  if (tamanho.z <= tamanho.x && tamanho.z <= tamanho.y) {
+    adicional = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 2, 0, "XYZ"));
+  } else if (tamanho.y <= tamanho.x && tamanho.y <= tamanho.z) {
+    adicional = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -Math.PI / 2, "XYZ"));
+  }
+  if (adicional) modelo.quaternion.multiply(adicional);
+  modelo.updateMatrixWorld(true);
+
+  caixa = new THREE.Box3().setFromObject(modelo);
+  if (caixa.isEmpty()) return;
+  tamanho = caixa.getSize(new THREE.Vector3());
+
+  // ATX costuma ser mais alto (Y) que largo/profundo (Z). Se o GLB ficou com
+  // esses dois eixos trocados, gira 90 graus no proprio plano da placa.
+  const alvoMaisAlto = alvo.y > alvo.z * 1.04;
+  const alvoMaisLargo = alvo.z > alvo.y * 1.04;
+  const eixosTrocados = (alvoMaisAlto && tamanho.z > tamanho.y) || (alvoMaisLargo && tamanho.y > tamanho.z);
+  if (eixosTrocados) {
+    modelo.rotateX(Math.PI / 2);
+    modelo.updateMatrixWorld(true);
+  }
+
+  const caixaDepois = new THREE.Box3().setFromObject(modelo);
+  if (!caixaDepois.isEmpty()) {
+    const centroDepois = caixaDepois.getCenter(new THREE.Vector3());
+    modelo.position.add(centroAntes.clone().sub(centroDepois));
+    modelo.updateMatrixWorld(true);
+  }
+}
+
+function ajustarPlacaMaeAoWireframe(modelo, alvo) {
+  if (!modelo || !alvo) return;
+  modelo.updateMatrixWorld(true);
+  const caixaAntes = new THREE.Box3().setFromObject(modelo);
+  if (caixaAntes.isEmpty()) return;
+
+  const centroAntes = caixaAntes.getCenter(new THREE.Vector3());
+  const tamanho = caixaAntes.getSize(new THREE.Vector3());
+  const fatorY = alvo.y / Math.max(0.000001, tamanho.y);
+  const fatorZ = alvo.z / Math.max(0.000001, tamanho.z);
+
+  // Dimensiona a placa pelo plano real Y/Z. A espessura, dissipadores e portas
+  // nao podem encolher a placa inteira. A media geometrica preserva a proporcao
+  // do GLB e faz o contorno ficar praticamente coincidente com o wireframe.
+  const fatorPlano = Math.sqrt(Math.max(0.000001, fatorY * fatorZ));
+  if (Number.isFinite(fatorPlano) && fatorPlano > 0) {
+    modelo.scale.multiplyScalar(fatorPlano);
+    modelo.updateMatrixWorld(true);
+  }
+
+  const caixaDepois = new THREE.Box3().setFromObject(modelo);
+  if (!caixaDepois.isEmpty()) {
+    const centroDepois = caixaDepois.getCenter(new THREE.Vector3());
+    modelo.position.add(centroAntes.clone().sub(centroDepois));
+    modelo.updateMatrixWorld(true);
+  }
+}
+
 function orientarCpuDeitadoNoSocket(modelo, possuiRotacaoCalibrada = false) {
   if (!modelo || possuiRotacaoCalibrada) return;
 
+  // CPU deve ficar quadrado e alinhado ao socket. Sem calibracao manual,
+  // descartamos a rotacao da raiz do exportador antes de escolher o eixo fino;
+  // isso evita o IHS aparecer em losango/45 graus no plano da placa-mae.
+  modelo.rotation.set(0, 0, 0);
   modelo.updateMatrixWorld(true);
   const caixaAntes = new THREE.Box3().setFromObject(modelo);
   if (caixaAntes.isEmpty()) return;
@@ -4744,6 +4828,28 @@ function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transfo
   const rotacao = Array.isArray(transform.rotacao) ? transform.rotacao : [0, 0, 0];
   const possuiRotacaoCalibrada = rotacao.some((valor) => Math.abs(Number(valor) || 0) > 0.0001);
 
+  if (categoria === "placamae") {
+    orientarPlacaMaeNoPlanoDoGabinete(modelo, alvo, possuiRotacaoCalibrada);
+    ajustarPlacaMaeAoWireframe(modelo, alvo);
+
+    // A placa-mae ja esta no plano correto do gabinete. Aqui aplicamos somente
+    // mais 90 graus no proprio plano, sempre pelo centro do GLB, para acertar
+    // a orientacao visual sem deslocar o encaixe/wireframe.
+    if (!possuiRotacaoCalibrada) {
+      rotacionarModelo3DAoRedorDoCentro(
+        modelo,
+        new THREE.Vector3(1, 0, 0),
+        Math.PI / 2,
+      );
+      modelo.userData.rotacaoPlacaMae90 = true;
+    }
+
+    modelo.userData.escalaFisicaAutomatica = true;
+    modelo.userData.ajustePlacaMaeWireframe = true;
+    modelo.userData.dimensoesFisicasAlvo = { x: alvo.x, y: alvo.y, z: alvo.z };
+    return;
+  }
+
   if (categoria === "processador") {
     orientarCpuDeitadoNoSocket(modelo, possuiRotacaoCalibrada);
     ajustarCpuParaDimensoesExatasDoSocket(modelo, alvo);
@@ -4781,12 +4887,22 @@ function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transfo
   modelo.scale.multiplyScalar(fator);
   modelo.updateMatrixWorld(true);
 
-  // A GPU ja estava com os eixos corretos. O plano das fans e X/Z e a
-  // espessura e Y. Girar 180 graus em X faz duas coisas sem mover o encaixe:
-  // coloca as fans para baixo e troca a ponta direita pela esquerda.
+  // GPU: primeiro inverte 180 graus pelo centro para deixar as fans voltadas
+  // para baixo. Depois gira 90 graus no plano horizontal, como uma pizza sendo
+  // girada sobre a mesa. Os dois giros preservam o centro/encaixe da placa.
   if (categoria === "placavideo" && !possuiRotacaoCalibrada) {
-    rotacionarModelo3DAoRedorDoCentro(modelo, new THREE.Vector3(1, 0, 0), Math.PI);
+    rotacionarModelo3DAoRedorDoCentro(
+      modelo,
+      new THREE.Vector3(1, 0, 0),
+      Math.PI,
+    );
+    rotacionarModelo3DAoRedorDoCentro(
+      modelo,
+      new THREE.Vector3(0, 1, 0),
+      Math.PI / 2,
+    );
     modelo.userData.inversaoGpuFansParaBaixo = true;
+    modelo.userData.rotacaoGpuPizza90 = true;
   }
 
   modelo.userData.escalaFisicaAutomatica = true;

@@ -399,8 +399,8 @@ export default function Builder() {
     window.addEventListener('pcbuilder:statechange', sincronizarEstadoReact)
 
     const estilos = [
-      '/legacy-builder/css/pcbuildstyle.css?v=react-v49-gpu-fans-down-cpu-exato',
-      '/legacy-builder/css/montador-extras.css?v=react-v49-gpu-fans-down-cpu-exato',
+      '/legacy-builder/css/pcbuildstyle.css?v=react-v51-mb90-gpu115-pizza90',
+      '/legacy-builder/css/montador-extras.css?v=react-v51-mb90-gpu115-pizza90',
       '/legacy-builder/css/ia-assistente.css?v=react-v40-1',
       '/legacy-builder/css/react-overrides.css?v=react-v40-1',
     ]
@@ -414,7 +414,7 @@ export default function Builder() {
         await carregarScript('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js')
         if (cancelado) return
 
-        await carregarScript('/legacy-builder/js/pcbuildscript.js?v=react-v49-gpu-fans-down-cpu-exato', { modulo: true })
+        await carregarScript('/legacy-builder/js/pcbuildscript.js?v=react-v51-mb90-gpu115-pizza90', { modulo: true })
         if (cancelado) return
 
         const inicializar = globalThis.inicializarMontadorLegado

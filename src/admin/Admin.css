@@ -1059,3 +1059,57 @@
   line-height: 1.45;
 }
 .admin-hardware-search-more { border-top: 1px solid var(--admin-border); }
+
+/* v51 — pesquisa de Hardware em Encaixes 3D */
+.admin-mount-search-wrap {
+  position: relative;
+}
+
+.admin-mount-search-results {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: grid;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--admin-border);
+  border-radius: 11px;
+  background: var(--admin-surface);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, .14);
+}
+
+.admin-mount-search-result {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  text-align: left;
+  color: var(--admin-text);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-mount-search-result:hover,
+.admin-mount-search-result.is-selected {
+  background: var(--admin-surface-soft);
+}
+
+.admin-mount-search-result strong {
+  font-size: .78rem;
+}
+
+.admin-mount-search-result small,
+.admin-mount-search-empty {
+  color: var(--admin-muted);
+  font-size: .68rem;
+}
+
+.admin-mount-search-empty {
+  padding: 10px;
+}

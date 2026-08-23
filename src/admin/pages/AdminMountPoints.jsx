@@ -24,8 +24,31 @@ const CATEGORIES = [
 ]
 
 function number(value, fallback = 0) {
+  if (value === '' || value === null || value === undefined) return fallback
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function preferredModel3D(models = []) {
+  return models.find((model) => model?.ativo !== false && model?.aprovado === true)
+    || models.find((model) => model?.ativo !== false)
+    || models[0]
+    || null
+}
+
+function transformFromModel3D(model) {
+  if (!model) return {}
+  return {
+    posicaoX: number(model.posicaoCorrecaoX),
+    posicaoY: number(model.posicaoCorrecaoY),
+    posicaoZ: number(model.posicaoCorrecaoZ),
+    rotacaoX: number(model.rotacaoCorrecaoX),
+    rotacaoY: number(model.rotacaoCorrecaoY),
+    rotacaoZ: number(model.rotacaoCorrecaoZ),
+    escalaX: number(model.escalaCorrecaoX, 1),
+    escalaY: number(model.escalaCorrecaoY, 1),
+    escalaZ: number(model.escalaCorrecaoZ, 1),
+  }
 }
 
 function VectorFields({ value, onChange, prefix, scale = false, disabled = false }) {
@@ -36,14 +59,14 @@ function VectorFields({ value, onChange, prefix, scale = false, disabled = false
       {keys.map((key, index) => (
         <label className="admin-field" key={key}>
           <span>{labels[index]}</span>
-          <input className="admin-input" type="number" step="0.01" disabled={disabled} value={value[key] ?? (scale ? 1 : 0)} onChange={(event) => onChange(key, event.target.value)} />
+          <input className="admin-input" type="number" step="0.00001" disabled={disabled} value={value[key] ?? (scale ? 1 : 0)} onChange={(event) => onChange(key, event.target.value)} />
         </label>
       ))}
     </div>
   )
 }
 
-function PointForm({ value, onChange, onSubmit, onCancel, saving, editing, disabled }) {
+function PointForm({ value, onChange, onSubmit, onCancel, saving, editing, disabled, lockCategory = false, sourceModel = null }) {
   return (
     <form className="admin-card admin-mount-editor" onSubmit={onSubmit}>
       <header className="admin-card-header"><div><h2>{editing ? 'Editar ponto de encaixe' : 'Novo ponto de encaixe'}</h2><p>Define onde uma categoria pode ser instalada no hardware pai.</p></div></header>
@@ -51,10 +74,11 @@ function PointForm({ value, onChange, onSubmit, onCancel, saving, editing, disab
         <div className="admin-form-grid">
           <label className="admin-field"><span>Código</span><input className="admin-input" required disabled={disabled} value={value.codigo} onChange={(e) => onChange('codigo', e.target.value)} placeholder="placa-mae-principal" /></label>
           <label className="admin-field"><span>Nome</span><input className="admin-input" disabled={disabled} value={value.nome} onChange={(e) => onChange('nome', e.target.value)} placeholder="Placa-mãe principal" /></label>
-          <label className="admin-field"><span>Categoria aceita</span><select className="admin-select" disabled={disabled} value={value.categoriaAceita} onChange={(e) => onChange('categoriaAceita', e.target.value)}>{CATEGORIES.map((category) => <option value={category} key={category}>{category}</option>)}</select></label>
+          <label className="admin-field"><span>Categoria aceita</span><select className="admin-select" disabled={disabled || lockCategory} value={value.categoriaAceita} onChange={(e) => onChange('categoriaAceita', e.target.value)}>{CATEGORIES.map((category) => <option value={category} key={category}>{category}</option>)}</select>{lockCategory && <small className="admin-help">O primeiro ponto de encaixe aceita somente PLACA_MAE.</small>}</label>
           <label className="admin-field"><span>Ordem</span><input className="admin-input" type="number" min="0" disabled={disabled} value={value.ordem} onChange={(e) => onChange('ordem', e.target.value)} /></label>
           <label className="admin-field full"><span>Observação</span><textarea className="admin-textarea" disabled={disabled} value={value.observacao} onChange={(e) => onChange('observacao', e.target.value)} /></label>
         </div>
+        {sourceModel && <p className="admin-help" style={{ margin: '4px 0 10px' }}>Posição, rotação e escala iniciais carregadas do GLB <strong>{sourceModel.nome || `#${sourceModel.id}`}</strong> cadastrado neste Hardware.</p>}
         <div className="admin-transform-grid">
           <fieldset><legend>Posição</legend><VectorFields value={value} prefix="posicao" disabled={disabled} onChange={onChange} /></fieldset>
           <fieldset><legend>Rotação</legend><VectorFields value={value} prefix="rotacao" disabled={disabled} onChange={onChange} /></fieldset>
@@ -75,10 +99,29 @@ function AdjustmentForm({ point, hardwares, onSaved, canEdit }) {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_ADJUSTMENT)
   const [saving, setSaving] = useState(false)
+  const [loadingModel, setLoadingModel] = useState(false)
   const candidates = useMemo(() => hardwares.filter((hardware) => hardware.categoria === point.categoriaAceita), [hardwares, point.categoriaAceita])
   if (!canEdit) return null
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }))
+
+  async function selectChildHardware(value) {
+    const id = String(value || '')
+    setForm({ ...EMPTY_ADJUSTMENT, hardwareFilhoId: id })
+    if (!id) return
+    setLoadingModel(true)
+    try {
+      const models = await adminService.hardwares.models(Number(id))
+      const model = preferredModel3D(models)
+      if (model) {
+        setForm((current) => ({ ...current, ...transformFromModel3D(model), hardwareFilhoId: id }))
+      }
+    } catch {
+      // O ajuste pode ser criado mesmo quando o Hardware ainda não possui GLB.
+    } finally {
+      setLoadingModel(false)
+    }
+  }
   async function submit(event) {
     event.preventDefault()
     if (!form.hardwareFilhoId) return
@@ -101,7 +144,7 @@ function AdjustmentForm({ point, hardwares, onSaved, canEdit }) {
   if (!open) return <button className="btn btn-secundario btn-pequeno" type="button" onClick={() => setOpen(true)}>+ Ajuste específico</button>
   return (
     <form className="admin-inline-editor" onSubmit={submit}>
-      <label className="admin-field full"><span>Hardware filho</span><select className="admin-select" required value={form.hardwareFilhoId} onChange={(e) => update('hardwareFilhoId', e.target.value)}><option value="">Selecione</option>{candidates.map((hardware) => <option key={hardware.id} value={hardware.id}>{hardware.nome}</option>)}</select></label>
+      <label className="admin-field full"><span>Hardware filho</span><select className="admin-select" required value={form.hardwareFilhoId} onChange={(e) => selectChildHardware(e.target.value)}><option value="">Selecione</option>{candidates.map((hardware) => <option key={hardware.id} value={hardware.id}>{hardware.nome}</option>)}</select><small className="admin-help">{loadingModel ? 'Carregando transformação do GLB...' : 'Ao selecionar um Hardware com GLB cadastrado, posição, rotação e escala são preenchidas automaticamente.'}</small></label>
       <div className="admin-transform-grid compact">
         <fieldset><legend>Posição</legend><VectorFields value={form} prefix="posicao" onChange={update} /></fieldset>
         <fieldset><legend>Rotação</legend><VectorFields value={form} prefix="rotacao" onChange={update} /></fieldset>
@@ -121,6 +164,8 @@ export default function AdminMountPoints() {
   const canEdit = role === 'ADMIN' || role === 'EDITOR'
   const [hardwares, setHardwares] = useState([])
   const [hardwareId, setHardwareId] = useState('')
+  const [hardwareSearch, setHardwareSearch] = useState('')
+  const [hardwareSearchOpen, setHardwareSearchOpen] = useState(false)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [pointsLoading, setPointsLoading] = useState(false)
@@ -129,6 +174,23 @@ export default function AdminMountPoints() {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(EMPTY_POINT)
   const [saving, setSaving] = useState(false)
+  const [selectedModel3D, setSelectedModel3D] = useState(null)
+  const [model3DLoading, setModel3DLoading] = useState(false)
+
+  const filteredHardwares = useMemo(() => {
+    const term = hardwareSearch.trim().toLowerCase()
+    if (!term) return hardwares.slice(0, 12)
+    return hardwares.filter((hardware) => {
+      const haystack = [
+        hardware.id,
+        hardware.nome,
+        hardware.marca,
+        hardware.modelo,
+        hardware.categoria,
+      ].filter(Boolean).join(' ').toLowerCase()
+      return haystack.includes(term)
+    }).slice(0, 12)
+  }, [hardwares, hardwareSearch])
 
   useEffect(() => {
     let active = true
@@ -148,15 +210,50 @@ export default function AdminMountPoints() {
     finally { setPointsLoading(false) }
   }
 
+  async function loadSelectedModel3D(id) {
+    if (!id) { setSelectedModel3D(null); return null }
+    setModel3DLoading(true)
+    try {
+      const models = await adminService.hardwares.models(Number(id))
+      const model = preferredModel3D(models)
+      setSelectedModel3D(model)
+      return model
+    } catch {
+      setSelectedModel3D(null)
+      return null
+    } finally {
+      setModel3DLoading(false)
+    }
+  }
+
   async function chooseHardware(id) {
+    const selected = hardwares.find((hardware) => String(hardware.id) === String(id))
     setHardwareId(id)
+    if (selected) setHardwareSearch(selected.nome || '')
+    setHardwareSearchOpen(false)
     setFormOpen(false)
     setEditingId(null)
-    await loadPoints(id)
+    setSelectedModel3D(null)
+    if (!id) { setData(null); return }
+    await Promise.all([loadPoints(id), loadSelectedModel3D(id)])
   }
 
   function updateForm(key, value) { setForm((current) => ({ ...current, [key]: value })) }
-  function newPoint() { setEditingId(null); setForm(EMPTY_POINT); setFormOpen(true) }
+  async function newPoint() {
+    setEditingId(null)
+    let model = selectedModel3D
+    if (!model && hardwareId) model = await loadSelectedModel3D(hardwareId)
+    const existing = data?.pontosEncaixe || []
+    const firstPoint = existing.length === 0
+    const nextOrder = existing.length ? Math.max(...existing.map((point) => number(point.ordem))) + 1 : 0
+    setForm({
+      ...EMPTY_POINT,
+      ...transformFromModel3D(model),
+      categoriaAceita: firstPoint ? 'PLACA_MAE' : EMPTY_POINT.categoriaAceita,
+      ordem: nextOrder,
+    })
+    setFormOpen(true)
+  }
   function editPoint(point) {
     setEditingId(point.id)
     setForm({ ...EMPTY_POINT, ...point, observacao: point.observacao || '' })
@@ -168,8 +265,10 @@ export default function AdminMountPoints() {
     if (!hardwareId || !canEdit) return
     setSaving(true)
     try {
+      const firstPointId = data?.pontosEncaixe?.[0]?.id
+      const isFirstPoint = (!editingId && !(data?.pontosEncaixe || []).length) || (editingId && Number(editingId) === Number(firstPointId))
       const body = {
-        codigo: form.codigo.trim(), nome: form.nome.trim() || undefined, categoriaAceita: form.categoriaAceita,
+        codigo: form.codigo.trim(), nome: form.nome.trim() || undefined, categoriaAceita: isFirstPoint ? 'PLACA_MAE' : form.categoriaAceita,
         ordem: number(form.ordem), posicaoX: number(form.posicaoX), posicaoY: number(form.posicaoY), posicaoZ: number(form.posicaoZ),
         rotacaoX: number(form.rotacaoX), rotacaoY: number(form.rotacaoY), rotacaoZ: number(form.rotacaoZ),
         escalaX: number(form.escalaX, 1), escalaY: number(form.escalaY, 1), escalaZ: number(form.escalaZ, 1),
@@ -200,6 +299,35 @@ export default function AdminMountPoints() {
       <AdminPageHeader title="Encaixes 3D" description="Pontos físicos e ajustes específicos usados para posicionar componentes no montador." />
       <section className="admin-card admin-mount-selector">
         <div className="admin-card-body admin-form-grid">
+          <div className="admin-field full admin-mount-search-wrap">
+            <span>Pesquisar Hardware</span>
+            <input
+              className="admin-input"
+              value={hardwareSearch}
+              placeholder="Pesquise por nome, marca, modelo, categoria ou ID"
+              onFocus={() => setHardwareSearchOpen(true)}
+              onChange={(event) => {
+                setHardwareSearch(event.target.value)
+                setHardwareSearchOpen(true)
+              }}
+            />
+            {hardwareSearchOpen && (hardwareSearch.trim() || !hardwareId) && (
+              <div className="admin-mount-search-results">
+                {filteredHardwares.map((hardware) => (
+                  <button
+                    type="button"
+                    className={`admin-mount-search-result ${String(hardware.id) === String(hardwareId) ? 'is-selected' : ''}`}
+                    key={hardware.id}
+                    onClick={() => chooseHardware(hardware.id)}
+                  >
+                    <strong>{hardware.nome}</strong>
+                    <small>{[hardware.marca, hardware.modelo, hardware.categoria, `#${hardware.id}`].filter(Boolean).join(' · ')}</small>
+                  </button>
+                ))}
+                {!filteredHardwares.length && <div className="admin-mount-search-empty">Nenhum Hardware encontrado.</div>}
+              </div>
+            )}
+          </div>
           <label className="admin-field full"><span>Hardware pai</span><select className="admin-select" value={hardwareId} onChange={(e) => chooseHardware(e.target.value)}><option value="">Selecione um hardware</option>{hardwares.map((hardware) => <option value={hardware.id} key={hardware.id}>{hardware.nome} — {hardware.categoria}</option>)}</select></label>
         </div>
       </section>
@@ -209,8 +337,8 @@ export default function AdminMountPoints() {
 
       {hardwareId && !pointsLoading && data && (
         <>
-          <div className="admin-section-toolbar"><div><strong>{data.hardwarePai?.nome}</strong><small>{data.total || 0} ponto(s) de encaixe</small></div>{canEdit && <button className="btn btn-primario" type="button" onClick={newPoint}>+ Novo ponto</button>}</div>
-          {formOpen && <PointForm value={form} onChange={updateForm} onSubmit={savePoint} onCancel={() => setFormOpen(false)} saving={saving} editing={Boolean(editingId)} disabled={!canEdit} />}
+          <div className="admin-section-toolbar"><div><strong>{data.hardwarePai?.nome}</strong><small>{data.total || 0} ponto(s) de encaixe{model3DLoading ? ' · carregando GLB...' : selectedModel3D ? ` · GLB: ${selectedModel3D.nome || `#${selectedModel3D.id}`}` : ' · sem GLB cadastrado'}</small></div>{canEdit && <button className="btn btn-primario" type="button" onClick={newPoint}>+ Novo ponto</button>}</div>
+          {formOpen && <PointForm value={form} onChange={updateForm} onSubmit={savePoint} onCancel={() => setFormOpen(false)} saving={saving} editing={Boolean(editingId)} disabled={!canEdit} lockCategory={(!editingId && !(data.pontosEncaixe || []).length) || (editingId && Number(editingId) === Number(data.pontosEncaixe?.[0]?.id))} sourceModel={!editingId ? selectedModel3D : null} />}
           <section className="admin-mount-list">
             {(data.pontosEncaixe || []).map((point) => (
               <article className="admin-card admin-mount-point" key={point.id}>
