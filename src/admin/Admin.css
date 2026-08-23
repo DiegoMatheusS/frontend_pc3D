@@ -1179,3 +1179,33 @@
   .admin-models3d-table-wrap { overflow-x: visible; }
   .admin-models3d-table { table-layout: auto; }
 }
+
+/* v54 — Encaixes 3D: placa-mãe como pai, busca de filho e exclusão lógica */
+.admin-mount-child-results { max-height: 260px; }
+.admin-mount-map-toolbar { align-items: center; }
+.admin-mount-toolbar-actions,
+.admin-mount-point-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.admin-mount-show-inactive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--admin-muted);
+  font-size: .72rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.admin-mount-point.is-deleted {
+  opacity: .72;
+  border-style: dashed;
+}
+.admin-mount-point.is-deleted .admin-card-body { filter: grayscale(.15); }
+@media (max-width: 800px) {
+  .admin-mount-toolbar-actions,
+  .admin-mount-point-actions { justify-content: flex-start; }
+}
