@@ -385,6 +385,8 @@
 .admin-row-actions { display:flex; align-items:center; gap:7px; }
 .admin-action-button { display:inline-flex; align-items:center; justify-content:center; min-height:34px; padding:6px 10px; border:1px solid var(--admin-border); border-radius:8px; background:var(--admin-surface); color:var(--admin-text); font-size:12px; font-weight:700; text-decoration:none; }
 .admin-action-button:hover { border-color:var(--admin-primary); color:var(--admin-primary); }
+.admin-action-button--danger { color:var(--admin-danger); border-color:color-mix(in srgb,var(--admin-danger) 35%,var(--admin-border)); }
+.admin-action-button--danger:hover { color:var(--admin-danger); border-color:var(--admin-danger); background:var(--admin-danger-soft); }
 .admin-product-cell { display:flex; align-items:center; gap:10px; min-width:220px; }
 .admin-product-cell > span { display:grid; gap:3px; min-width:0; }
 .admin-product-cell small { color:var(--admin-muted); font-size:11px; }

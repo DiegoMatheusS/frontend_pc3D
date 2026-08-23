@@ -140,6 +140,7 @@ export const adminService = {
     models: (hardwareId) => list(`/api/admin/hardwares/${hardwareId}/modelos-3d`),
     createModel: (hardwareId, body) => oneRequest(`/api/admin/hardwares/${hardwareId}/modelos-3d`, 'POST', body),
     updateModel: (modelId, body) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}`, 'PATCH', body),
+    removeModel: (modelId) => apiRequest(`/api/admin/hardwares/modelos-3d/${modelId}`, { method: 'DELETE' }),
     approveModel: (modelId) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}/aprovar`, 'PATCH'),
     setModelStatus: (modelId, ativo) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}/status`, 'PATCH', { ativo }),
     cpuMotherboardCompatibilities: () => list('/api/admin/hardwares/compatibilidades/cpu-placa-mae'),

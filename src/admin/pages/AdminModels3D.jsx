@@ -38,6 +38,7 @@ export default function AdminModels3D() {
   const role = String(user?.papel || '').toUpperCase()
   const canEdit = ['ADMIN', 'EDITOR'].includes(role)
   const canReview = ['ADMIN', 'REVISOR'].includes(role)
+  const canDelete = role === 'ADMIN'
   const toast = useAdminToast()
   const [hardwares, setHardwares] = useState(null)
   const [models, setModels] = useState([])
@@ -47,6 +48,7 @@ export default function AdminModels3D() {
   const [error, setError] = useState(null)
   const [loadingModels, setLoadingModels] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deletingModelId, setDeletingModelId] = useState(null)
   const [homeModelId, setHomeModelId] = useState(() => {
     try {
       const saved = JSON.parse(window.localStorage.getItem(HOME_MODEL_STORAGE_KEY) || 'null')
@@ -161,6 +163,34 @@ export default function AdminModels3D() {
       toast.show(model.ativo === false ? 'Modelo ativado.' : 'Modelo desativado.')
       await reloadHardware(model.hardwareId)
     } catch (err) { toast.show(err.message, 'erro') }
+  }
+
+  async function removeModel(model) {
+    if (!canDelete || deletingModelId) return
+
+    const nomeModelo = model.nome || model.arquivoUrl || `Modelo #${model.id}`
+    const confirmed = window.confirm(
+      `Excluir permanentemente "${nomeModelo}"?\n\nO cadastro será removido e, quando o arquivo for gerenciado pelo CriaByte, o backend também tentará apagá-lo do Cloudflare R2. Esta ação não pode ser desfeita.`
+    )
+    if (!confirmed) return
+
+    setDeletingModelId(model.id)
+    try {
+      await adminService.hardwares.removeModel(model.id)
+
+      if (String(homeModelId) === String(model.id)) {
+        try { window.localStorage.removeItem(HOME_MODEL_STORAGE_KEY) } catch { /* noop */ }
+        setHomeModelId('')
+      }
+
+      if (String(form.id) === String(model.id)) clearForm()
+      toast.show('Modelo 3D excluído permanentemente.')
+      await reloadHardware(model.hardwareId)
+    } catch (err) {
+      toast.show(err.message, 'erro')
+    } finally {
+      setDeletingModelId(null)
+    }
   }
 
   function isGpuModel(model) {
@@ -279,7 +309,7 @@ export default function AdminModels3D() {
         <td data-label="Aprovação"><span className={`admin-status ${model.aprovado ? 'status-publicado' : 'status-rascunho'}`}>{model.aprovado ? 'APROVADO' : 'PENDENTE · NÃO APARECE NO 3D'}</span></td>
         <td data-label="Status"><span className={`admin-status ${model.ativo === false ? 'status-inativo' : 'status-ativo'}`}>{model.ativo === false ? 'INATIVO' : 'ATIVO'}</span></td>
         <td data-label="Atualização">{formatDate(model.atualizadoEm)}</td>
-        <td data-label="Ações"><div className="admin-row-actions admin-models3d-actions">{canEdit && <button className="admin-action-button" type="button" onClick={() => edit(model)}>Editar</button>}{canReview && !model.aprovado && <button className="admin-action-button" type="button" onClick={() => approve(model)}>Aprovar</button>}{isGpuModel(model) && <button className={`admin-action-button${String(homeModelId) === String(model.id) ? ' is-home-model' : ''}`} type="button" disabled={model.ativo === false || !model.aprovado} onClick={() => setAsHomeModel(model)}>{String(homeModelId) === String(model.id) ? 'Na Home' : 'Home'}</button>}{canReview && <button className="admin-action-button" type="button" onClick={() => toggle(model)}>{model.ativo === false ? 'Ativar' : 'Desativar'}</button>}</div></td>
+        <td data-label="Ações"><div className="admin-row-actions admin-models3d-actions">{canEdit && <button className="admin-action-button" type="button" onClick={() => edit(model)}>Editar</button>}{canReview && !model.aprovado && <button className="admin-action-button" type="button" onClick={() => approve(model)}>Aprovar</button>}{isGpuModel(model) && <button className={`admin-action-button${String(homeModelId) === String(model.id) ? ' is-home-model' : ''}`} type="button" disabled={model.ativo === false || !model.aprovado} onClick={() => setAsHomeModel(model)}>{String(homeModelId) === String(model.id) ? 'Na Home' : 'Home'}</button>}{canReview && <button className="admin-action-button" type="button" onClick={() => toggle(model)}>{model.ativo === false ? 'Ativar' : 'Desativar'}</button>}{canDelete && <button className="admin-action-button admin-action-button--danger" type="button" disabled={deletingModelId !== null} onClick={() => removeModel(model)}>{String(deletingModelId) === String(model.id) ? 'Excluindo...' : 'Excluir'}</button>}</div></td>
       </tr>) : <EmptyRow columns={8} />}
     </tbody></table></div></section>
   </>
