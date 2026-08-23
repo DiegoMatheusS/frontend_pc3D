@@ -1113,3 +1113,67 @@
 .admin-mount-search-empty {
   padding: 10px;
 }
+
+/* v53 — Modelos 3D: tabela compacta sem rolagem horizontal */
+.admin-models3d-table-wrap {
+  overflow-x: hidden;
+}
+
+.admin-models3d-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.admin-models3d-table th,
+.admin-models3d-table td {
+  min-width: 0;
+  vertical-align: top;
+}
+
+.admin-models3d-table th:nth-child(1) { width: 14%; }
+.admin-models3d-table th:nth-child(2) { width: 30%; }
+.admin-models3d-table th:nth-child(3) { width: 7%; }
+.admin-models3d-table th:nth-child(4) { width: 8%; }
+.admin-models3d-table th:nth-child(5) { width: 11%; }
+.admin-models3d-table th:nth-child(6) { width: 8%; }
+.admin-models3d-table th:nth-child(7) { width: 9%; }
+.admin-models3d-table th:nth-child(8) { width: 13%; }
+
+.admin-models3d-model-cell,
+.admin-models3d-model-cell strong,
+.admin-models3d-model-cell small {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+
+.admin-models3d-model-cell small {
+  display: inline;
+  color: var(--admin-muted);
+  line-height: 1.35;
+}
+
+.admin-models3d-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.admin-models3d-actions .admin-action-button {
+  max-width: 100%;
+}
+
+.admin-models3d-actions .admin-action-button.is-home-model {
+  color: var(--admin-primary);
+  border-color: color-mix(in srgb, var(--admin-primary) 45%, var(--admin-border));
+  background: var(--admin-primary-soft);
+  font-weight: 800;
+}
+
+@media (max-width: 900px) {
+  .admin-models3d-table-wrap { overflow-x: visible; }
+  .admin-models3d-table { table-layout: auto; }
+}

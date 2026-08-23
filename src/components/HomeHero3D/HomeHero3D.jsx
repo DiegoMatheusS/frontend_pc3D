@@ -6,6 +6,7 @@ const ORBIT_URL = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/contro
 const GLTF_URL = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'
 
 const R2_PUBLIC_BASE_URL = 'https://pub-f75dfbdc12814aea925f2615df4d32a5.r2.dev/'
+const HOME_MODEL_STORAGE_KEY = 'criabyte:home-modelo3d:v1'
 
 function resolveModelUrl(value) {
   const raw = String(value ?? '').trim()
@@ -52,6 +53,14 @@ function modelFromHardware(hardware) {
 }
 
 async function getHeroGpuModelUrl() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(HOME_MODEL_STORAGE_KEY) || 'null')
+    const savedUrl = resolveModelUrl(saved?.arquivoUrl)
+    if (savedUrl) return savedUrl
+  } catch {
+    // Sem seleção local: continua com a escolha automática da GPU pública.
+  }
+
   let payload
   try {
     payload = await apiRequest('/api/hardwares?categoria=PLACA_VIDEO&pagina=1&limite=100')

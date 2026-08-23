@@ -5,6 +5,7 @@ import { AdminError, AdminLoading, AdminPageHeader, EmptyRow, formatDate } from 
 import { useAdminToast } from '../components/AdminToast'
 
 const R2_PUBLIC_BASE_URL = 'https://pub-f75dfbdc12814aea925f2615df4d32a5.r2.dev/'
+const HOME_MODEL_STORAGE_KEY = 'criabyte:home-modelo3d:v1'
 
 const EMPTY = {
   id: null, hardwareId: '', nome: '', arquivoUrl: '', formato: 'GLB', versao: '',
@@ -46,6 +47,14 @@ export default function AdminModels3D() {
   const [error, setError] = useState(null)
   const [loadingModels, setLoadingModels] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [homeModelId, setHomeModelId] = useState(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(HOME_MODEL_STORAGE_KEY) || 'null')
+      return saved?.modelId ? String(saved.modelId) : ''
+    } catch {
+      return ''
+    }
+  })
 
   useEffect(() => { adminService.hardwares.list().then(setHardwares).catch(setError) }, [])
   useEffect(() => {
@@ -59,6 +68,7 @@ export default function AdminModels3D() {
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }))
   const hardwareMap = useMemo(() => new Map((hardwares || []).map((hardware) => [Number(hardware.id), hardware.nome])), [hardwares])
+  const hardwareById = useMemo(() => new Map((hardwares || []).map((hardware) => [Number(hardware.id), hardware])), [hardwares])
   const filteredHardwares = useMemo(() => {
     const term = hardwareSearch.trim().toLocaleLowerCase('pt-BR')
     if (!term) return hardwares || []
@@ -118,6 +128,18 @@ export default function AdminModels3D() {
       NUMERIC.forEach((key) => { const numero = parseNumeroFormulario(form[key]); if (numero !== undefined) body[key] = numero })
       if (form.id) await adminService.hardwares.updateModel(form.id, body)
       else await adminService.hardwares.createModel(Number(form.hardwareId), body)
+      if (form.id && String(homeModelId) === String(form.id)) {
+        try {
+          const saved = JSON.parse(window.localStorage.getItem(HOME_MODEL_STORAGE_KEY) || '{}')
+          window.localStorage.setItem(HOME_MODEL_STORAGE_KEY, JSON.stringify({
+            ...saved,
+            modelId: form.id,
+            hardwareId: form.hardwareId,
+            arquivoUrl: body.arquivoUrl,
+            nome: body.nome || '',
+          }))
+        } catch { /* seleção local da Home não bloqueia a edição */ }
+      }
       toast.show(form.id ? 'Modelo 3D atualizado.' : (canReview ? 'Modelo 3D cadastrado como PENDENTE. Clique em Aprovar para liberar no 3D público.' : 'Modelo 3D cadastrado e enviado para aprovação.'))
       const hardwareId = form.hardwareId
       clearForm()
@@ -130,7 +152,52 @@ export default function AdminModels3D() {
   }
 
   async function toggle(model) {
-    try { await adminService.hardwares.setModelStatus(model.id, model.ativo === false); toast.show(model.ativo === false ? 'Modelo ativado.' : 'Modelo desativado.'); await reloadHardware(model.hardwareId) } catch (err) { toast.show(err.message, 'erro') }
+    try {
+      await adminService.hardwares.setModelStatus(model.id, model.ativo === false)
+      if (model.ativo !== false && String(homeModelId) === String(model.id)) {
+        window.localStorage.removeItem(HOME_MODEL_STORAGE_KEY)
+        setHomeModelId('')
+      }
+      toast.show(model.ativo === false ? 'Modelo ativado.' : 'Modelo desativado.')
+      await reloadHardware(model.hardwareId)
+    } catch (err) { toast.show(err.message, 'erro') }
+  }
+
+  function isGpuModel(model) {
+    const hardware = hardwareById.get(Number(model.hardwareId))
+    return String(hardware?.categoria || '').toUpperCase() === 'PLACA_VIDEO'
+  }
+
+  function setAsHomeModel(model) {
+    if (!isGpuModel(model)) {
+      toast.show('A Home usa um modelo de placa de vídeo.', 'erro')
+      return
+    }
+    if (model.ativo === false || !model.aprovado) {
+      toast.show('Ative e aprove o modelo antes de colocá-lo na Home.', 'erro')
+      return
+    }
+
+    try {
+      const isCurrent = String(homeModelId) === String(model.id)
+      if (isCurrent) {
+        window.localStorage.removeItem(HOME_MODEL_STORAGE_KEY)
+        setHomeModelId('')
+        toast.show('Seleção da Home removida. A Home voltará à escolha automática.')
+        return
+      }
+
+      window.localStorage.setItem(HOME_MODEL_STORAGE_KEY, JSON.stringify({
+        modelId: model.id,
+        hardwareId: model.hardwareId,
+        arquivoUrl: montarUrlR2(model.arquivoUrl),
+        nome: model.nome || '',
+      }))
+      setHomeModelId(String(model.id))
+      toast.show('Modelo selecionado para a Home neste navegador.')
+    } catch {
+      toast.show('Não foi possível salvar a seleção da Home neste navegador.', 'erro')
+    }
   }
 
   if (error) return <AdminError error={error} />
@@ -204,15 +271,15 @@ export default function AdminModels3D() {
       </div>
     </section><footer className="admin-form-footer"><button className="btn btn-primario" type="submit" disabled={saving}>{saving ? 'Salvando...' : form.id ? 'Salvar alterações' : 'Cadastrar modelo'}</button></footer></form></section>}
 
-    <section className="admin-table-card mobile-cards"><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Hardware</th><th>Modelo</th><th>Formato</th><th>Escala</th><th>Aprovação</th><th>Status</th><th>Atualização</th><th>Ações</th></tr></thead><tbody>
+    <section className="admin-table-card mobile-cards"><div className="admin-table-wrap admin-models3d-table-wrap"><table className="admin-table admin-models3d-table"><thead><tr><th>Hardware</th><th>Modelo</th><th>Formato</th><th>Escala</th><th>Aprovação</th><th>Status</th><th>Atualização</th><th>Ações</th></tr></thead><tbody>
       {loadingModels ? <EmptyRow columns={8} text="Carregando modelos..." /> : models.length ? models.map((model) => <tr key={`${model.hardwareId}-${model.id}`}>
         <td data-label="Hardware">{model.hardwareNome || hardwareMap.get(Number(model.hardwareId))}</td>
-        <td data-label="Modelo"><strong>{model.nome || model.arquivoUrl}</strong><br/><small>{model.arquivoUrl}</small></td>
+        <td data-label="Modelo" className="admin-models3d-model-cell"><strong>{model.nome || model.arquivoUrl}</strong><br/><small>{model.arquivoUrl}</small></td>
         <td data-label="Formato">{model.formato}</td><td data-label="Escala">{[model.escalaCorrecaoX,model.escalaCorrecaoY,model.escalaCorrecaoZ].map((value) => value ?? 1).join(' / ')}</td>
         <td data-label="Aprovação"><span className={`admin-status ${model.aprovado ? 'status-publicado' : 'status-rascunho'}`}>{model.aprovado ? 'APROVADO' : 'PENDENTE · NÃO APARECE NO 3D'}</span></td>
         <td data-label="Status"><span className={`admin-status ${model.ativo === false ? 'status-inativo' : 'status-ativo'}`}>{model.ativo === false ? 'INATIVO' : 'ATIVO'}</span></td>
         <td data-label="Atualização">{formatDate(model.atualizadoEm)}</td>
-        <td data-label="Ações"><div className="admin-row-actions">{canEdit && <button className="admin-action-button" type="button" onClick={() => edit(model)}>Editar</button>}{canReview && !model.aprovado && <button className="admin-action-button" type="button" onClick={() => approve(model)}>Aprovar</button>}{canReview && <button className="admin-action-button" type="button" onClick={() => toggle(model)}>{model.ativo === false ? 'Ativar' : 'Desativar'}</button>}</div></td>
+        <td data-label="Ações"><div className="admin-row-actions admin-models3d-actions">{canEdit && <button className="admin-action-button" type="button" onClick={() => edit(model)}>Editar</button>}{canReview && !model.aprovado && <button className="admin-action-button" type="button" onClick={() => approve(model)}>Aprovar</button>}{isGpuModel(model) && <button className={`admin-action-button${String(homeModelId) === String(model.id) ? ' is-home-model' : ''}`} type="button" disabled={model.ativo === false || !model.aprovado} onClick={() => setAsHomeModel(model)}>{String(homeModelId) === String(model.id) ? 'Na Home' : 'Home'}</button>}{canReview && <button className="admin-action-button" type="button" onClick={() => toggle(model)}>{model.ativo === false ? 'Ativar' : 'Desativar'}</button>}</div></td>
       </tr>) : <EmptyRow columns={8} />}
     </tbody></table></div></section>
   </>
