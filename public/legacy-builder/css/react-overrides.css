@@ -662,3 +662,19 @@ body.builder-route-active .ia-balao-boas-vindas {
   .pcbuilder-dialogo[open] { animation: none; }
   .pcbuilder-dialogo-acoes button { transition: none; }
 }
+
+/* v54 — pesquisa legível no modo escuro. O seletor por ID vence o legado claro. */
+:root[data-theme='dark'] .builder-page #pesquisa-hardware-builder {
+  color: #f1f5f9 !important;
+  -webkit-text-fill-color: #f1f5f9;
+  caret-color: #93c5fd;
+  background: transparent !important;
+}
+:root[data-theme='dark'] .builder-page #pesquisa-hardware-builder::placeholder {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8;
+  opacity: 1;
+}
+:root[data-theme='dark'] .builder-page .painel-pesquisa-hardware label {
+  color: #cbd5e1;
+}

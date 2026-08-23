@@ -318,7 +318,7 @@ export default function HomeHero3D() {
                 // propositalmente grande e pode ultrapassar visualmente o cartão.
                 // No celular preservamos a escala anterior para não cortar a peça.
                 const isMobileHero = window.matchMedia('(max-width: 620px)').matches
-                const heroTargetSize = isMobileHero ? 6.15 : 8.65
+                const heroTargetSize = isMobileHero ? 6.15 : 10.35
                 asset.scale.multiplyScalar(heroTargetSize / largest)
                 asset.updateMatrixWorld(true)
                 const fittedBox = new THREE.Box3().setFromObject(asset)

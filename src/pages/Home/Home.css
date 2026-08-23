@@ -1190,3 +1190,42 @@
   .home-preview__stage { overflow: hidden; }
   .home-preview__webgl { inset: 0; overflow: hidden; }
 }
+
+/* v54 — preview 3D imersivo no desktop.
+   Como o cartão usa overflow visível, cabeçalho/rodapé recebem os próprios
+   raios para não formar uma borda quadrada por cima da borda arredondada. */
+.home-preview__top { border-radius: 21px 21px 0 0; }
+.home-preview__bottom { border-radius: 0 0 21px 21px; }
+.home-preview__stage,
+.home-preview__webgl,
+.home-preview__webgl-canvas {
+  border: 0;
+  outline: 0;
+}
+
+@media (min-width: 621px) {
+  .home-hero__preview { overflow: visible; }
+  .home-preview__stage {
+    overflow: visible;
+    z-index: 2;
+  }
+  .home-preview__webgl {
+    inset: -58px -72px;
+    z-index: 3;
+    overflow: visible;
+  }
+  .home-preview__webgl-canvas {
+    overflow: visible;
+  }
+  .home-preview__top,
+  .home-preview__bottom {
+    z-index: 5;
+  }
+}
+
+@media (max-width: 620px) {
+  .home-hero__preview { overflow: hidden; }
+  .home-preview__stage,
+  .home-preview__webgl { overflow: hidden; }
+  .home-preview__webgl { inset: 0; }
+}

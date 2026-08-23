@@ -207,8 +207,32 @@ function normalizarFormatoGabinete(especificacao = {}) {
   return tamanho ? "mid-tower" : "";
 }
 
+function resolverCategoriaHardwareParaBuilder(hardware) {
+  const categoriaBruta = String(
+    hardware?.categoria ?? hardware?.categoriaHardware ?? hardware?.category ?? "",
+  ).trim().toUpperCase();
+
+  const categoriaDireta = CATEGORIA_HARDWARE_PARA_BUILDER[categoriaBruta];
+  if (categoriaDireta) return categoriaDireta;
+
+  // Fallback defensivo: alguns payloads públicos podem vir sem `categoria`,
+  // mas ainda trazem a ficha técnica especializada. Isso evita esconder, em
+  // especial, Coolers cadastrados corretamente no catálogo técnico.
+  if (hardware?.especificacaoCooler) return "cooler";
+  if (hardware?.especificacaoProcessador) return "processador";
+  if (hardware?.especificacaoPlacaMae) return "placa-mae";
+  if (hardware?.especificacaoMemoriaRam) return "memoria";
+  if (hardware?.especificacaoPlacaVideo) return "placa-video";
+  if (hardware?.especificacaoArmazenamento) return "armazenamento";
+  if (hardware?.especificacaoFonte) return "fonte";
+  if (hardware?.especificacaoGabinete) return "gabinete";
+  if (hardware?.especificacaoVentoinha) return "ventoinha";
+
+  return null;
+}
+
 function normalizarHardwareParaBuilder(hardware) {
-  const categoria = CATEGORIA_HARDWARE_PARA_BUILDER[String(hardware?.categoria || "").toUpperCase()];
+  const categoria = resolverCategoriaHardwareParaBuilder(hardware);
   if (!categoria) return null;
 
   const oferta = melhorOfertaHardware(hardware);
@@ -541,16 +565,47 @@ export const api = Object.freeze({
 
     const hardwares = await requisitar("/api/hardwares");
 
+    // Garante que Cooler não desapareça caso a listagem geral pública esteja
+    // paginada/cacheada de forma diferente. A rota filtrada é mesclada sem
+    // duplicar IDs. Se ela não existir/der erro, a listagem geral continua.
+    let hardwaresComCoolers = hardwares;
+    const gerais = Array.isArray(hardwares)
+      ? hardwares
+      : Array.isArray(hardwares?.itens) ? hardwares.itens
+        : Array.isArray(hardwares?.dados) ? hardwares.dados : [];
+    const geralJaTemCooler = gerais.some((item) => resolverCategoriaHardwareParaBuilder(item) === "cooler");
+
+    if (!geralJaTemCooler) {
+      try {
+        const respostaCoolers = await requisitar("/api/hardwares?categoria=COOLER");
+        const coolers = Array.isArray(respostaCoolers)
+          ? respostaCoolers
+          : Array.isArray(respostaCoolers?.itens) ? respostaCoolers.itens
+            : Array.isArray(respostaCoolers?.dados) ? respostaCoolers.dados : [];
+
+        if (coolers.length > 0) {
+          const porId = new Map();
+          [...gerais, ...coolers].forEach((item) => {
+            const chave = String(item?.id ?? `${item?.categoria ?? ""}:${item?.nome ?? ""}:${item?.modelo ?? ""}`);
+            porId.set(chave, item);
+          });
+          hardwaresComCoolers = [...porId.values()];
+        }
+      } catch (erroCooler) {
+        console.warn("Não foi possível reforçar a listagem pública de Coolers; usando catálogo geral.", erroCooler);
+      }
+    }
+
     // Cruza o catálogo técnico com /api/produtos, que é a mesma fonte usada
     // pela Loja. Assim preço e link do PC 3D deixam de divergir do Produto.
     try {
       const produtos = await listarTodosProdutosPublicosParaBuilder();
       return normalizarListaHardwaresParaBuilder(
-        cruzarHardwareComCatalogoComercial(hardwares, produtos),
+        cruzarHardwareComCatalogoComercial(hardwaresComCoolers, produtos),
       );
     } catch (erroProdutos) {
       console.warn("Não foi possível sincronizar preços da Loja no montador; usando relação do Hardware.", erroProdutos);
-      return normalizarListaHardwaresParaBuilder(hardwares);
+      return normalizarListaHardwaresParaBuilder(hardwaresComCoolers);
     }
   },
 

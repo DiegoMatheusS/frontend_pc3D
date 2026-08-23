@@ -399,10 +399,10 @@ export default function Builder() {
     window.addEventListener('pcbuilder:statechange', sincronizarEstadoReact)
 
     const estilos = [
-      '/legacy-builder/css/pcbuildstyle.css?v=react-v52-model-transform-values',
+      '/legacy-builder/css/pcbuildstyle.css?v=react-v54-cooler-dark-search',
       '/legacy-builder/css/montador-extras.css?v=react-v52-model-transform-values',
       '/legacy-builder/css/ia-assistente.css?v=react-v40-1',
-      '/legacy-builder/css/react-overrides.css?v=react-v40-1',
+      '/legacy-builder/css/react-overrides.css?v=react-v54-cooler-dark-search',
     ]
     estilos.forEach(carregarEstilo)
     globalThis.PC_BUILDER_ASSET_BASE_URL = rotaLegada('')
@@ -414,7 +414,7 @@ export default function Builder() {
         await carregarScript('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js')
         if (cancelado) return
 
-        await carregarScript('/legacy-builder/js/pcbuildscript.js?v=react-v53-gpu-slot-horizontal', { modulo: true })
+        await carregarScript('/legacy-builder/js/pcbuildscript.js?v=react-v54-cooler-optional-case', { modulo: true })
         if (cancelado) return
 
         const inicializar = globalThis.inicializarMontadorLegado

@@ -9,8 +9,8 @@ import {
   obterQualidade3D,
 } from "./renderer.js";
 
-import { verificarCompatibilidade } from "./compatibilidade.js";
-import { api } from "./api.js?v=react-v52-model-transform-values";
+import { verificarCompatibilidade } from "./compatibilidade.js?v=react-v54-cooler-optional-case";
+import { api } from "./api.js?v=react-v54-cooler-optional-case";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {

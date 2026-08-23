@@ -211,13 +211,19 @@ export function verificarCompatibilidade(estadoMontagem, opcoes = {}) {
         }
     }
 
-    // Componentes mínimos para finalizar e ligar.
+    // Componentes mínimos para finalizar e ligar. O gabinete é opcional: o
+    // usuário pode validar a configuração antes de escolher um case.
+    // Processadores com cooler incluso também satisfazem a refrigeração mínima.
     const faltando = [];
+    const coolerInclusoProcessador = Boolean(
+        processador?.coolerIncluso === true ||
+        processador?.especificacoes?.coolerIncluso === true
+    );
+    const possuiRefrigeracaoCpu = Boolean(cooler) || coolerInclusoProcessador;
 
-    if (!gabinete) faltando.push("gabinete");
     if (!placaMae) faltando.push("placa-mãe");
     if (!processador) faltando.push("processador");
-    if (!cooler) faltando.push("cooler");
+    if (!possuiRefrigeracaoCpu) faltando.push("cooler");
     if (memorias.length === 0) faltando.push("memória RAM");
     if (!fonte) faltando.push("fonte");
     if (armazenamentos.length === 0) faltando.push("armazenamento");
