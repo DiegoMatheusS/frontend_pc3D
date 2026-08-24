@@ -414,7 +414,7 @@ export default function Builder() {
         await carregarScript('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js')
         if (cancelado) return
 
-        await carregarScript('/legacy-builder/js/pcbuildscript.js?v=react-v56-cooler-image-description', { modulo: true })
+        await carregarScript('/legacy-builder/js/pcbuildscript.js?v=react-v57-all-hardware-descriptions', { modulo: true })
         if (cancelado) return
 
         const inicializar = globalThis.inicializarMontadorLegado

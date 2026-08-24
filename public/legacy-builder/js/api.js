@@ -123,6 +123,32 @@ function extrairProdutosPublicos(payload) {
   return [];
 }
 
+function extrairHardwaresPublicos(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.dados)) return payload.dados;
+  if (Array.isArray(payload?.hardwares)) return payload.hardwares;
+  if (Array.isArray(payload?.itens)) return payload.itens;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+async function listarTodosHardwaresPublicosParaBuilder() {
+  // Pede um limite alto e, quando o backend informa paginação, percorre todas
+  // as páginas. Isso evita o montador mostrar só os primeiros itens de uma
+  // categoria (por exemplo, apenas 1 Cooler).
+  const primeiraPagina = await requisitar("/api/hardwares?pagina=1&limite=100");
+  const hardwares = [...extrairHardwaresPublicos(primeiraPagina)];
+  const totalPaginas = Math.max(1, Number(primeiraPagina?.totalPaginas) || 1);
+
+  for (let pagina = 2; pagina <= totalPaginas; pagina += 1) {
+    const resposta = await requisitar(`/api/hardwares?pagina=${pagina}&limite=100`);
+    hardwares.push(...extrairHardwaresPublicos(resposta));
+  }
+
+  return [...new Map(hardwares.map((item) => [String(item?.id ?? `${item?.categoria ?? ""}:${item?.nome ?? ""}:${item?.modelo ?? ""}`), item])).values()];
+}
+
 async function listarTodosProdutosPublicosParaBuilder() {
   const primeiraPagina = await requisitar("/api/produtos?pagina=1&limite=100");
   const produtos = [...extrairProdutosPublicos(primeiraPagina)];
@@ -580,38 +606,7 @@ export const api = Object.freeze({
       return obterJsonLocal(new URL("../pecas.json", import.meta.url).href);
     }
 
-    const hardwares = await requisitar("/api/hardwares");
-
-    // Garante que Cooler não desapareça caso a listagem geral pública esteja
-    // paginada/cacheada de forma diferente. A rota filtrada é mesclada sem
-    // duplicar IDs. Se ela não existir/der erro, a listagem geral continua.
-    let hardwaresComCoolers = hardwares;
-    const gerais = Array.isArray(hardwares)
-      ? hardwares
-      : Array.isArray(hardwares?.itens) ? hardwares.itens
-        : Array.isArray(hardwares?.dados) ? hardwares.dados : [];
-    const geralJaTemCooler = gerais.some((item) => resolverCategoriaHardwareParaBuilder(item) === "cooler");
-
-    if (!geralJaTemCooler) {
-      try {
-        const respostaCoolers = await requisitar("/api/hardwares?categoria=COOLER");
-        const coolers = Array.isArray(respostaCoolers)
-          ? respostaCoolers
-          : Array.isArray(respostaCoolers?.itens) ? respostaCoolers.itens
-            : Array.isArray(respostaCoolers?.dados) ? respostaCoolers.dados : [];
-
-        if (coolers.length > 0) {
-          const porId = new Map();
-          [...gerais, ...coolers].forEach((item) => {
-            const chave = String(item?.id ?? `${item?.categoria ?? ""}:${item?.nome ?? ""}:${item?.modelo ?? ""}`);
-            porId.set(chave, item);
-          });
-          hardwaresComCoolers = [...porId.values()];
-        }
-      } catch (erroCooler) {
-        console.warn("Não foi possível reforçar a listagem pública de Coolers; usando catálogo geral.", erroCooler);
-      }
-    }
+    const hardwaresComCoolers = await listarTodosHardwaresPublicosParaBuilder();
 
     // Cruza o catálogo técnico com /api/produtos, que é a mesma fonte usada
     // pela Loja. Assim preço e link do PC 3D deixam de divergir do Produto.

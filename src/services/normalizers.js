@@ -337,17 +337,20 @@ function normalizeSpecs(item, category) {
 }
 
 export function normalizeProduct(item) {
-  const hardware = item?.hardware && typeof item.hardware === 'object' ? item.hardware : null
-  const notebook = item?.notebook && typeof item.notebook === 'object' ? item.notebook : null
-  const rawCategory = hardware?.categoria ?? item.categoria ?? item.category ?? item.tipo ?? ''
+  const product = item?.produto && typeof item.produto === 'object' ? item.produto : null
+  const hardware = item?.hardware && typeof item.hardware === 'object' ? item.hardware : (product?.hardware && typeof product.hardware === 'object' ? product.hardware : null)
+  const notebook = item?.notebook && typeof item.notebook === 'object' ? item.notebook : (product?.notebook && typeof product.notebook === 'object' ? product.notebook : null)
+  const peripheral = item?.periferico && typeof item.periferico === 'object' ? item.periferico : null
+  const setupItem = item?.setup && typeof item.setup === 'object' ? item.setup : (item?.itemSetup && typeof item.itemSetup === 'object' ? item.itemSetup : null)
+  const rawCategory = hardware?.categoria ?? product?.categoria ?? item.categoria ?? item.category ?? item.tipo ?? ''
   const enumCategory = categoryCode(rawCategory)
   const [knownGroup, knownCategory, knownCategoryKey] = CATEGORY_META[enumCategory] || []
-  const rawGroup = typeof rawCategory === 'object' && rawCategory ? rawCategory.grupo : undefined
+  const rawGroup = typeof rawCategory === 'object' && rawCategory ? rawCategory.grupo : (product?.grupo ?? undefined)
   const mappedGroup = PRODUCT_GROUPS[normalizeCategoryToken(rawGroup)]
-  const group = knownGroup || mappedGroup || text(item.group || item.grupo, 'hardwares').toLowerCase()
+  const group = knownGroup || mappedGroup || text(item.group || item.grupo || product?.group || product?.grupo, 'hardwares').toLowerCase()
   const category = knownCategory || text(rawCategory, 'Produto')
   const categoryKey = knownCategoryKey || text(item.categoryKey || item.categoriaChave || item.slugCategoria, 'produto')
-  const offers = normalizeOffers(item.ofertas || item.offers || (item.melhorOferta ? [item.melhorOferta] : []))
+  const offers = normalizeOffers(item.ofertas || item.offers || product?.ofertas || product?.offers || (item.melhorOferta ? [item.melhorOferta] : product?.melhorOferta ? [product.melhorOferta] : []))
   const price = offers[0]?.price ?? number(item.precoAtual ?? item.preco ?? item.price)
   const previousPrice = offers.find((offer) => offer.previousPrice)?.previousPrice ?? (number(item.precoAnterior ?? item.previousPrice, 0) || null)
   const has3d = Boolean(
@@ -361,20 +364,20 @@ export function normalizeProduct(item) {
   )
 
   return {
-    id: item.id,
-    slug: item.slug || String(item.id),
-    type: text(item.tipo ?? item.type, ''),
-    active: item.ativo !== false && notebook?.ativo !== false,
-    published: item.publicado !== false && notebook?.publicado !== false,
+    id: item.id ?? product?.id,
+    slug: item.slug || product?.slug || String(item.id ?? product?.id),
+    type: text(item.tipo ?? item.type ?? product?.tipo ?? product?.type, ''),
+    active: item.ativo !== false && product?.ativo !== false && notebook?.ativo !== false,
+    published: item.publicado !== false && product?.publicado !== false && notebook?.publicado !== false,
     notebookId: notebook?.id ?? item.notebookId ?? null,
     group,
     category,
     categoryKey,
-    name: text(item.nome ?? item.name, `${text(item.marca, '')} ${text(item.modelo, '')}`.trim() || 'Produto'),
-    brand: text(item.marca ?? item.brand ?? hardware?.marca),
-    description: item.descricao || item.description || hardware?.descricao || '',
-    image: item.imagemUrl || item.imagem || item.image || hardware?.imagemUrl || null,
-    hoverImage: item.imagemHoverUrl || item.hoverImage || item.imageHover || hardware?.imagemHoverUrl || null,
+    name: text(item.nome ?? item.name ?? product?.nome ?? product?.name, `${text(item.marca ?? product?.marca, '')} ${text(item.modelo ?? product?.modelo, '')}`.trim() || 'Produto'),
+    brand: text(item.marca ?? item.brand ?? product?.marca ?? product?.brand ?? hardware?.marca),
+    description: item.descricao || item.description || product?.descricao || product?.description || hardware?.descricao || notebook?.descricao || peripheral?.descricao || setupItem?.descricao || '',
+    image: item.imagemUrl || item.imagem || item.image || product?.imagemUrl || product?.imagem || product?.image || hardware?.imagemUrl || peripheral?.imagemUrl || setupItem?.imagemUrl || null,
+    hoverImage: item.imagemHoverUrl || item.hoverImage || item.imageHover || product?.imagemHoverUrl || product?.hoverImage || hardware?.imagemHoverUrl || peripheral?.imagemHoverUrl || setupItem?.imagemHoverUrl || null,
     rating: number(item.mediaAvaliacoes ?? item.avaliacao?.media ?? item.rating),
     reviewsCount: number(item.quantidadeAvaliacoes ?? item.avaliacao?.quantidade ?? item.reviewsCount),
     builderCompatible: item.builderCompatible === true || has3d,
