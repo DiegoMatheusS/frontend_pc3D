@@ -88,6 +88,22 @@ const PRODUCT_GROUPS = {
   COMPUTADORES: 'computadores',
 }
 
+const GROUP_ALIASES = {
+  HARDWARE: 'hardwares',
+  HARDWARES: 'hardwares',
+  COMPONENTE: 'hardwares',
+  COMPONENTES: 'hardwares',
+  PERIFERICO: 'perifericos',
+  PERIFERICOS: 'perifericos',
+  MONITOR: 'monitores',
+  MONITORES: 'monitores',
+  NOTEBOOK: 'notebooks',
+  NOTEBOOKS: 'notebooks',
+  SETUP: 'setup',
+  ACESSORIO: 'setup',
+  ACESSORIOS: 'setup',
+}
+
 
 function number(value, fallback = 0) {
   const parsed = Number(value)
@@ -347,7 +363,10 @@ export function normalizeProduct(item) {
   const [knownGroup, knownCategory, knownCategoryKey] = CATEGORY_META[enumCategory] || []
   const rawGroup = typeof rawCategory === 'object' && rawCategory ? rawCategory.grupo : (product?.grupo ?? undefined)
   const mappedGroup = PRODUCT_GROUPS[normalizeCategoryToken(rawGroup)]
-  const group = knownGroup || mappedGroup || text(item.group || item.grupo || product?.group || product?.grupo, 'hardwares').toLowerCase()
+  const categoryGroupHint = GROUP_ALIASES[normalizeCategoryToken(rawCategory)]
+  const fallbackGroupValue = item.group || item.grupo || product?.group || product?.grupo || rawGroup
+  const canonicalFallbackGroup = GROUP_ALIASES[normalizeCategoryToken(fallbackGroupValue)] || text(fallbackGroupValue, 'hardwares').toLowerCase()
+  const group = knownGroup || mappedGroup || categoryGroupHint || canonicalFallbackGroup
   const category = knownCategory || text(rawCategory, 'Produto')
   const categoryKey = knownCategoryKey || text(item.categoryKey || item.categoriaChave || item.slugCategoria, 'produto')
   const offers = normalizeOffers(item.ofertas || item.offers || product?.ofertas || product?.offers || (item.melhorOferta ? [item.melhorOferta] : product?.melhorOferta ? [product.melhorOferta] : []))

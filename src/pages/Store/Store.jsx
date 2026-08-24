@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import ProductCard from '../../components/ProductCard/ProductCard'
@@ -128,10 +128,16 @@ export default function Store({ defaultGroup = 'todos' }) {
   const [loadError, setLoadError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const [searchParams, setSearchParams] = useSearchParams()
+  const initialSearchParamsRef = useRef(new URLSearchParams(searchParams))
+  const descriptionRequestsRef = useRef(new Set())
   const comparisonDialogRef = useAccessibleDialog(comparisonOpen, setComparisonOpen)
 
   useEffect(() => {
     let active = true
+    const initialSearchParams = initialSearchParamsRef.current
+    setLoading(true)
+    setLoadError('')
+
     Promise.all([
       getProductGroups(),
       getProducts(),
@@ -172,15 +178,17 @@ export default function Store({ defaultGroup = 'todos' }) {
         }
         return publicNotebookNames.has(normalize(product.name))
       })
+
       setGroups(safeGroups)
       setProducts(safeProducts)
       setVisibleCount(20)
-      const requestedSearch = searchParams.get('busca')
+
+      const requestedSearch = initialSearchParams.get('busca')
       setQuery(requestedSearch || '')
-      const requestedGroup = searchParams.get('grupo')
+      const requestedGroup = initialSearchParams.get('grupo')
       if (requestedGroup && safeGroups.some((item) => item.id === requestedGroup)) setGroup(requestedGroup)
       else setGroup(defaultGroup)
-      const requestedCategory = searchParams.get('categoria')
+      const requestedCategory = initialSearchParams.get('categoria')
       if (requestedCategory) {
         const foundCategory = safeProducts.find((item) => item.categoryKey === requestedCategory)?.category
         setCategory(foundCategory || 'todos')
@@ -189,14 +197,15 @@ export default function Store({ defaultGroup = 'todos' }) {
       }
       setBrand('todos')
       setMaxPrice('todos')
-      const requestedCompare = searchParams.get('comparar')
+
+      const requestedCompare = initialSearchParams.get('comparar')
       if (requestedCompare) {
         const found = safeProducts.find((item) => String(item.id) === String(requestedCompare) || String(item.slug) === String(requestedCompare))
         if (found) {
           setCompare([found])
           setCompareMessage('Selecione mais um produto da mesma categoria para comparar.')
         }
-        const next = new URLSearchParams(searchParams)
+        const next = new URLSearchParams(initialSearchParams)
         next.delete('comparar')
         setSearchParams(next, { replace: true })
       }
@@ -206,8 +215,9 @@ export default function Store({ defaultGroup = 'todos' }) {
       setProducts([])
       setLoadError(error?.message || 'Não foi possível consultar o catálogo agora.')
     }).finally(() => { if (active) setLoading(false) })
+
     return () => { active = false }
-  }, [defaultGroup, reloadKey, searchParams, setSearchParams])
+  }, [defaultGroup, reloadKey, setSearchParams])
 
 
   const visiblePool = useMemo(() => products.filter((product) => group === 'todos' || product.group === group), [products, group])
@@ -242,6 +252,41 @@ export default function Store({ defaultGroup = 'todos' }) {
 
   const visibleProducts = filtered.slice(0, visibleCount)
   const remainingProducts = Math.max(0, filtered.length - visibleProducts.length)
+
+  useEffect(() => {
+    let active = true
+    const missing = visibleProducts
+      .filter((product) => !String(product.description || '').trim())
+      .filter((product) => !descriptionRequestsRef.current.has(String(product.id)))
+      .slice(0, 4)
+
+    if (!missing.length) return () => { active = false }
+    missing.forEach((product) => descriptionRequestsRef.current.add(String(product.id)))
+
+    Promise.allSettled(missing.map((product) => getProductById(product.id || product.slug))).then((results) => {
+      if (!active) return
+      const updates = new Map()
+      results.forEach((result, index) => {
+        if (result.status !== 'fulfilled' || !result.value) return
+        const detail = result.value
+        if (!String(detail.description || '').trim() && !detail.image && !detail.hoverImage) return
+        updates.set(String(missing[index].id), detail)
+      })
+      if (!updates.size) return
+      setProducts((current) => current.map((product) => {
+        const detail = updates.get(String(product.id))
+        if (!detail) return product
+        return {
+          ...product,
+          description: product.description || detail.description || '',
+          image: product.image || detail.image || null,
+          hoverImage: product.hoverImage || detail.hoverImage || null,
+        }
+      }))
+    })
+
+    return () => { active = false }
+  }, [visibleProducts])
 
   const changeGroup = (nextGroup) => {
     setVisibleCount(20)
