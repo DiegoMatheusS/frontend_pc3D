@@ -62,6 +62,7 @@ function normalizeHardwareCategory(value, fallback = EMPTY.categoria) {
     GPU: 'PLACA_VIDEO',
     PROCESSADOR: 'PROCESSADOR',
     CPU: 'PROCESSADOR',
+    COOLERS: 'COOLER',
     COOLERCPU: 'COOLER',
     AIRCOOLER: 'COOLER',
     WATERCOOLER: 'COOLER',

@@ -27,3 +27,5 @@
 .notebook-card__image--hover { position:absolute; inset:0; opacity:0; }
 .notebook-card__visual:hover .notebook-card__image.has-hover { opacity:0; }
 .notebook-card__visual:hover .notebook-card__image--hover { opacity:1; }
+
+.notebook-card__device[hidden] { display: none !important; }

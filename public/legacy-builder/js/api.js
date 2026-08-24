@@ -30,6 +30,7 @@ function resolverUrlModelo3D(valor) {
 const CATEGORIA_HARDWARE_PARA_BUILDER = Object.freeze({
   PROCESSADOR: "processador",
   COOLER: "cooler",
+  COOLERS: "cooler",
   COOLER_CPU: "cooler",
   AIR_COOLER: "cooler",
   WATER_COOLER: "cooler",
@@ -186,8 +187,12 @@ function cruzarHardwareComCatalogoComercial(hardwaresResposta, produtos) {
       produto: {
         ...(hardware?.produto && typeof hardware.produto === "object" ? hardware.produto : {}),
         id: produtoLoja.id ?? hardware?.produto?.id,
-        imagemUrl: produtoLoja.imagemUrl ?? hardware?.produto?.imagemUrl,
-        imagemHoverUrl: produtoLoja.imagemHoverUrl ?? hardware?.produto?.imagemHoverUrl,
+        nome: produtoLoja.nome || hardware?.produto?.nome,
+        marca: produtoLoja.marca || hardware?.produto?.marca,
+        modelo: produtoLoja.modelo || hardware?.produto?.modelo,
+        descricao: produtoLoja.descricao || hardware?.produto?.descricao || '',
+        imagemUrl: produtoLoja.imagemUrl || hardware?.produto?.imagemUrl || '',
+        imagemHoverUrl: produtoLoja.imagemHoverUrl || hardware?.produto?.imagemHoverUrl || '',
         ofertas: melhorOferta ? [melhorOferta] : [],
       },
     };
@@ -212,9 +217,17 @@ function normalizarFormatoGabinete(especificacao = {}) {
 }
 
 function resolverCategoriaHardwareParaBuilder(hardware) {
-  const categoriaBruta = String(
-    hardware?.categoria ?? hardware?.categoriaHardware ?? hardware?.category ?? "",
-  ).trim().toUpperCase();
+  const categoriaOrigem = hardware?.categoria ?? hardware?.categoriaHardware ?? hardware?.category ?? "";
+  const categoriaValor = categoriaOrigem && typeof categoriaOrigem === "object"
+    ? categoriaOrigem.codigo ?? categoriaOrigem.code ?? categoriaOrigem.nome ?? categoriaOrigem.name ?? categoriaOrigem.slug ?? ""
+    : categoriaOrigem;
+  const categoriaBruta = String(categoriaValor)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 
   const categoriaDireta = CATEGORIA_HARDWARE_PARA_BUILDER[categoriaBruta];
   if (categoriaDireta) return categoriaDireta;
@@ -312,9 +325,9 @@ function normalizarHardwareParaBuilder(hardware) {
     nome: hardware.nome,
     marca: hardware.marca || "",
     modelo: hardware.modelo || "",
-    descricao: hardware.descricao || "",
-    imagem: hardware.imagemUrl || hardware?.produto?.imagemHoverUrl || "",
-    imagemUrl: hardware.imagemUrl || hardware?.produto?.imagemHoverUrl || "",
+    descricao: hardware.descricao || hardware?.produto?.descricao || "",
+    imagem: hardware.imagemUrl || hardware?.produto?.imagemUrl || hardware?.produto?.imagemHoverUrl || "",
+    imagemUrl: hardware.imagemUrl || hardware?.produto?.imagemUrl || hardware?.produto?.imagemHoverUrl || "",
     modelo3dUrl,
     modelo3D: modelo3dUrl,
     ...(transform3D ? { transform3D } : {}),
