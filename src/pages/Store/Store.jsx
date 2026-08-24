@@ -128,13 +128,12 @@ export default function Store({ defaultGroup = 'todos' }) {
   const [loadError, setLoadError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const [searchParams, setSearchParams] = useSearchParams()
-  const initialSearchParamsRef = useRef(new URLSearchParams(searchParams))
+  const lastSyncedSearchRef = useRef(null)
   const descriptionRequestsRef = useRef(new Set())
   const comparisonDialogRef = useAccessibleDialog(comparisonOpen, setComparisonOpen)
 
   useEffect(() => {
     let active = true
-    const initialSearchParams = initialSearchParamsRef.current
     setLoading(true)
     setLoadError('')
 
@@ -182,33 +181,6 @@ export default function Store({ defaultGroup = 'todos' }) {
       setGroups(safeGroups)
       setProducts(safeProducts)
       setVisibleCount(20)
-
-      const requestedSearch = initialSearchParams.get('busca')
-      setQuery(requestedSearch || '')
-      const requestedGroup = initialSearchParams.get('grupo')
-      if (requestedGroup && safeGroups.some((item) => item.id === requestedGroup)) setGroup(requestedGroup)
-      else setGroup(defaultGroup)
-      const requestedCategory = initialSearchParams.get('categoria')
-      if (requestedCategory) {
-        const foundCategory = safeProducts.find((item) => item.categoryKey === requestedCategory)?.category
-        setCategory(foundCategory || 'todos')
-      } else {
-        setCategory('todos')
-      }
-      setBrand('todos')
-      setMaxPrice('todos')
-
-      const requestedCompare = initialSearchParams.get('comparar')
-      if (requestedCompare) {
-        const found = safeProducts.find((item) => String(item.id) === String(requestedCompare) || String(item.slug) === String(requestedCompare))
-        if (found) {
-          setCompare([found])
-          setCompareMessage('Selecione mais um produto da mesma categoria para comparar.')
-        }
-        const next = new URLSearchParams(initialSearchParams)
-        next.delete('comparar')
-        setSearchParams(next, { replace: true })
-      }
     }).catch((error) => {
       if (!active) return
       setGroups([])
@@ -217,8 +189,48 @@ export default function Store({ defaultGroup = 'todos' }) {
     }).finally(() => { if (active) setLoading(false) })
 
     return () => { active = false }
-  }, [defaultGroup, reloadKey, setSearchParams])
+  }, [defaultGroup, reloadKey])
 
+  useEffect(() => {
+    if (!groups.length) return
+
+    const searchKey = searchParams.toString()
+    if (lastSyncedSearchRef.current === searchKey) return
+
+    const requestedCategory = searchParams.get('categoria')
+    if (requestedCategory && !products.length) return
+
+    lastSyncedSearchRef.current = searchKey
+
+    const requestedGroup = searchParams.get('grupo')
+    const nextGroup = defaultGroup === 'hardwares'
+      ? 'hardwares'
+      : requestedGroup && groups.some((item) => item.id === requestedGroup)
+        ? requestedGroup
+        : defaultGroup
+
+    setGroup(nextGroup)
+    setQuery(searchParams.get('busca') || '')
+
+    if (requestedCategory) {
+      const foundCategory = products.find((item) => item.categoryKey === requestedCategory)?.category
+      setCategory(foundCategory || 'todos')
+    } else {
+      setCategory('todos')
+    }
+
+    const requestedCompare = searchParams.get('comparar')
+    if (requestedCompare) {
+      const found = products.find((item) => String(item.id) === String(requestedCompare) || String(item.slug) === String(requestedCompare))
+      if (found) {
+        setCompare([found])
+        setCompareMessage('Selecione mais um produto da mesma categoria para comparar.')
+      }
+      const next = new URLSearchParams(searchParams)
+      next.delete('comparar')
+      setSearchParams(next, { replace: true })
+    }
+  }, [defaultGroup, groups, products, searchParams, setSearchParams])
 
   const visiblePool = useMemo(() => products.filter((product) => group === 'todos' || product.group === group), [products, group])
   const categories = useMemo(() => {
@@ -295,6 +307,8 @@ export default function Store({ defaultGroup = 'todos' }) {
     setBrand('todos')
     if (defaultGroup === 'hardwares') return
     const next = new URLSearchParams(searchParams)
+    next.delete('categoria')
+    next.delete('comparar')
     if (nextGroup === 'todos') next.delete('grupo')
     else next.set('grupo', nextGroup)
     setSearchParams(next, { replace: true })
