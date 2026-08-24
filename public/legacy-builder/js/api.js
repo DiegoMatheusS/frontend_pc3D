@@ -135,18 +135,55 @@ function extrairHardwaresPublicos(payload) {
 
 function extrairPaginacaoHardwaresPublicos(payload) {
   const meta = payload?.paginacao || payload?.pagination || payload?.meta || {};
-  const totalPaginas = Number(
+  const itens = extrairHardwaresPublicos(payload);
+  const limiteInformado = Number(
+    payload?.limite
+      ?? payload?.limit
+      ?? payload?.porPagina
+      ?? payload?.pageSize
+      ?? meta?.limite
+      ?? meta?.limit
+      ?? meta?.perPage
+      ?? meta?.pageSize
+      ?? 0,
+  );
+  const limite = Number.isFinite(limiteInformado) && limiteInformado > 0
+    ? Math.floor(limiteInformado)
+    : itens.length;
+
+  const totalItens = Number(
+    payload?.total
+      ?? payload?.totalItens
+      ?? payload?.totalItems
+      ?? payload?.totalRegistros
+      ?? payload?.quantidadeTotal
+      ?? meta?.total
+      ?? meta?.totalItens
+      ?? meta?.totalItems
+      ?? meta?.totalRecords
+      ?? 0,
+  );
+
+  const totalPaginasInformado = Number(
     payload?.totalPaginas
+      ?? payload?.pages
+      ?? payload?.pageCount
       ?? meta?.totalPaginas
       ?? meta?.pageCount
       ?? meta?.pages
-      ?? 1,
+      ?? 0,
   );
-  const limite = Number(payload?.limite ?? meta?.limite ?? meta?.limit ?? 0);
+
+  const totalPaginasInferido = Number.isFinite(totalItens) && totalItens > 0 && limite > 0
+    ? Math.ceil(totalItens / limite)
+    : 0;
+  const totalPaginas = totalPaginasInformado > 0 ? totalPaginasInformado : totalPaginasInferido;
 
   return {
     totalPaginas: Number.isFinite(totalPaginas) && totalPaginas > 1 ? Math.floor(totalPaginas) : 1,
     limite: Number.isFinite(limite) && limite > 0 ? Math.floor(limite) : 0,
+    totalItens: Number.isFinite(totalItens) && totalItens > 0 ? Math.floor(totalItens) : 0,
+    possuiPaginacaoDeclarada: Boolean(totalPaginasInformado > 1 || totalPaginasInferido > 1),
   };
 }
 
@@ -160,31 +197,110 @@ function mesclarHardwaresPublicos(...listas) {
 }
 
 async function listarTodosHardwaresPublicosParaBuilder() {
-  // A rota sem parâmetros já era a fonte estável do montador. Não força
-  // limite=100, pois algumas versões do backend rejeitam esse limite e isso
-  // fazia o catálogo inteiro ficar vazio.
+  // A rota sem parâmetros é a fonte estável do montador. Não força limite=100,
+  // pois algumas versões do backend rejeitam esse limite.
   const primeiraPagina = await requisitar("/api/hardwares");
   let hardwares = [...extrairHardwaresPublicos(primeiraPagina)];
   const paginacao = extrairPaginacaoHardwaresPublicos(primeiraPagina);
 
-  // Só percorre páginas adicionais quando o próprio backend informa paginação,
-  // reutilizando o limite aceito por ele em vez de inventar um limite alto.
-  for (let pagina = 2; pagina <= paginacao.totalPaginas; pagina += 1) {
-    const sufixoLimite = paginacao.limite ? `&limite=${paginacao.limite}` : "";
-    const resposta = await requisitar(`/api/hardwares?pagina=${pagina}${sufixoLimite}`);
-    hardwares = mesclarHardwaresPublicos(hardwares, extrairHardwaresPublicos(resposta));
+  if (paginacao.possuiPaginacaoDeclarada) {
+    // Quando total/totalPaginas existe, percorre exatamente as páginas declaradas.
+    for (let pagina = 2; pagina <= paginacao.totalPaginas; pagina += 1) {
+      try {
+        const resposta = await requisitar(`/api/hardwares?pagina=${pagina}`);
+        hardwares = mesclarHardwaresPublicos(hardwares, extrairHardwaresPublicos(resposta));
+      } catch {
+        break;
+      }
+    }
+  } else if (hardwares.length > 0) {
+    // Algumas respostas retornam apenas os itens e omitem os metadados. Faz uma
+    // sondagem segura das páginas seguintes e para assim que vier vazio/repetido.
+    for (let pagina = 2; pagina <= 20; pagina += 1) {
+      try {
+        const resposta = await requisitar(`/api/hardwares?pagina=${pagina}`);
+        const itensPagina = extrairHardwaresPublicos(resposta);
+        if (!itensPagina.length) break;
+        const quantidadeAntes = hardwares.length;
+        hardwares = mesclarHardwaresPublicos(hardwares, itensPagina);
+        if (hardwares.length === quantidadeAntes) break;
+        if (paginacao.limite > 0 && itensPagina.length < paginacao.limite) break;
+      } catch {
+        break;
+      }
+    }
   }
 
-  // Reforça somente Cooler, que era a categoria que podia aparecer incompleta
-  // na listagem geral. Se a rota filtrada não existir, o catálogo geral segue.
-  try {
-    const respostaCoolers = await requisitar("/api/hardwares?categoria=COOLER");
-    hardwares = mesclarHardwaresPublicos(hardwares, extrairHardwaresPublicos(respostaCoolers));
-  } catch (erroCooler) {
-    console.warn("Não foi possível complementar a lista de Coolers; usando o catálogo geral.", erroCooler);
-  }
+  // Aceita tanto o contrato novo (COOLER) quanto dados antigos/filtros que ainda
+  // respondam por COOLERS. Falhas nesses filtros não derrubam o catálogo geral.
+  const consultasCooler = await Promise.allSettled([
+    requisitar("/api/hardwares?categoria=COOLER"),
+  ]);
+  consultasCooler.forEach((resultado) => {
+    if (resultado.status === "fulfilled") {
+      hardwares = mesclarHardwaresPublicos(hardwares, extrairHardwaresPublicos(resultado.value));
+    }
+  });
 
   return hardwares;
+}
+
+function extrairHardwareDoProdutoPublico(produto) {
+  const candidatos = [
+    produto?.hardware,
+    produto?.produto?.hardware,
+    produto?.item?.hardware,
+    produto?.data?.hardware,
+  ];
+  return candidatos.find((item) => item && typeof item === "object" && !Array.isArray(item)) || null;
+}
+
+async function complementarHardwaresComProdutosPublicos(hardwares, produtos) {
+  const idsOriginais = new Set((Array.isArray(hardwares) ? hardwares : []).map((item) => String(item?.id ?? "")));
+  const embutidos = (Array.isArray(produtos) ? produtos : [])
+    .map((produto) => {
+      const hardware = extrairHardwareDoProdutoPublico(produto);
+      if (!hardware?.id) return null;
+      return {
+        ...hardware,
+        produto: {
+          ...(hardware?.produto && typeof hardware.produto === "object" ? hardware.produto : {}),
+          id: produto?.id ?? produto?.produto?.id ?? hardware?.produto?.id,
+          nome: produto?.nome ?? produto?.produto?.nome ?? hardware?.produto?.nome,
+          descricao: produto?.descricao ?? produto?.produto?.descricao ?? hardware?.produto?.descricao ?? "",
+          imagemUrl: produto?.imagemUrl ?? produto?.produto?.imagemUrl ?? hardware?.produto?.imagemUrl ?? "",
+          imagemHoverUrl: produto?.imagemHoverUrl ?? produto?.produto?.imagemHoverUrl ?? hardware?.produto?.imagemHoverUrl ?? "",
+          ofertas: produto?.ofertas ?? produto?.produto?.ofertas ?? hardware?.produto?.ofertas ?? [],
+        },
+      };
+    })
+    .filter(Boolean);
+
+  let resultado = mesclarHardwaresPublicos(hardwares, embutidos);
+
+  // Se um Cooler aparece na Loja ligado a um Hardware que não veio na primeira
+  // listagem pública, consulta apenas esse detalhe. São poucas requisições e
+  // garantem ficha técnica completa sem transformar o Builder em N+1 geral.
+  const coolersFaltantes = embutidos.filter((hardware) => (
+    !idsOriginais.has(String(hardware.id))
+    && resolverCategoriaHardwareParaBuilder(hardware) === "cooler"
+  ));
+
+  if (coolersFaltantes.length) {
+    const detalhes = await Promise.allSettled(
+      coolersFaltantes.map((hardware) => requisitar(`/api/hardwares/${encodeURIComponent(hardware.id)}`)),
+    );
+    detalhes.forEach((resposta) => {
+      if (resposta.status !== "fulfilled") return;
+      const payload = resposta.value;
+      const detalhe = payload?.hardware || payload?.item || payload?.dado || payload?.data || payload;
+      if (detalhe && typeof detalhe === "object" && !Array.isArray(detalhe)) {
+        resultado = mesclarHardwaresPublicos(resultado, [detalhe]);
+      }
+    });
+  }
+
+  return resultado;
 }
 
 async function listarTodosProdutosPublicosParaBuilder() {
@@ -650,8 +766,9 @@ export const api = Object.freeze({
     // pela Loja. Assim preço e link do PC 3D deixam de divergir do Produto.
     try {
       const produtos = await listarTodosProdutosPublicosParaBuilder();
+      const hardwaresComProdutos = await complementarHardwaresComProdutosPublicos(hardwaresComCoolers, produtos);
       return normalizarListaHardwaresParaBuilder(
-        cruzarHardwareComCatalogoComercial(hardwaresComCoolers, produtos),
+        cruzarHardwareComCatalogoComercial(hardwaresComProdutos, produtos),
       );
     } catch (erroProdutos) {
       console.warn("Não foi possível sincronizar preços da Loja no montador; usando relação do Hardware.", erroProdutos);
