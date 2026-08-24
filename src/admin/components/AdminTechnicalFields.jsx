@@ -190,6 +190,12 @@ function cleanToken(value) {
 
 export function productSchemaFor(category) {
   const token = cleanToken([category?.slug, category?.nome, category].filter(Boolean).join(' '))
+
+  // Categorias de suporte/braco para monitor nao podem herdar a ficha tecnica
+  // de MONITOR apenas por conterem a palavra "monitor" no slug/nome.
+  const isMonitorSupport = (token.includes('suporte') || token.includes('braco')) && token.includes('monitor')
+  if (isMonitorSupport) return null
+
   if (token.includes('monitor')) return PRODUCT_SCHEMAS.monitor
   if (token.includes('mouse')) return PRODUCT_SCHEMAS.mouse
   if (token.includes('teclado')) return PRODUCT_SCHEMAS.teclado

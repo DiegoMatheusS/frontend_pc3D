@@ -401,6 +401,7 @@ export default function AdminNotebookForm() {
             <div className="admin-field"><label>Resolução — largura</label><input className="admin-input" type="number" min="1" step="1" value={specification.resolucaoLargura ?? ''} onChange={(event) => updateSpec('resolucaoLargura', event.target.value, 'number')} placeholder="1920" /></div>
             <div className="admin-field"><label>Resolução — altura</label><input className="admin-input" type="number" min="1" step="1" value={specification.resolucaoAltura ?? ''} onChange={(event) => updateSpec('resolucaoAltura', event.target.value, 'number')} placeholder="1080" /></div>
             <div className="admin-field full"><label>GPU</label><input className="admin-input" value={specification.gpuNome ?? ''} onChange={(event) => updateSpec('gpuNome', event.target.value)} placeholder="Intel Iris Xe / NVIDIA GeForce RTX 4050" /></div>
+            <div className="admin-field"><label>Peso (kg)</label><input className="admin-input" type="number" min="0.1" step="0.01" value={specification.pesoKg ?? ''} onChange={(event) => updateSpec('pesoKg', event.target.value, 'number')} placeholder="1.65" /></div>
           </div>
           <details className="admin-mounted-advanced">
             <summary>Avançado: editar especificação completa em JSON</summary>
