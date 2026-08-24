@@ -89,7 +89,7 @@ export default function AdminProducts() {
   }, [])
 
 
-  const categories = useMemo(() => [...new Set((items || []).map(categoryName).filter((v) => v !== '—'))].sort(), [items])
+  const categories = useMemo(() => [...new Set(['Cooler', ...(items || []).map(categoryName).filter((v) => v !== '—')])].sort((a, b) => a.localeCompare(b, 'pt-BR')), [items])
   const filtered = useMemo(() => (items || []).filter((item) => {
     const text = [item.nome, item.marca, item.fabricante, item.modelo, item.mpn, item.gtin].join(' ').toLocaleLowerCase('pt-BR')
     const term = search.trim().toLocaleLowerCase('pt-BR')

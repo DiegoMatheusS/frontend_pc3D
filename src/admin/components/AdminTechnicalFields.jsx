@@ -137,7 +137,9 @@ const HARDWARE_SCHEMAS = {
       ['alturaLivreRamMm', 'Folga RAM (mm)', 'number'], ['tamanhoRadiadorMm', 'Radiador (mm)', 'number'], ['espessuraRadiadorMm', 'Espessura radiador (mm)', 'number'],
       ['quantidadeVentoinhas', 'Quantidade de fans', 'number'], ['tamanhoVentoinhaMm', 'Fan (mm)', 'number'], ['espessuraVentoinhaMm', 'Espessura fan (mm)', 'number'],
       ['comprimentoMangueirasMm', 'Mangueiras (mm)', 'number'], ['conectorBomba', 'Conector da bomba', 'text'], ['consumoBombaWatts', 'Consumo bomba (W)', 'number'], ['consumoWatts', 'Consumo (W)', 'number'],
-      ['rgb', 'RGB', 'boolean'], ['argb', 'ARGB', 'boolean'],
+      ['ruidoDb', 'Nível de ruído (dB)', 'number', false, 'Ex.: 25,8'], ['vidaUtilHoras', 'Vida útil (horas)', 'number', false, 'Ex.: 40000'],
+      ['pesoGramas', 'Peso (g)', 'number', false, 'Ex.: 980'], ['velocidadeMaxRpm', 'Velocidade máxima (RPM)', 'number', false, 'Ex.: 2100'],
+      ['rgb', 'Com iluminação RGB', 'boolean'], ['argb', 'ARGB', 'boolean'],
     ],
   },
   VENTOINHA: {

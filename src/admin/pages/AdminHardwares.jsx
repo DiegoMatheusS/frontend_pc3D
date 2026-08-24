@@ -6,6 +6,7 @@ import { useAdminToast } from '../components/AdminToast'
 import { useAdminPermissions } from '../components/AdminAccess'
 
 const PAGE_SIZE = 10
+const ALL_HARDWARE_CATEGORIES = ['PROCESSADOR','COOLER','PLACA_MAE','MEMORIA_RAM','PLACA_VIDEO','ARMAZENAMENTO','FONTE','GABINETE','VENTOINHA','MONITOR','MOUSE','TECLADO','FONE','MICROFONE']
 
 export default function AdminHardwares() {
   const toast = useAdminToast()
@@ -25,7 +26,7 @@ export default function AdminHardwares() {
     return () => { active = false }
   }, [])
 
-  const categories = useMemo(() => [...new Set((items || []).map((item) => item.categoria).filter(Boolean))].sort(), [items])
+  const categories = useMemo(() => [...new Set([...ALL_HARDWARE_CATEGORIES, ...(items || []).map((item) => item.categoria).filter(Boolean)])], [items])
   const filtered = useMemo(() => (items || []).filter((item) => {
     const text = [item.nome, item.marca, item.modelo, item.mpn, item.gtin, item.categoria].join(' ').toLocaleLowerCase('pt-BR')
     const term = search.trim().toLocaleLowerCase('pt-BR')

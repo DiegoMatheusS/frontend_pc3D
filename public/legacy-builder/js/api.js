@@ -30,6 +30,10 @@ function resolverUrlModelo3D(valor) {
 const CATEGORIA_HARDWARE_PARA_BUILDER = Object.freeze({
   PROCESSADOR: "processador",
   COOLER: "cooler",
+  COOLER_CPU: "cooler",
+  AIR_COOLER: "cooler",
+  WATER_COOLER: "cooler",
+  REFRIGERACAO: "cooler",
   PLACA_MAE: "placa-mae",
   MEMORIA_RAM: "memoria",
   PLACA_VIDEO: "placa-video",

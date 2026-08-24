@@ -31,7 +31,8 @@ const specLabels = {
   baseClockGhz: 'Clock base', boostClockGhz: 'Clock turbo', cacheL3Mb: 'Cache L3', tdpWatts: 'TDP', integratedGraphics: 'Vídeo integrado', memory: 'Memória suportada', pcie: 'PCIe',
   vramGb: 'VRAM', memoryType: 'Tipo de memória', memoryBusBits: 'Barramento', boostClockMhz: 'Clock boost', tgpWatts: 'TGP', recommendedPsuWatts: 'Fonte recomendada', lengthMm: 'Comprimento', slots: 'Slots',
   chipset: 'Chipset', formFactor: 'Formato', ramSlots: 'Slots RAM', maxRamGb: 'RAM máxima', m2Slots: 'Slots M.2', sataPorts: 'Portas SATA', wifi: 'Wi-Fi', bluetooth: 'Bluetooth',
-  capacityGb: 'Capacidade', modules: 'Módulos', frequencyMhz: 'Frequência', latency: 'Latência', voltage: 'Tensão', rgb: 'RGB', type: 'Tipo', interface: 'Interface', readMbps: 'Leitura', writeMbps: 'Gravação',
+  capacityGb: 'Capacidade', modules: 'Módulos', frequencyMhz: 'Frequência', latency: 'Latência', voltage: 'Tensão', rgb: 'Com iluminação RGB', type: 'Tipo', interface: 'Interface', readMbps: 'Leitura', writeMbps: 'Gravação',
+  coolingType: 'Tipo de refrigeração', sockets: 'Sockets suportados', thermalCapacityWatts: 'Capacidade térmica', radiatorMm: 'Radiador', fanCount: 'Quantidade de fans', noiseDb: 'Nível de ruído', lifeHours: 'Vida útil', maxRpm: 'Velocidade máxima', depthMm: 'Profundidade',
   powerWatts: 'Potência', certification: 'Certificação', modularity: 'Modularidade', pcie5: 'PCIe 5', fanMm: 'Ventoinha',
   sensor: 'Sensor', dpiMax: 'DPI máximo', pollingRateHz: 'Polling rate', buttons: 'Botões', weightGrams: 'Peso', connection: 'Conexão', layout: 'Layout', size: 'Tamanho', switch: 'Switch', hotSwap: 'Hot swap',
   driverMm: 'Driver', microphone: 'Microfone', surround: 'Surround', sizeInches: 'Tamanho', resolution: 'Resolução', refreshRateHz: 'Taxa de atualização', panel: 'Painel', responseTimeMs: 'Tempo de resposta', hdr: 'HDR', displayPort: 'DisplayPort', hdmi: 'HDMI', vesa: 'VESA',
@@ -41,9 +42,18 @@ const specLabels = {
 }
 
 const unitFor = (key) => ({
-  baseClockGhz: ' GHz', boostClockGhz: ' GHz', cacheL3Mb: ' MB', tdpWatts: ' W', vramGb: ' GB', memoryBusBits: ' bits', boostClockMhz: ' MHz', tgpWatts: ' W', recommendedPsuWatts: ' W', lengthMm: ' mm', maxRamGb: ' GB', capacityGb: ' GB', frequencyMhz: ' MHz', readMbps: ' MB/s', writeMbps: ' MB/s', powerWatts: ' W', fanMm: ' mm', pollingRateHz: ' Hz', weightGrams: ' g', driverMm: ' mm', sizeInches: '”', refreshRateHz: ' Hz', responseTimeMs: ' ms', ramGb: ' GB', storageGb: ' GB', screenInches: '”', weightKg: ' kg', maxWeightKg: ' kg', widthMm: ' mm', heightMm: ' mm', thicknessMm: ' mm',
+  baseClockGhz: ' GHz', boostClockGhz: ' GHz', cacheL3Mb: ' MB', tdpWatts: ' W', vramGb: ' GB', memoryBusBits: ' bits', boostClockMhz: ' MHz', tgpWatts: ' W', recommendedPsuWatts: ' W', lengthMm: ' mm', maxRamGb: ' GB', capacityGb: ' GB', frequencyMhz: ' MHz', readMbps: ' MB/s', writeMbps: ' MB/s', powerWatts: ' W', fanMm: ' mm', pollingRateHz: ' Hz', weightGrams: ' g', driverMm: ' mm', sizeInches: '”', refreshRateHz: ' Hz', responseTimeMs: ' ms', ramGb: ' GB', storageGb: ' GB', screenInches: '”', weightKg: ' kg', maxWeightKg: ' kg', widthMm: ' mm', heightMm: ' mm', depthMm: ' mm', thicknessMm: ' mm', thermalCapacityWatts: ' W', radiatorMm: ' mm', noiseDb: ' dB', lifeHours: ' horas', maxRpm: ' RPM',
 }[key] ?? '')
 
+
+function formatPublicSpecValue(key, value) {
+  if (value === null || value === undefined || value === '') return '—'
+  if (typeof value === 'number') {
+    const fractionDigits = key === 'noiseDb' ? 1 : Number.isInteger(value) ? 0 : 2
+    return value.toLocaleString('pt-BR', { maximumFractionDigits: fractionDigits })
+  }
+  return String(value)
+}
 
 function isInternalSpecKey(key) {
   const normalized = String(key || '').replace(/[^a-z0-9]/gi, '').toLowerCase()
@@ -122,7 +132,7 @@ export default function ProductDetails() {
       <section className="page-container product-detail-section">
         <div className="product-detail-section__heading"><span className="eyebrow">Ficha técnica</span><h2>Especificações</h2></div>
         <dl className="product-spec-grid">
-          {specs.map(([key, value]) => <div key={key}><dt>{specLabels[key] ?? key}</dt><dd>{String(value)}{unitFor(key)}</dd></div>)}
+          {specs.map(([key, value]) => <div key={key}><dt>{specLabels[key] ?? key}</dt><dd>{formatPublicSpecValue(key, value)}{unitFor(key)}</dd></div>)}
         </dl>
       </section>
 

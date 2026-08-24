@@ -10,7 +10,7 @@ import {
 } from "./renderer.js";
 
 import { verificarCompatibilidade } from "./compatibilidade.js?v=react-v54-cooler-optional-case";
-import { api } from "./api.js?v=react-v54-cooler-optional-case";
+import { api } from "./api.js?v=react-v55-cooler-fields-categories";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {

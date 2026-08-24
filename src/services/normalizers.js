@@ -180,6 +180,8 @@ function genericSpecs(item) {
     item.especificacaoPlacaVideo,
     item.especificacaoArmazenamento,
     item.especificacaoFonte,
+    item.especificacaoCooler,
+    item.especificacaoVentoinha,
     item.especificacaoMonitor,
     item.especificacaoMouse,
     item.especificacaoTeclado,
@@ -265,6 +267,25 @@ function normalizeSpecs(item, category) {
       modularity: specValue(raw, 'modularity', 'modularidade'),
       pcie5: yesNo(Boolean(specValue(raw, 'conector12vhpwr', 'conectores12vhpwr', 'conectores12v2x6'))),
       fanMm: specValue(raw, 'fanMm', 'tamanhoVentoinhaMm'),
+    }
+  } else if (category === 'COOLER') {
+    const tipoBruto = String(specValue(raw, 'tipo', 'type') || '').toUpperCase()
+    normalized = {
+      ...raw,
+      coolingType: tipoBruto === 'AIR_COOLER' ? 'Ar' : tipoBruto === 'WATER_COOLER' ? 'Líquido / Water Cooler' : specValue(raw, 'tipo', 'type'),
+      sockets: arrayText(specValue(raw, 'sockets', 'socketsSuportados')),
+      thermalCapacityWatts: specValue(raw, 'thermalCapacityWatts', 'capacidadeTermicaWatts'),
+      heightMm: specValue(raw, 'heightMm', 'alturaMm'),
+      widthMm: specValue(raw, 'widthMm', 'larguraMm'),
+      depthMm: specValue(raw, 'depthMm', 'profundidadeMm'),
+      radiatorMm: specValue(raw, 'radiatorMm', 'tamanhoRadiadorMm'),
+      fanCount: specValue(raw, 'fanCount', 'quantidadeVentoinhas'),
+      fanMm: specValue(raw, 'fanMm', 'tamanhoVentoinhaMm'),
+      noiseDb: specValue(raw, 'noiseDb', 'ruidoDb'),
+      lifeHours: specValue(raw, 'lifeHours', 'vidaUtilHoras'),
+      weightGrams: specValue(raw, 'weightGrams', 'pesoGramas'),
+      maxRpm: specValue(raw, 'maxRpm', 'velocidadeMaxRpm'),
+      rgb: yesNo(specValue(raw, 'rgb')),
     }
   } else if (category === 'MONITOR') {
     normalized = {

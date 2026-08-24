@@ -44,6 +44,11 @@ const comparisonByCategory = {
   fonte: [
     ['Potência', 'powerWatts', null, ' W'], ['Certificação', 'certification'], ['Modularidade', 'modularity'], ['PCIe 5', 'pcie5'], ['Ventoinha', 'fanMm', null, ' mm'],
   ],
+  cooler: [
+    ['Tipo de refrigeração', 'coolingType'], ['Sockets', 'sockets'], ['Capacidade térmica', 'thermalCapacityWatts', 'higher', ' W'],
+    ['Nível de ruído', 'noiseDb', 'lower', ' dB'], ['Vida útil', 'lifeHours', 'higher', ' horas'], ['Peso', 'weightGrams', 'lower', ' g'],
+    ['Velocidade máxima', 'maxRpm', 'higher', ' RPM'], ['RGB', 'rgb'], ['Altura', 'heightMm', 'lower', ' mm'], ['Radiador', 'radiatorMm', null, ' mm'],
+  ],
   mouse: [
     ['Sensor', 'sensor'], ['DPI máximo', 'dpiMax', 'higher'], ['Polling rate', 'pollingRateHz', 'higher', ' Hz'],
     ['Botões', 'buttons', 'higher'], ['Peso', 'weightGrams', 'lower', ' g'], ['Conexão', 'connection'], ['RGB', 'rgb'],
@@ -206,7 +211,11 @@ export default function Store({ defaultGroup = 'todos' }) {
 
 
   const visiblePool = useMemo(() => products.filter((product) => group === 'todos' || product.group === group), [products, group])
-  const categories = useMemo(() => [...new Set(visiblePool.map((product) => product.category))].sort(), [visiblePool])
+  const categories = useMemo(() => {
+    const values = new Set(visiblePool.map((product) => product.category).filter(Boolean))
+    if (defaultGroup === 'hardwares' || group === 'hardwares' || group === 'todos') values.add('Cooler')
+    return [...values].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [visiblePool, defaultGroup, group])
   const brands = useMemo(() => [...new Set(visiblePool.map((product) => product.brand))].sort(), [visiblePool])
 
   const filtered = useMemo(() => {
