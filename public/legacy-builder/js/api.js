@@ -133,20 +133,58 @@ function extrairHardwaresPublicos(payload) {
   return [];
 }
 
-async function listarTodosHardwaresPublicosParaBuilder() {
-  // Pede um limite alto e, quando o backend informa paginação, percorre todas
-  // as páginas. Isso evita o montador mostrar só os primeiros itens de uma
-  // categoria (por exemplo, apenas 1 Cooler).
-  const primeiraPagina = await requisitar("/api/hardwares?pagina=1&limite=100");
-  const hardwares = [...extrairHardwaresPublicos(primeiraPagina)];
-  const totalPaginas = Math.max(1, Number(primeiraPagina?.totalPaginas) || 1);
+function extrairPaginacaoHardwaresPublicos(payload) {
+  const meta = payload?.paginacao || payload?.pagination || payload?.meta || {};
+  const totalPaginas = Number(
+    payload?.totalPaginas
+      ?? meta?.totalPaginas
+      ?? meta?.pageCount
+      ?? meta?.pages
+      ?? 1,
+  );
+  const limite = Number(payload?.limite ?? meta?.limite ?? meta?.limit ?? 0);
 
-  for (let pagina = 2; pagina <= totalPaginas; pagina += 1) {
-    const resposta = await requisitar(`/api/hardwares?pagina=${pagina}&limite=100`);
-    hardwares.push(...extrairHardwaresPublicos(resposta));
+  return {
+    totalPaginas: Number.isFinite(totalPaginas) && totalPaginas > 1 ? Math.floor(totalPaginas) : 1,
+    limite: Number.isFinite(limite) && limite > 0 ? Math.floor(limite) : 0,
+  };
+}
+
+function mesclarHardwaresPublicos(...listas) {
+  const porId = new Map();
+  listas.flat().filter(Boolean).forEach((item) => {
+    const chave = String(item?.id ?? `${item?.categoria ?? ""}:${item?.nome ?? ""}:${item?.modelo ?? ""}`);
+    porId.set(chave, item);
+  });
+  return [...porId.values()];
+}
+
+async function listarTodosHardwaresPublicosParaBuilder() {
+  // A rota sem parâmetros já era a fonte estável do montador. Não força
+  // limite=100, pois algumas versões do backend rejeitam esse limite e isso
+  // fazia o catálogo inteiro ficar vazio.
+  const primeiraPagina = await requisitar("/api/hardwares");
+  let hardwares = [...extrairHardwaresPublicos(primeiraPagina)];
+  const paginacao = extrairPaginacaoHardwaresPublicos(primeiraPagina);
+
+  // Só percorre páginas adicionais quando o próprio backend informa paginação,
+  // reutilizando o limite aceito por ele em vez de inventar um limite alto.
+  for (let pagina = 2; pagina <= paginacao.totalPaginas; pagina += 1) {
+    const sufixoLimite = paginacao.limite ? `&limite=${paginacao.limite}` : "";
+    const resposta = await requisitar(`/api/hardwares?pagina=${pagina}${sufixoLimite}`);
+    hardwares = mesclarHardwaresPublicos(hardwares, extrairHardwaresPublicos(resposta));
   }
 
-  return [...new Map(hardwares.map((item) => [String(item?.id ?? `${item?.categoria ?? ""}:${item?.nome ?? ""}:${item?.modelo ?? ""}`), item])).values()];
+  // Reforça somente Cooler, que era a categoria que podia aparecer incompleta
+  // na listagem geral. Se a rota filtrada não existir, o catálogo geral segue.
+  try {
+    const respostaCoolers = await requisitar("/api/hardwares?categoria=COOLER");
+    hardwares = mesclarHardwaresPublicos(hardwares, extrairHardwaresPublicos(respostaCoolers));
+  } catch (erroCooler) {
+    console.warn("Não foi possível complementar a lista de Coolers; usando o catálogo geral.", erroCooler);
+  }
+
+  return hardwares;
 }
 
 async function listarTodosProdutosPublicosParaBuilder() {
