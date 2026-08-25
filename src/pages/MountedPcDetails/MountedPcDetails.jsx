@@ -163,6 +163,7 @@ export default function MountedPcDetails() {
             <span className="eyebrow">Onde comprar</span>
             <h2>Ofertas disponíveis</h2>
             <p>Preços e links podem mudar conforme as ofertas disponíveis nas lojas.</p>
+            <p className="mounted-detail__offers-note"><strong>Importante:</strong> as peças em promoção relacionadas abaixo são ofertas do CriaByte para compra separada e <strong>não estão vinculadas diretamente ao computador em promoção</strong>.</p>
           </header>
 
           {purchaseSummary && <div className="mounted-detail__purchase-summary">
@@ -177,7 +178,7 @@ export default function MountedPcDetails() {
               <article key={`${item.hardwareId}-${item.categoria}`}>
                 <div><strong>{item.nome}</strong><span>{item.quantidadeComercial > 1 ? `${item.quantidadeComercial} unidades` : item.categoria}</span></div>
                 <strong>{item.subtotal != null ? formatCurrency(item.subtotal) : 'Sem oferta'}</strong>
-                {isPromotion(item.melhorOferta) && item.melhorOferta?.urlCompra ? <a className="button button--secondary" href={item.melhorOferta.urlCompra} target="_blank" rel="sponsored noopener noreferrer">Comprar</a> : null}
+                {isPromotion(item.melhorOferta) && item.melhorOferta?.urlCompra ? <a className="button button--secondary" href={item.melhorOferta.urlCompra} target="_blank" rel="sponsored noopener noreferrer">Ver Promoção</a> : null}
               </article>
             ))}
           </div>}
