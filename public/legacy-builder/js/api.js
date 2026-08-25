@@ -191,7 +191,33 @@ function mesclarHardwaresPublicos(...listas) {
   const porId = new Map();
   listas.flat().filter(Boolean).forEach((item) => {
     const chave = String(item?.id ?? `${item?.categoria ?? ""}:${item?.nome ?? ""}:${item?.modelo ?? ""}`);
-    porId.set(chave, item);
+    const anterior = porId.get(chave);
+    if (!anterior) {
+      porId.set(chave, item);
+      return;
+    }
+
+    // Dados comerciais vindos de Produto/Oferta devem complementar o Hardware,
+    // nunca apagar nome, categoria, marca, modelo ou ficha técnica já existente.
+    const produtoAnterior = anterior?.produto && typeof anterior.produto === "object" ? anterior.produto : {};
+    const produtoNovo = item?.produto && typeof item.produto === "object" ? item.produto : {};
+    const combinado = {
+      ...anterior,
+      ...item,
+      id: item?.id ?? anterior?.id,
+      nome: item?.nome || anterior?.nome || produtoNovo?.nome || produtoAnterior?.nome || "",
+      categoria: item?.categoria || anterior?.categoria || "",
+      marca: item?.marca || anterior?.marca || produtoNovo?.marca || produtoAnterior?.marca || "",
+      modelo: item?.modelo || anterior?.modelo || produtoNovo?.modelo || produtoAnterior?.modelo || "",
+      descricao: item?.descricao || anterior?.descricao || produtoNovo?.descricao || produtoAnterior?.descricao || "",
+      imagemUrl: item?.imagemUrl || anterior?.imagemUrl || produtoNovo?.imagemUrl || produtoAnterior?.imagemUrl || "",
+      produto: {
+        ...produtoAnterior,
+        ...produtoNovo,
+        nome: produtoNovo?.nome || produtoAnterior?.nome || item?.nome || anterior?.nome || "",
+      },
+    };
+    porId.set(chave, combinado);
   });
   return [...porId.values()];
 }
@@ -502,7 +528,7 @@ function normalizarHardwareParaBuilder(hardware) {
     origem: "CATALOGO",
     categoria,
     categoriaHardware: hardware.categoria,
-    nome: hardware.nome,
+    nome: hardware.nome || hardware?.produto?.nome || [hardware.marca, hardware.modelo].filter(Boolean).join(" ") || `Hardware #${hardware.id}`,
     marca: hardware.marca || "",
     modelo: hardware.modelo || "",
     descricao: hardware.descricao || hardware?.produto?.descricao || "",
