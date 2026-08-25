@@ -432,7 +432,7 @@ export default function AdminMountedForm() {
   if (error && editing && !form.nome) return <AdminError error={error} />
 
   return <>
-    <AdminPageHeader title={editing ? 'Editar PC montado' : 'Novo PC montado'} description="Cadastre os dados, escolha os componentes reais do catálogo e, se quiser, já crie a oferta do PC no mesmo fluxo.">
+    <AdminPageHeader title={editing ? 'Editar PC montado' : 'Novo PC montado'} description="Cadastre o PC completo usando apenas Hardwares do catálogo. Produtos/ofertas individuais são opcionais e servem apenas para compras por peça.">
       <AdminBack to="/admin/montados">Cancelar</AdminBack>
     </AdminPageHeader>
     <form className="admin-form-layout" onSubmit={submit}>
@@ -474,7 +474,7 @@ export default function AdminMountedForm() {
         </div></section>
 
         <section className="admin-form-section">
-          <div className="admin-section-heading"><div><h2>Componentes do PC</h2><p>O catálogo administrativo de Hardware é carregado aqui. Você pode navegar por categoria ou pesquisar por nome/modelo.</p></div><strong>{selectedComponents.length} item(ns)</strong></div>
+          <div className="admin-section-heading"><div><h2>Componentes do PC</h2><p>Use os Hardwares reais do catálogo. Não é necessário cadastrar cada peça em Produtos nem informar preço para montar o PC completo.</p></div><strong>{selectedComponents.length} item(ns)</strong></div>
           {hardwareLoadError && <p className="admin-inline-warning">{hardwareLoadError}</p>}
           <div className="admin-form-grid admin-mounted-hardware-toolbar">
             <div className="admin-field"><label>Categoria</label><select className="admin-select" value={hardwareCategory} onChange={(event) => setHardwareCategory(event.target.value)}><option value="TODOS">Todas</option>{hardwareCategories.map((category) => <option key={category} value={category}>{category.replaceAll('_', ' ')}</option>)}</select></div>
@@ -515,7 +515,7 @@ export default function AdminMountedForm() {
           onAdd={() => addOffer()}
           onRemove={removeOffer}
           title="Ofertas do PC Montado"
-          description="Cadastre ou edite várias ofertas do mesmo PC. Cada oferta pode ter parceiro, preço, vendedor e links próprios."
+          description="Opcional: cadastre o preço e o link do PC completo vendido pelo parceiro. As ofertas individuais das peças são tratadas separadamente."
         />
 
         <section className="admin-form-section"><h2>Configuração 3D</h2><textarea className="admin-textarea admin-code-area" value={form.configuracao3D} onChange={(e) => update('configuracao3D', e.target.value)} placeholder={'{\n  "camera": {},\n  "pecas": []\n}'} /></section>

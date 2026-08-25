@@ -55,6 +55,21 @@ export default function MountedPcDetails() {
     ['Ventoinhas', String(pc.fans)],
   ]
 
+  const componentItems = asArray(pc.components)
+  const purchaseByHardwareId = new Map(purchaseItems.map((item) => [String(item.hardwareId), item]))
+  const isPromotion = (offer) => {
+    if (!offer) return false
+    const current = Number(offer.precoAtual ?? offer.preco ?? offer.price)
+    const previous = Number(offer.precoAnterior ?? offer.previousPrice)
+    const discount = Number(offer.descontoPercentual ?? offer.desconto ?? offer.discountPercent)
+    return (Number.isFinite(discount) && discount > 0) || (Number.isFinite(previous) && previous > 0 && Number.isFinite(current) && current > 0 && previous > current)
+  }
+
+  const getComponentOffer = (component) => {
+    const purchaseItem = purchaseByHardwareId.get(String(component?.hardwareId ?? component?.hardware?.id))
+    return purchaseItem?.melhorOferta || purchaseItem?.oferta || null
+  }
+
   return (
     <div className="mounted-detail">
       <section className="mounted-detail__hero">
@@ -105,6 +120,24 @@ export default function MountedPcDetails() {
               <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
             ))}
           </dl>
+
+          {componentItems.length > 0 && <div className="mounted-detail__components-list">
+            <h3>Peças utilizadas</h3>
+            {componentItems.map((component, index) => {
+              const hardware = component?.hardware || {}
+              const offer = getComponentOffer(component)
+              const promotion = isPromotion(offer)
+              const name = component?.nome || hardware?.nome || component?.name || `Hardware #${component?.hardwareId ?? index + 1}`
+              const category = component?.categoria || hardware?.categoria || 'Hardware'
+              const quantity = Number(component?.quantidade || 1)
+              return (
+                <div className="mounted-detail__component-row" key={`${component?.hardwareId ?? 'component'}-${index}`}>
+                  <div><strong>{name}</strong><span>{category}{quantity > 1 ? ` · ${quantity} unidades` : ''}</span></div>
+                  {promotion && offer?.urlCompra && <a className="button button--secondary" href={offer.urlCompra} target="_blank" rel="sponsored noopener noreferrer">Comprar</a>}
+                </div>
+              )
+            })}
+          </div>}
         </section>
 
         <section className="mounted-detail__summary">
@@ -144,7 +177,7 @@ export default function MountedPcDetails() {
               <article key={`${item.hardwareId}-${item.categoria}`}>
                 <div><strong>{item.nome}</strong><span>{item.quantidadeComercial > 1 ? `${item.quantidadeComercial} unidades` : item.categoria}</span></div>
                 <strong>{item.subtotal != null ? formatCurrency(item.subtotal) : 'Sem oferta'}</strong>
-                {item.melhorOferta?.urlCompra ? <a className="button button--secondary" href={item.melhorOferta.urlCompra} target="_blank" rel="sponsored noopener noreferrer">Comprar</a> : <button className="button button--secondary" type="button" disabled>Link indisponível</button>}
+                {isPromotion(item.melhorOferta) && item.melhorOferta?.urlCompra ? <a className="button button--secondary" href={item.melhorOferta.urlCompra} target="_blank" rel="sponsored noopener noreferrer">Comprar</a> : null}
               </article>
             ))}
           </div>}
