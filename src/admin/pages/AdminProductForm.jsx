@@ -679,9 +679,25 @@ export default function AdminProductForm() {
 
   async function submit(event, draft = false) {
     event?.preventDefault()
-    if (!selectedHardwareId && !validGtin(form.gtin)) {
+    const formElement = event?.currentTarget
+    if (!draft && formElement && !formElement.checkValidity()) {
+      formElement.reportValidity()
+      return
+    }
+    if (!draft && !selectedHardwareId && !validGtin(form.gtin)) {
       setError(new Error('GTIN/EAN inválido. Confira a quantidade de dígitos e o dígito verificador.'))
       return
+    }
+
+    if (draft) {
+      if (!cleanText(form.nome)) {
+        setError(new Error('Informe o nome do Produto antes de salvar o rascunho.'))
+        return
+      }
+      if (!form.categoriaId) {
+        setError(new Error('Selecione a categoria do Produto antes de salvar o rascunho.'))
+        return
+      }
     }
 
     setSaving(true)
@@ -707,7 +723,9 @@ export default function AdminProductForm() {
       }
       if (schema) body[schema.key] = normalizeSpec(schema, technical)
 
-      const offerEntries = (draft || fromOfferSuggestion) ? [] : buildOffersPayload()
+      // Rascunhos podem ser criados sem Hardware vinculado. Se houver uma oferta preenchida,
+      // ela fica vinculada ao Produto rascunho e não será exibida como oferta pública até a publicação.
+      const offerEntries = fromOfferSuggestion ? [] : buildOffersPayload()
       const firstNewOfferIndex = offerEntries.findIndex((entry) => !entry.id)
       const ofertaInicial = firstNewOfferIndex >= 0 ? offerEntries[firstNewOfferIndex].payload : null
       let saved
@@ -792,7 +810,7 @@ export default function AdminProductForm() {
       <AdminBack to="/admin/produtos">Cancelar</AdminBack>
     </AdminPageHeader>
 
-    <form className="admin-form-layout" onSubmit={submit}>
+    <form className="admin-form-layout" noValidate onSubmit={submit}>
       <div className="admin-form-card">
         {!editing && role === 'ADMIN' && <section className="admin-form-section admin-import-section">
           <div className="admin-section-heading">
