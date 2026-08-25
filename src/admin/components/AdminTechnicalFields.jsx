@@ -45,7 +45,7 @@ const HARDWARE_SCHEMAS = {
         create: { codigo: '', interfacesSuportadas: [], chavesSuportadas: [], tamanhosSuportadosMm: [], geracaoPcieMaxima: '', pistasPcie: '', compartilhaCom: '', observacao: '', ativo: true },
         fields: [
           ['codigo', 'Código / identificação', 'text', true, 'Ex.: M2_1'],
-          ['interfacesSuportadas', 'Interfaces suportadas', 'csv', true, 'Ex.: NVME_PCIE, SATA'],
+          ['interfacesSuportadas', 'Interfaces suportadas', 'multiSelect', true, ['NVME_PCIE', 'SATA']],
           ['chavesSuportadas', 'Chaves suportadas', 'csv', true, 'Ex.: M, B_M'],
           ['tamanhosSuportadosMm', 'Tamanhos suportados (mm)', 'csvNumber', true, 'Ex.: 42, 60, 80, 110'],
           ['geracaoPcieMaxima', 'Geração PCIe máxima', 'number'],
@@ -220,6 +220,7 @@ function normalizeValue(type, raw) {
     return Number.isFinite(number) ? number : undefined
   }
   if (type === 'csvNumber') return [...new Set((Array.isArray(raw) ? raw : String(raw).split(',')).map((v) => Number(String(v).trim())).filter(Number.isFinite))]
+  if (type === 'multiSelect') return [...new Set((Array.isArray(raw) ? raw : []).map((v) => String(v).trim()).filter(Boolean))]
   if (type === 'csv') return [...new Set((Array.isArray(raw) ? raw : String(raw).split(',')).map((v) => String(v).trim()).filter(Boolean))]
   return String(raw).trim()
 }
@@ -263,6 +264,14 @@ function FieldControl({ field, value, onChange, idPrefix }) {
   if (type === 'select') {
     const options = Array.isArray(optionsOrPlaceholder) ? optionsOrPlaceholder : []
     return <div className="admin-field"><label htmlFor={id}>{label}{required ? ' *' : ''}</label><select id={id} className="admin-select" required={required} value={display} onChange={(e) => onChange(e.target.value)}><option value="">Selecione</option>{options.map((option) => <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>)}</select></div>
+  }
+  if (type === 'multiSelect') {
+    const options = Array.isArray(optionsOrPlaceholder) ? optionsOrPlaceholder : []
+    const selected = Array.isArray(value) ? value : []
+    return <div className="admin-field"><label>{label}{required ? ' *' : ''}</label><div className="admin-multi-select">{options.map((option) => {
+      const checked = selected.includes(option)
+      return <label className="admin-multi-select-option" key={option}><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked ? [...selected, option] : selected.filter((item) => item !== option))} /> <span>{option.replaceAll('_', ' ')}</span></label>
+    })}</div>{required && !selected.length && <small>Selecione pelo menos uma interface.</small>}</div>
   }
   if (type === 'textarea') {
     return <div className="admin-field full"><label htmlFor={id}>{label}{required ? ' *' : ''}</label><textarea id={id} className="admin-textarea admin-textarea--compact" required={required} value={display} onChange={(e) => onChange(e.target.value)} placeholder={typeof optionsOrPlaceholder === 'string' ? optionsOrPlaceholder : undefined} /></div>
