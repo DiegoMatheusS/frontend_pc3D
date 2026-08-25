@@ -426,3 +426,14 @@
     flex-direction: column;
   }
 }
+
+/* v30 — composição real do PC montado */
+.mounted-detail__components-note {
+  margin: .35rem 0 .8rem;
+  font-size: .88rem;
+  line-height: 1.45;
+  color: var(--text-muted, #64748b);
+}
+.mounted-detail__components-note strong {
+  color: var(--text, #0f172a);
+}

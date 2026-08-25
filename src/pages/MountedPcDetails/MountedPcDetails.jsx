@@ -122,7 +122,8 @@ export default function MountedPcDetails() {
           </dl>
 
           {componentItems.length > 0 && <div className="mounted-detail__components-list">
-            <h3>Peças utilizadas</h3>
+            <h3>Peças utilizadas neste PC</h3>
+            <p className="mounted-detail__components-note"><strong>Importante:</strong> as peças em promoção relacionadas são ofertas do CriaByte para compra separada e <strong>não estão vinculadas diretamente ao computador em promoção</strong>.</p>
             {componentItems.map((component, index) => {
               const hardware = component?.hardware || {}
               const offer = getComponentOffer(component)
@@ -133,7 +134,7 @@ export default function MountedPcDetails() {
               return (
                 <div className="mounted-detail__component-row" key={`${component?.hardwareId ?? 'component'}-${index}`}>
                   <div><strong>{name}</strong><span>{category}{quantity > 1 ? ` · ${quantity} unidades` : ''}</span></div>
-                  {promotion && offer?.urlCompra && <a className="button button--secondary" href={offer.urlCompra} target="_blank" rel="sponsored noopener noreferrer">Comprar</a>}
+                  {promotion && offer?.urlCompra && <a className="button button--secondary" href={offer.urlCompra} target="_blank" rel="sponsored noopener noreferrer">Ver Promoção</a>}
                 </div>
               )
             })}
@@ -163,7 +164,6 @@ export default function MountedPcDetails() {
             <span className="eyebrow">Onde comprar</span>
             <h2>Ofertas disponíveis</h2>
             <p>Preços e links podem mudar conforme as ofertas disponíveis nas lojas.</p>
-            <p className="mounted-detail__offers-note"><strong>Importante:</strong> as peças em promoção relacionadas abaixo são ofertas do CriaByte para compra separada e <strong>não estão vinculadas diretamente ao computador em promoção</strong>.</p>
           </header>
 
           {purchaseSummary && <div className="mounted-detail__purchase-summary">

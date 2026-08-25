@@ -43,16 +43,104 @@ export async function getMountedPcs() {
   return hydrateMountedPcRatings(items)
 }
 
-export function getMountedPcById(id) {
-  return apiFirst({
+function mergeHardwareCatalog(items = []) {
+  const byId = new Map()
+  for (const item of items) {
+    const hardware = item?.hardware && typeof item.hardware === 'object' ? item.hardware : item
+    const id = hardware?.id ?? item?.hardwareId
+    if (id == null) continue
+    const key = String(id)
+    const previous = byId.get(key) || {}
+    byId.set(key, {
+      ...previous,
+      ...hardware,
+      id: hardware?.id ?? previous?.id ?? id,
+      nome: hardware?.nome || previous?.nome || item?.nome || '',
+      categoria: hardware?.categoria || previous?.categoria || item?.categoria || '',
+      marca: hardware?.marca || previous?.marca || item?.marca || '',
+      modelo: hardware?.modelo || previous?.modelo || item?.modelo || '',
+    })
+  }
+  return byId
+}
+
+async function hydrateMountedPcComponents(pc) {
+  const components = Array.isArray(pc?.components) ? pc.components : []
+  if (!components.length || dataMode === 'mock') return pc
+
+  try {
+    const firstPayload = await apiRequest('/api/hardwares')
+    let catalogItems = extractList(firstPayload, ['hardwares'])
+    const totalPages = Math.max(1, Number(firstPayload?.totalPaginas ?? firstPayload?.paginacao?.totalPaginas ?? 1) || 1)
+
+    if (totalPages > 1) {
+      for (let page = 2; page <= totalPages; page += 1) {
+        try {
+          const payload = await apiRequest(`/api/hardwares?pagina=${page}`)
+          catalogItems = catalogItems.concat(extractList(payload, ['hardwares']))
+        } catch {
+          break
+        }
+      }
+    }
+
+    let catalog = mergeHardwareCatalog(catalogItems)
+    const missingComponents = components.filter((component) => {
+      const id = component?.hardwareId ?? component?.hardware?.id
+      return id != null && !catalog.has(String(id))
+    })
+
+    const missingCategories = [...new Set(missingComponents
+      .map((component) => component?.categoria ?? component?.hardware?.categoria)
+      .filter(Boolean)
+      .map((value) => String(value).trim().toUpperCase()))]
+
+    if (missingCategories.length) {
+      const results = await Promise.allSettled(missingCategories.map((category) => (
+        apiRequest(`/api/hardwares?categoria=${encodeURIComponent(category)}`)
+      )))
+      const extras = results.flatMap((result) => result.status === 'fulfilled'
+        ? extractList(result.value, ['hardwares'])
+        : [])
+      catalog = mergeHardwareCatalog([...catalog.values(), ...extras])
+    }
+
+    return {
+      ...pc,
+      components: components.map((component) => {
+        const hardwareId = component?.hardwareId ?? component?.hardware?.id
+        const catalogHardware = hardwareId == null ? null : catalog.get(String(hardwareId))
+        const existingHardware = component?.hardware && typeof component.hardware === 'object' ? component.hardware : {}
+        const hardware = catalogHardware ? { ...catalogHardware, ...existingHardware,
+          nome: existingHardware?.nome || catalogHardware?.nome || component?.nome || '',
+          categoria: existingHardware?.categoria || catalogHardware?.categoria || component?.categoria || '',
+          marca: existingHardware?.marca || catalogHardware?.marca || '',
+          modelo: existingHardware?.modelo || catalogHardware?.modelo || '',
+        } : existingHardware
+        return {
+          ...component,
+          hardware,
+          nome: component?.nome || hardware?.nome || '',
+          categoria: component?.categoria || hardware?.categoria || '',
+        }
+      }),
+    }
+  } catch {
+    return pc
+  }
+}
+
+export async function getMountedPcById(id) {
+  const pc = await apiFirst({
     key: 'montado',
     path: `/api/builds/${encodeURIComponent(id)}`,
     fallback: () => {
       const item = structuredClone(mountedPcsMock.find((pc) => String(pc.id) === String(id)) ?? null)
       return item ? normalizeMountedPc(item) : null
     },
-    transform: (payload) => normalizeMountedPc(payload?.montado || payload?.pc || payload),
+    transform: (payload) => normalizeMountedPc(payload?.build || payload?.montado || payload?.pc || payload),
   })
+  return hydrateMountedPcComponents(pc)
 }
 
 export async function getFeaturedMountedPcs() {
