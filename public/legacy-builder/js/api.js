@@ -239,23 +239,9 @@ async function listarTodosHardwaresPublicosParaBuilder() {
         break;
       }
     }
-  } else if (hardwares.length > 0) {
-    // Algumas respostas retornam apenas os itens e omitem os metadados. Faz uma
-    // sondagem segura das páginas seguintes e para assim que vier vazio/repetido.
-    for (let pagina = 2; pagina <= 20; pagina += 1) {
-      try {
-        const resposta = await requisitar(`/api/hardwares?pagina=${pagina}`);
-        const itensPagina = extrairHardwaresPublicos(resposta);
-        if (!itensPagina.length) break;
-        const quantidadeAntes = hardwares.length;
-        hardwares = mesclarHardwaresPublicos(hardwares, itensPagina);
-        if (hardwares.length === quantidadeAntes) break;
-        if (paginacao.limite > 0 && itensPagina.length < paginacao.limite) break;
-      } catch {
-        break;
-      }
-    }
   }
+  // Não faz paginação especulativa quando a API não declara paginação.
+  // A API pública atual rejeita `?pagina=2` nesse formato com HTTP 400.
 
   // Aceita tanto o contrato novo (COOLER) quanto dados antigos/filtros que ainda
   // respondam por COOLERS. Falhas nesses filtros não derrubam o catálogo geral.
@@ -269,6 +255,35 @@ async function listarTodosHardwaresPublicosParaBuilder() {
   });
 
   return hardwares;
+}
+
+function obterProdutoPublicoInterno(produto) {
+  return produto?.produto && typeof produto.produto === "object" && !Array.isArray(produto.produto)
+    ? produto.produto
+    : produto;
+}
+
+function obterNomeProdutoPublico(produto) {
+  const interno = obterProdutoPublicoInterno(produto);
+  return produto?.nome
+    || produto?.name
+    || interno?.nome
+    || interno?.name
+    || [produto?.marca || interno?.marca, produto?.modelo || interno?.modelo].filter(Boolean).join(" ")
+    || "";
+}
+
+function obterHardwareIdProdutoPublico(produto) {
+  const interno = obterProdutoPublicoInterno(produto);
+  return produto?.hardware?.id
+    ?? interno?.hardware?.id
+    ?? produto?.hardwareId
+    ?? interno?.hardwareId
+    ?? produto?.hardwareId3D
+    ?? interno?.hardwareId3D
+    ?? produto?.produtoHardwareId
+    ?? interno?.produtoHardwareId
+    ?? null;
 }
 
 function extrairHardwareDoProdutoPublico(produto) {
@@ -292,7 +307,7 @@ async function complementarHardwaresComProdutosPublicos(hardwares, produtos) {
         produto: {
           ...(hardware?.produto && typeof hardware.produto === "object" ? hardware.produto : {}),
           id: produto?.id ?? produto?.produto?.id ?? hardware?.produto?.id,
-          nome: produto?.nome ?? produto?.produto?.nome ?? hardware?.produto?.nome,
+          nome: obterNomeProdutoPublico(produto) || hardware?.produto?.nome || hardware?.nome || "",
           descricao: produto?.descricao ?? produto?.produto?.descricao ?? hardware?.produto?.descricao ?? "",
           imagemUrl: produto?.imagemUrl ?? produto?.produto?.imagemUrl ?? hardware?.produto?.imagemUrl ?? "",
           imagemHoverUrl: produto?.imagemHoverUrl ?? produto?.produto?.imagemHoverUrl ?? hardware?.produto?.imagemHoverUrl ?? "",
@@ -304,27 +319,9 @@ async function complementarHardwaresComProdutosPublicos(hardwares, produtos) {
 
   let resultado = mesclarHardwaresPublicos(hardwares, embutidos);
 
-  // Se um Cooler aparece na Loja ligado a um Hardware que não veio na primeira
-  // listagem pública, consulta apenas esse detalhe. São poucas requisições e
-  // garantem ficha técnica completa sem transformar o Builder em N+1 geral.
-  const coolersFaltantes = embutidos.filter((hardware) => (
-    !idsOriginais.has(String(hardware.id))
-    && resolverCategoriaHardwareParaBuilder(hardware) === "cooler"
-  ));
-
-  if (coolersFaltantes.length) {
-    const detalhes = await Promise.allSettled(
-      coolersFaltantes.map((hardware) => requisitar(`/api/hardwares/${encodeURIComponent(hardware.id)}`)),
-    );
-    detalhes.forEach((resposta) => {
-      if (resposta.status !== "fulfilled") return;
-      const payload = resposta.value;
-      const detalhe = payload?.hardware || payload?.item || payload?.dado || payload?.data || payload;
-      if (detalhe && typeof detalhe === "object" && !Array.isArray(detalhe)) {
-        resultado = mesclarHardwaresPublicos(resultado, [detalhe]);
-      }
-    });
-  }
+  // Não consulta `/api/hardwares/:id` para completar dados: essa rota pública
+  // não existe na API atual. O Hardware da listagem e o Produto relacionado já
+  // são suficientes para nome, imagem, preço e ficha disponível no Builder.
 
   return resultado;
 }
@@ -355,11 +352,7 @@ function cruzarHardwareComCatalogoComercial(hardwaresResposta, produtos) {
   const produtoPorId = new Map();
 
   (Array.isArray(produtos) ? produtos : []).forEach((produto) => {
-    const hardwareId = produto?.hardware?.id
-      ?? produto?.hardwareId
-      ?? produto?.hardwareId3D
-      ?? produto?.hardware?.hardwareId
-      ?? produto?.produtoHardwareId;
+    const hardwareId = obterHardwareIdProdutoPublico(produto);
     if (hardwareId !== undefined && hardwareId !== null) {
       produtoPorHardware.set(String(hardwareId), produto);
     }
@@ -393,7 +386,7 @@ function cruzarHardwareComCatalogoComercial(hardwaresResposta, produtos) {
       produto: {
         ...(hardware?.produto && typeof hardware.produto === "object" ? hardware.produto : {}),
         id: produtoLoja.id ?? hardware?.produto?.id,
-        nome: produtoLoja.nome || hardware?.produto?.nome,
+        nome: obterNomeProdutoPublico(produtoLoja) || hardware?.produto?.nome || hardware?.nome || "",
         marca: produtoLoja.marca || hardware?.produto?.marca,
         modelo: produtoLoja.modelo || hardware?.produto?.modelo,
         descricao: produtoLoja.descricao || hardware?.produto?.descricao || '',
@@ -528,7 +521,13 @@ function normalizarHardwareParaBuilder(hardware) {
     origem: "CATALOGO",
     categoria,
     categoriaHardware: hardware.categoria,
-    nome: hardware.nome || hardware?.produto?.nome || [hardware.marca, hardware.modelo].filter(Boolean).join(" ") || `Hardware #${hardware.id}`,
+    nome: hardware.nome
+      || hardware.name
+      || hardware?.produto?.nome
+      || hardware?.produto?.name
+      || hardware?.produto?.produto?.nome
+      || [hardware.marca, hardware.modelo].filter(Boolean).join(" ")
+      || `Hardware #${hardware.id}`,
     marca: hardware.marca || "",
     modelo: hardware.modelo || "",
     descricao: hardware.descricao || hardware?.produto?.descricao || "",
@@ -738,26 +737,9 @@ async function obterModelo3DHardwarePublico(hardwareId) {
         // Continua pelo detalhe público do Hardware.
       }
 
-      try {
-        const payload = await requisitar(`/api/hardwares/${id}`);
-        const hardware = payload?.hardware || payload?.item || payload?.dado || payload?.data || payload;
-
-        const modelosDiretos = escolherModelo(hardware);
-        if (modelosDiretos) return modelosDiretos;
-
-        const hardwareNormalizado = normalizarHardwareParaBuilder(hardware);
-        if (hardwareNormalizado?.modelo3dUrl) {
-          return {
-            modelo3dUrl: hardwareNormalizado.modelo3dUrl,
-            modelo3D: hardwareNormalizado.modelo3dUrl,
-            transform3D: hardwareNormalizado.transform3D,
-            modelo: null,
-          };
-        }
-      } catch (erro) {
-        console.warn(`Não foi possível consultar o GLB público do Hardware #${id}.`, erro);
-      }
-
+      // A API pública atual não expõe `/api/hardwares/:id`. Se a rota dedicada
+      // de modelos não retornar um GLB, o Builder mantém o modelo já embutido
+      // na listagem do Hardware e não gera uma sequência de 404 no Console.
       return null;
     })());
   }

@@ -10,7 +10,7 @@ import {
 } from "./renderer.js";
 
 import { verificarCompatibilidade } from "./compatibilidade.js?v=react-v54-cooler-optional-case";
-import { api } from "./api.js?v=react-v59-builder-all-coolers";
+import { api } from "./api.js?v=react-v63-pc3d-nomes";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {
@@ -146,7 +146,7 @@ function serializarPecaParaReact(peca, categoria = "") {
     id: String(peca.id ?? ""),
     hardwareId,
     categoria,
-    nome: String(peca.nome ?? "Peça sem nome"),
+    nome: String(peca.nome || peca.modelo || peca.marca || (hardwareId ? `Hardware #${hardwareId}` : "Peça sem nome")),
     marca: String(peca.marca ?? ""),
     modelo: String(peca.modelo ?? ""),
     descricao: String(peca.descricao ?? ""),
@@ -2276,7 +2276,7 @@ function renderizarListaPecas(categoria) {
 
         <div class="info-peca-mini">
           <small class="categoria-peca-mini">${escaparHtml(nomeCategoria)}</small>
-          <h4>${escaparHtml(peca.nome ?? "Peça sem nome")}</h4>
+          <h4>${escaparHtml(peca.nome || peca.modelo || peca.marca || (peca.hardwareId ? `Hardware #${peca.hardwareId}` : "Peça sem nome"))}</h4>
           <span class="preco-peca-mini">${formatarPreco(peca.preco)}</span>
           ${criarHtmlCompatibilidadePeca(avaliacaoCompatibilidade)}
           ${selecionada ? criarHtmlLinkLoja(peca) : ""}
