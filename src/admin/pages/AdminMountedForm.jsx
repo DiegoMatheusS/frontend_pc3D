@@ -6,6 +6,7 @@ import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../compone
 import { useAdminToast } from '../components/AdminToast'
 import AdminMultiOfferEditor from '../components/AdminMultiOfferEditor'
 import { emptyOfferRow, normalizeOfferRow } from '../components/AdminMultiOfferEditor.utils'
+import { consumeAiImportPreview } from '../utils/aiImportTransfer'
 
 const EMPTY = {
   nome: '', marca: '', modelo: '', descricao: '', imagemUrl: '', imagemHoverUrl: '', categoria: '', finalidade: '', resolucaoRecomendada: '',
@@ -119,6 +120,8 @@ export default function AdminMountedForm() {
   const [importUrl, setImportUrl] = useState('')
   const [importing, setImporting] = useState(false)
   const [importPreview, setImportPreview] = useState(null)
+  const [transferredPreview] = useState(() => editing ? null : consumeAiImportPreview('PC_MONTADO'))
+  const [transferredApplied, setTransferredApplied] = useState(false)
   const [aiComponentNotice, setAiComponentNotice] = useState('')
   const [hardwares, setHardwares] = useState([])
   const [partners, setPartners] = useState([])
@@ -272,13 +275,21 @@ export default function AdminMountedForm() {
     }))
     setImageError(false)
 
-    const originalUrl = cleanText(importUrl || preview?.urlFinal || preview?.urlOrigem)
+    const suggestedOffer = preview?.ofertaSugerida || {}
+    const originalUrl = cleanText(suggestedOffer.urlOriginal || importUrl || preview?.urlFinal || preview?.urlOrigem)
     if (originalUrl && !offerRows.some((row) => !row._removed && cleanText(row.urlOriginal))) {
       const storeName = cleanText(preview?.coleta?.meta?.siteName || preview?.coleta?.meta?.['og:site_name'])
-      const matchedPartner = storeName
-        ? partners.find((partner) => normalizeSearch(partner.nome).includes(normalizeSearch(storeName)) || normalizeSearch(storeName).includes(normalizeSearch(partner.nome)))
-        : null
-      addOffer({ urlOriginal: originalUrl, parceiroId: matchedPartner?.id ? String(matchedPartner.id) : '' })
+      const matchedPartner = suggestedOffer.parceiroId
+        ? partners.find((partner) => Number(partner.id) === Number(suggestedOffer.parceiroId))
+        : storeName
+          ? partners.find((partner) => normalizeSearch(partner.nome).includes(normalizeSearch(storeName)) || normalizeSearch(storeName).includes(normalizeSearch(partner.nome)))
+          : null
+      addOffer({
+        urlOriginal: originalUrl,
+        parceiroId: suggestedOffer.parceiroId ? String(suggestedOffer.parceiroId) : (matchedPartner?.id ? String(matchedPartner.id) : ''),
+        preco: suggestedOffer.preco ?? '',
+        precoAnterior: suggestedOffer.precoAnterior ?? '',
+      })
     }
 
     if (components?.length) {
@@ -292,6 +303,15 @@ export default function AdminMountedForm() {
 
     if (notify) toast.show('Dados da IA do backend aplicados ao PC Montado. Revise tudo antes de salvar.')
   }
+
+  useEffect(() => {
+    if (editing || loading || transferredApplied || !transferredPreview) return
+    setImportPreview(transferredPreview)
+    setImportUrl(cleanText(transferredPreview?.urlOrigem || transferredPreview?.urlFinal))
+    applyImportPreview(transferredPreview, false)
+    setTransferredApplied(true)
+    toast.show('Prévia do Produto IA transferida para o cadastro de PC Montado. Revise antes de salvar.')
+  }, [editing, loading, transferredApplied, transferredPreview])
 
   async function importData() {
     const url = cleanText(importUrl)

@@ -597,3 +597,29 @@
   .mobile-nav-account__identity small { color: var(--color-text-soft); font-size: 11px; font-weight: 600; }
   .mobile-nav-account > button { cursor: pointer; }
 }
+
+
+/* Central compacta de notificações ao lado do perfil */
+.header-notifications { position: relative; }
+.header-notifications__trigger {
+  position: relative; width: 40px; min-height: 40px; display: grid; place-items: center;
+  border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text);
+  background: var(--color-surface); font: inherit; cursor: pointer;
+}
+.header-notifications__trigger b {
+  position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; display: grid; place-items: center;
+  padding: 0 4px; border: 2px solid var(--color-surface); border-radius: 999px; color: #fff; background: #dc2626; font-size: 9px;
+}
+.header-notifications__panel {
+  display: none; position: absolute; top: calc(100% + 8px); right: 0; width: min(360px, calc(100vw - 24px));
+  padding: 10px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: var(--shadow-md);
+}
+.header-notifications--open .header-notifications__panel { display: block; }
+.header-notifications__panel > header { display: grid; gap: 2px; padding: 6px 6px 10px; border-bottom: 1px solid var(--color-border); }
+.header-notifications__panel > header span { color: var(--color-text-soft); font-size: 11px; }
+.header-notifications__list { display: grid; max-height: 360px; overflow: auto; padding-top: 6px; }
+.header-notifications__list a { display: grid; gap: 3px; padding: 9px; border-radius: 9px; color: var(--color-text); text-decoration: none; }
+.header-notifications__list a:hover, .header-notifications__list a.is-unread { background: var(--color-primary-soft); }
+.header-notifications__list a strong { font-size: 12px; }
+.header-notifications__list a span { color: var(--color-text-soft); font-size: 11px; line-height: 1.4; }
+.header-notifications__empty { margin: 0; padding: 16px 8px 10px; color: var(--color-text-soft); font-size: 12px; }

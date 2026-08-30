@@ -296,3 +296,20 @@
     overflow-x: hidden;
   }
 }
+
+
+/* Comparação: textos longos, especialmente descrições, quebram dentro da célula. */
+.store-comparison__row > span,
+.store-comparison__row > strong {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.store-comparison__row { grid-template-columns: minmax(120px, 180px) repeat(2, minmax(0, 1fr)); }
+.store-comparison__table { width: 100%; min-width: 0; }
+@media (max-width: 700px) {
+  .store-comparison__row { grid-template-columns: minmax(92px, .72fr) repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .store-comparison__table { padding-inline: 12px; }
+}

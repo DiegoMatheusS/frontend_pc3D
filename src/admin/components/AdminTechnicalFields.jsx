@@ -199,7 +199,7 @@ export function productSchemaFor(category) {
   if (token.includes('monitor')) return PRODUCT_SCHEMAS.monitor
   if (token.includes('mouse')) return PRODUCT_SCHEMAS.mouse
   if (token.includes('teclado')) return PRODUCT_SCHEMAS.teclado
-  if (token.includes('headset') || token.includes('fone')) return PRODUCT_SCHEMAS.headset
+  if (token.includes('headset')) return PRODUCT_SCHEMAS.headset
   return null
 }
 

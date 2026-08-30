@@ -206,3 +206,14 @@
 @media (max-width: 420px) {
   .product-card__actions { grid-template-columns: 1fr; }
 }
+
+
+.product-card__social { display: flex; align-items: center; justify-content: flex-start; margin-top: 10px; }
+.product-card__like {
+  min-height: 34px; display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px;
+  border: 1px solid var(--color-border); border-radius: 999px; color: var(--color-text-soft); background: var(--color-surface);
+  font: inherit; font-size: 11px; font-weight: 800; cursor: pointer;
+}
+.product-card__like > span:first-child { font-size: 16px; }
+.product-card__like b { min-width: 16px; color: var(--color-text); font-size: 10px; }
+.product-card__like:hover, .product-card__like.is-liked { color: #dc2626; border-color: color-mix(in srgb, #dc2626 38%, var(--color-border)); background: color-mix(in srgb, #dc2626 8%, var(--color-surface)); }

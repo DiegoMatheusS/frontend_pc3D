@@ -15,6 +15,10 @@ const formatPrice = (value) => new Intl.NumberFormat('pt-BR', {
 const normalize = (value) => String(value ?? '')
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
+const productLikeCount = (product) => Number(
+  product?.likesCount ?? product?.curtidasCount ?? product?.curtidas ?? product?.likes ?? 0,
+) || 0
+
 const comparisonByCategory = {
   processador: [
     ['Socket', 'socket'], ['Geração', 'generation'], ['Arquitetura', 'architecture'],
@@ -119,6 +123,9 @@ export default function Store({ defaultGroup = 'todos' }) {
   const [maxPrice, setMaxPrice] = useState('todos')
   const [sortBy, setSortBy] = useState('relevancia')
   const [visibleCount, setVisibleCount] = useState(20)
+  const [likedProductIds, setLikedProductIds] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('criabyteLikedProducts') || '[]').map(String)) } catch { return new Set() }
+  })
   const [compare, setCompare] = useState([])
   const [comparisonItems, setComparisonItems] = useState([])
   const [comparisonOpen, setComparisonOpen] = useState(false)
@@ -257,6 +264,7 @@ export default function Store({ defaultGroup = 'todos' }) {
       if (sortBy === 'preco-maior') return b.price - a.price
       if (sortBy === 'avaliacao') return b.rating - a.rating || b.reviewsCount - a.reviewsCount
       if (sortBy === 'ofertas') return b.offers.length - a.offers.length
+      if (sortBy === 'likes') return productLikeCount(b) - productLikeCount(a)
       if (sortBy === 'nome') return a.name.localeCompare(b.name, 'pt-BR')
       return (b.rating * Math.log10(b.reviewsCount + 10)) - (a.rating * Math.log10(a.reviewsCount + 10))
     })
@@ -299,6 +307,17 @@ export default function Store({ defaultGroup = 'todos' }) {
 
     return () => { active = false }
   }, [visibleProducts])
+
+  const toggleLike = (product) => {
+    const id = String(product.id)
+    setLikedProductIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      localStorage.setItem('criabyteLikedProducts', JSON.stringify([...next]))
+      return next
+    })
+  }
 
   const changeGroup = (nextGroup) => {
     setVisibleCount(20)
@@ -487,6 +506,7 @@ export default function Store({ defaultGroup = 'todos' }) {
               <option value="relevancia">Relevância</option>
               <option value="avaliacao">Melhor avaliação</option>
               <option value="ofertas">Mais ofertas</option>
+              <option value="likes">Mais curtidos</option>
               <option value="preco-menor">Menor preço</option>
               <option value="preco-maior">Maior preço</option>
               <option value="nome">Nome A–Z</option>
@@ -499,7 +519,7 @@ export default function Store({ defaultGroup = 'todos' }) {
             <>
               <div className="store-results__grid">
                 {visibleProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} onCompare={toggleCompare} selected={compare.some((item) => String(item.id) === String(product.id))} />
+                  <ProductCard key={product.id} product={product} onCompare={toggleCompare} selected={compare.some((item) => String(item.id) === String(product.id))} onLike={toggleLike} liked={likedProductIds.has(String(product.id))} likeCount={productLikeCount(product) + (likedProductIds.has(String(product.id)) ? 1 : 0)} />
                 ))}
               </div>
               {remainingProducts > 0 && (

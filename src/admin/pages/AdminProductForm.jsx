@@ -6,6 +6,7 @@ import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../compone
 import { useAdminToast } from '../components/AdminToast'
 import { AdminTechnicalFields, normalizeSpec, productSchemaFor, readSpec } from '../components/AdminTechnicalFields'
 import { getSpecializedProductTarget } from '../utils/productRouting'
+import { storeAiImportPreview } from '../utils/aiImportTransfer'
 
 const EMPTY = {
   categoriaId: '', nome: '', marca: '', modelo: '', descricao: '', mpn: '', gtin: '',
@@ -29,7 +30,8 @@ const HARDWARE_CATEGORY_ALIASES = {
   MONITOR: ['monitores', 'monitor'],
   MOUSE: ['mouses', 'mouse'],
   TECLADO: ['teclados', 'teclado'],
-  FONE: ['fones', 'fone', 'headsets', 'headset'],
+  FONE: ['fones', 'fone', 'fone de ouvido', 'fones de ouvido'],
+  HEADSET: ['headsets', 'headset'],
   MICROFONE: ['microfones', 'microfone'],
 }
 
@@ -417,11 +419,30 @@ export default function AdminProductForm() {
     setOfferRows((current) => [...current, { ...EMPTY_OFFER }])
   }
 
-  const removeOffer = (index) => {
+  const removeOffer = async (index) => {
+    const row = offerRows[index]
+    if (!row) return
+
+    if (row.id) {
+      const confirmed = window.confirm(`Excluir a Oferta #${row.id}? Esta ação remove a oferta cadastrada.`)
+      if (!confirmed) return
+      try {
+        await adminService.offers.remove(row.id)
+        setAllOffers((current) => current.filter((item) => Number(item?.id) !== Number(row.id)))
+        setOfferRows((current) => {
+          const next = current.filter((_, rowIndex) => rowIndex !== index)
+          return next.length ? next : [{ ...EMPTY_OFFER }]
+        })
+        setDirty(false)
+        toast.show('Oferta excluída.')
+      } catch (err) {
+        toast.show(err?.message || 'Não foi possível excluir a Oferta.', 'erro')
+      }
+      return
+    }
+
     setDirty(true)
     setOfferRows((current) => {
-      const row = current[index]
-      if (row?.id) return current
       const next = current.filter((_, rowIndex) => rowIndex !== index)
       return next.length ? next : [{ ...EMPTY_OFFER }]
     })
@@ -532,13 +553,13 @@ export default function AdminProductForm() {
     try {
       const result = await adminService.ai.importLink(cleanText(importUrl))
       setImportPreview(result)
-      if (result?.iaDisponivel === false) {
-        toast.show(result?.avisoIa || 'Página coletada, mas a IA não conseguiu normalizar os dados.', 'alerta')
-      } else if (result?.destinoSugerido === 'PRODUTO') {
+      if (result?.destinoSugerido === 'PRODUTO') {
         applyImportPreview(result, false)
         toast.show('Dados encontrados pela IA foram preenchidos. Revise o Produto e as ofertas antes de salvar.')
-      } else {
+      } else if (result?.destinoSugerido === 'HARDWARE') {
         toast.show('A página parece ser um Hardware. Use a ação abaixo para continuar no cadastro correto.', 'alerta')
+      } else {
+        applyImportPreview(result, false)
       }
     } catch (err) {
       toast.show(err?.message || 'Não foi possível analisar o link com a IA.', 'erro')
@@ -548,37 +569,79 @@ export default function AdminProductForm() {
   }
 
   function applyImportPreview(preview = importPreview, notify = true) {
-    const source = preview?.normalizacao?.camposNormalizados || {}
+    const normalized = preview?.normalizacao?.camposNormalizados || {}
+    const payload = preview?.cadastroSugerido?.payload || preview?.acaoFrontend?.payloadInicial || {}
+    const source = { ...normalized, ...payload }
     if (!Object.keys(source).length) {
       toast.show('Não existem dados normalizados para aplicar. Faça o cadastro manualmente.', 'alerta')
       return
     }
     if (preview?.destinoSugerido === 'HARDWARE') {
-      try { sessionStorage.setItem('criabyteAdminIaImportPreview', JSON.stringify(preview)) } catch { /* opcional */ }
+      storeAiImportPreview(preview)
       navigate('/admin/hardwares/novo?origem=ia-importacao')
       return
     }
+    if (preview?.destinoSugerido === 'NOTEBOOK') {
+      storeAiImportPreview(preview)
+      navigate('/admin/notebooks/novo?origem=ia-importacao')
+      return
+    }
+    if (preview?.destinoSugerido === 'PC_MONTADO') {
+      storeAiImportPreview(preview)
+      navigate('/admin/montados/novo?origem=ia-importacao')
+      return
+    }
 
-    const category = findCategoryFromPreview(categories, source.categoria)
-    const nextCategoryId = category?.id || form.categoriaId
+    const category = source.categoriaId
+      ? categories.find((item) => Number(item.id) === Number(source.categoriaId))
+      : findCategoryFromPreview(categories, source.categoria || preview?.categoriaDetectada || preview?.categoriaSugerida)
+    const nextCategoryId = category?.id || source.categoriaId || form.categoriaId
     const importedSchema = productSchemaFor(category || selectedCategory)
     const image = source.imagemUrl || preview?.coleta?.meta?.imagem || preview?.coleta?.meta?.ogImage || ''
     setSelectedHardwareId('')
     setForm((current) => ({
       ...current,
       categoriaId: nextCategoryId,
-      nome: source.nome || current.nome,
-      marca: source.marca || current.marca,
-      modelo: source.modelo || current.modelo,
-      descricao: source.descricao || current.descricao,
-      mpn: source.mpn || current.mpn,
-      gtin: normalizeGtin(source.gtin || source.ean || current.gtin),
+      nome: source.nome ?? current.nome,
+      marca: source.marca ?? current.marca,
+      modelo: source.modelo ?? current.modelo,
+      descricao: source.descricao ?? current.descricao,
+      mpn: source.mpn ?? current.mpn,
+      gtin: normalizeGtin(source.gtin ?? source.ean ?? current.gtin),
       imagemUrl: image || current.imagemUrl,
-      imagemHoverUrl: source.imagemHoverUrl || current.imagemHoverUrl,
+      imagemHoverUrl: source.imagemHoverUrl ?? current.imagemHoverUrl,
+      metadados: source.metadados && typeof source.metadados === 'object'
+        ? JSON.stringify(source.metadados, null, 2)
+        : current.metadados,
     }))
-    if (importedSchema) setTechnical((current) => ({ ...current, ...technicalFromPreview(importedSchema, source) }))
+    if (importedSchema) {
+      const structured = source[importedSchema.key] && typeof source[importedSchema.key] === 'object'
+        ? source[importedSchema.key]
+        : source
+      setTechnical((current) => ({ ...current, ...technicalFromPreview(importedSchema, structured) }))
+    }
+
+    const offer = preview?.ofertaSugerida
+    if (offer && cleanText(offer.urlOriginal)) {
+      setIncludeOffer(true)
+      setOfferRows((current) => {
+        const nextOffer = {
+          ...EMPTY_OFFER,
+          parceiroId: offer.parceiroId ? String(offer.parceiroId) : '',
+          preco: offer.preco ?? '',
+          precoAnterior: offer.precoAnterior ?? '',
+          urlOriginal: cleanText(offer.urlOriginal),
+          urlAfiliada: '',
+        }
+        const firstEditable = current.findIndex((row) => !row.id && !cleanText(row.urlOriginal) && !cleanText(row.preco))
+        if (firstEditable >= 0) return current.map((row, index) => index === firstEditable ? { ...row, ...nextOffer } : row)
+        const alreadyThere = current.some((row) => cleanText(row.urlOriginal) === nextOffer.urlOriginal)
+        return alreadyThere ? current : [...current, nextOffer]
+      })
+    }
+
     setDirty(true)
-    if (notify) toast.show('Prévia da IA aplicada. Revise os dados antes de salvar.')
+    if (notify) toast.show('Prévia do Produto IA aplicada. Revise os dados e a oferta antes de salvar.')
   }
 
   async function analyzeWithAi() {
@@ -622,7 +685,6 @@ export default function AdminProductForm() {
       if (!parceiroId) throw new Error(`Selecione o parceiro da Oferta ${numero}.`)
       if (!Number.isFinite(preco) || preco <= 0) throw new Error(`Informe um preço válido para a Oferta ${numero}.`)
       if (!urlOriginal) throw new Error(`Informe a URL original da Oferta ${numero}.`)
-      if (!urlAfiliada) throw new Error(`Informe a URL afiliada da Oferta ${numero}.`)
 
       const precoAnterior = row.precoAnterior === '' ? undefined : Number(row.precoAnterior)
       if (precoAnterior !== undefined && (!Number.isFinite(precoAnterior) || precoAnterior <= 0)) {
@@ -637,7 +699,7 @@ export default function AdminProductForm() {
           preco,
           ...(precoAnterior !== undefined ? { precoAnterior } : {}),
           urlOriginal,
-          urlAfiliada,
+          ...(urlAfiliada ? { urlAfiliada } : { urlAfiliada: null }),
         },
       }
     })
@@ -650,6 +712,7 @@ export default function AdminProductForm() {
 
       if (entry.id) {
         await adminService.offers.update(entry.id, {
+          parceiroId: entry.payload.parceiroId,
           preco: entry.payload.preco,
           precoAnterior: entry.payload.precoAnterior ?? null,
           urlOriginal: entry.payload.urlOriginal,
@@ -1024,21 +1087,20 @@ export default function AdminProductForm() {
                   <strong>Oferta {index + 1}</strong>
                   <small>{row.id ? 'Oferta já cadastrada' : 'Nova oferta'}</small>
                 </div>
-                {!row.id && offerRows.length > 1 && <button className="admin-action-button" type="button" onClick={() => removeOffer(index)}>Remover</button>}
+                {(row.id || offerRows.length > 1) && <button className={row.id ? 'admin-action-button admin-action-button--danger' : 'admin-action-button'} type="button" onClick={() => removeOffer(index)}>{row.id ? 'Excluir Oferta' : 'Remover'}</button>}
               </div>
               <div className="admin-form-grid">
                 <div className="admin-field">
                   <label>Parceiro</label>
-                  <select className="admin-select" required value={row.parceiroId} disabled={Boolean(row.id)} onChange={(event) => updateOffer(index, 'parceiroId', event.target.value)}>
+                  <select className="admin-select" required value={row.parceiroId} onChange={(event) => updateOffer(index, 'parceiroId', event.target.value)}>
                     <option value="">Selecione</option>
                     {partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.nome}</option>)}
                   </select>
-                  {row.id && <small className="admin-help">Para trocar o parceiro de uma oferta existente, edite-a diretamente em Ofertas.</small>}
                 </div>
                 <div className="admin-field"><label>Preço atual</label><input className="admin-input" type="number" min="0.01" step="0.01" required value={row.preco} onChange={(event) => updateOffer(index, 'preco', event.target.value)} placeholder="0,00" /></div>
                 <div className="admin-field"><label>Preço anterior</label><input className="admin-input" type="number" min="0.01" step="0.01" value={row.precoAnterior} onChange={(event) => updateOffer(index, 'precoAnterior', event.target.value)} placeholder="Opcional" /></div>
                 <div className="admin-field full"><label>URL original</label><input className="admin-input" type="url" required value={row.urlOriginal} onChange={(event) => updateOffer(index, 'urlOriginal', event.target.value)} placeholder="https://loja.com/produto" /></div>
-                <div className="admin-field full"><label>URL afiliada</label><input className="admin-input" type="url" required value={row.urlAfiliada} onChange={(event) => updateOffer(index, 'urlAfiliada', event.target.value)} placeholder="https://...link-afiliado..." /><small className="admin-help">Este é o link usado pela Busca de Ofertas e pelos botões de compra.</small></div>
+                <div className="admin-field full"><label>URL afiliada</label><input className="admin-input" type="url" value={row.urlAfiliada} onChange={(event) => updateOffer(index, 'urlAfiliada', event.target.value)} placeholder="https://...link-afiliado..." /><small className="admin-help">Opcional. Sem link afiliado, o CriaByte usa a URL original da oferta.</small></div>
               </div>
             </div>)}
           </div>}

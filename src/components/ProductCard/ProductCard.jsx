@@ -5,7 +5,7 @@ import './ProductCard.css'
 const productReference = (product) => product.slug || product.id
 const productHref = (product) => `/produto/${encodeURIComponent(productReference(product))}`
 
-export default function ProductCard({ product = {}, onCompare, selected = false }) {
+export default function ProductCard({ product = {}, onCompare, selected = false, onLike, liked = false, likeCount = 0 }) {
   const navigate = useNavigate()
   const category = asText(product.category, 'Produto')
   const name = asText(product.name, 'Produto')
@@ -92,6 +92,14 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
         <div className="product-card__commerce">
           <div><span>{price > 0 ? 'A partir de' : 'Preço'}</span><strong>{price > 0 ? formatCurrency(price) : 'Sem oferta ativa'}</strong></div>
           <span>{offers.length} oferta{offers.length === 1 ? '' : 's'}</span>
+        </div>
+
+        <div className="product-card__social">
+          <button className={`product-card__like ${liked ? 'is-liked' : ''}`} type="button" aria-pressed={liked} onClick={() => onLike?.(product)}>
+            <span aria-hidden="true">♥</span>
+            <span>{liked ? 'Curtido' : 'Like'}</span>
+            <b>{Number(likeCount) || 0}</b>
+          </button>
         </div>
 
         <div className="product-card__actions">

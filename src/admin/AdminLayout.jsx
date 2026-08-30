@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { key: 'modelos', to: '/admin/modelos-3d', icon: '◈', label: 'Modelos 3D', group: '3D e compatibilidade', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'compatibilidade', to: '/admin/compatibilidade', icon: '✓', label: 'Compatibilidade', group: '3D e compatibilidade', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'encaixes', to: '/admin/encaixes', icon: '3D', label: 'Encaixes 3D', group: '3D e compatibilidade', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
+  { key: 'avaliacoes', to: '/admin/avaliacoes', icon: '★', label: 'Avaliações', group: 'Gestão', roles: ['ADMIN'] },
   { key: 'usuarios', to: '/admin/usuarios', icon: '◎', label: 'Usuários', group: 'Gestão', roles: ['ADMIN'] },
   { key: 'auditoria', to: '/admin/auditoria', icon: 'LOG', label: 'Auditoria', group: 'Gestão', roles: ['ADMIN'] },
 ]
@@ -38,6 +39,7 @@ const ROUTE_META = [
   [/^\/admin\/encaixes/, ['Encaixes 3D', 'Pontos físicos e ajustes específicos do montador']],
   [/^\/admin\/notebooks/, ['Notebooks', 'Catálogo técnico dedicado']],
   [/^\/admin\/montados/, ['PCs Montados', 'Builds comerciais publicadas no site']],
+  [/^\/admin\/avaliacoes/, ['Avaliações', 'Moderação de notas e comentários']],
   [/^\/admin\/usuarios/, ['Usuários', 'Papéis, status e acesso']],
   [/^\/admin\/auditoria/, ['Auditoria', 'Registro de alterações administrativas']],
   [/^\/admin/, ['Dashboard', 'Resumo do catálogo e das ofertas']],

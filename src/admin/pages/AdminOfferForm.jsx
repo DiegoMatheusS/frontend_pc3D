@@ -85,7 +85,7 @@ export default function AdminOfferForm() {
     setError(null)
     try {
       const body = {
-        ...(!editing ? { parceiroId: Number(form.parceiroId) } : {}),
+        parceiroId: Number(form.parceiroId),
         vendedorNome: String(form.vendedorNome ?? '').trim() || (editing ? null : undefined),
         vendedorIdentificador: String(form.vendedorIdentificador ?? '').trim() || (editing ? null : undefined),
         urlOriginal: String(form.urlOriginal ?? '').trim(),
@@ -116,6 +116,24 @@ export default function AdminOfferForm() {
 
   const currentTarget = targets.find((target) => Number(target.id) === Number(form.targetId))
   const currentPartner = data?.partners.find((partner) => Number(partner.id) === Number(form.parceiroId))
+
+
+  async function deleteOffer() {
+    if (!editing || saving) return
+    const confirmed = window.confirm('Excluir esta oferta? Esta ação não pode ser desfeita.')
+    if (!confirmed) return
+    setSaving(true)
+    setError(null)
+    try {
+      await adminService.offers.remove(id)
+      toast.show('Oferta excluída.', 'sucesso')
+      navigate('/admin/ofertas', { replace: true })
+    } catch (err) {
+      setError(err)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   async function reactivateNow() {
     if (!editing) return
@@ -151,7 +169,7 @@ export default function AdminOfferForm() {
           <div className="admin-form-grid">
             <div className="admin-field"><label>Tipo</label><select className="admin-select" value={form.targetType} disabled={editing || Boolean(suggestionId)} onChange={(event) => { update('targetType', event.target.value); update('targetId', '') }}><option value="produto">Produto</option><option value="hardware">Hardware</option></select></div>
             <div className="admin-field"><label>Item</label><select className="admin-select" value={form.targetId} disabled={editing} required onChange={(event) => update('targetId', event.target.value)}><option value="">Selecione</option>{targets.map((target) => <option key={target.id} value={target.id}>{target.nome}</option>)}</select></div>
-            <div className="admin-field"><label>Parceiro</label><select className="admin-select" required disabled={editing} value={form.parceiroId} onChange={(event) => update('parceiroId', event.target.value)}><option value="">Selecione</option>{data?.partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.nome}</option>)}</select></div>
+            <div className="admin-field"><label>Parceiro</label><select className="admin-select" required value={form.parceiroId} onChange={(event) => update('parceiroId', event.target.value)}><option value="">Selecione</option>{data?.partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.nome}</option>)}</select></div>
             <div className="admin-field"><label>Status</label><select className="admin-select" value={form.status} disabled={!editing} onChange={(event) => update('status', event.target.value)}><option>ATIVA</option><option>INDISPONIVEL</option><option>DESCONTINUADA</option></select></div>
           </div>
         </section>
@@ -178,9 +196,10 @@ export default function AdminOfferForm() {
 
         {error && <div className="admin-form-section"><p className="admin-form-error">{error.message}</p></div>}
         <footer className="admin-form-footer admin-form-footer--offer">
+          {editing && <button className="btn btn-perigo" type="button" disabled={saving} onClick={deleteOffer}>Excluir oferta</button>}
           {editing && form.status !== 'ATIVA' && <button className="btn btn-secundario" type="button" disabled={saving} onClick={reactivateNow}>Reativar agora</button>}
           <button className="btn btn-primario" type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar oferta'}</button>
-          {editing && <small className="admin-offer-status-help">Status atual: <strong>{form.status}</strong>. Para reativar, escolha ATIVA e salve ou use “Reativar agora”.</small>}
+          {editing && <small className="admin-offer-status-help">Status atual: <strong>{form.status}</strong>. A loja/parceiro pode ser alterada normalmente e a oferta também pode ser excluída.</small>}
         </footer>
       </div>
 

@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /conta
+Disallow: /minhas-builds
+Disallow: /enviar-oferta
+Disallow: /busca-ofertas
+
+Sitemap: https://criabyte.com.br/sitemap.xml

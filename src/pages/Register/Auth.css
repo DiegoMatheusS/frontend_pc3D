@@ -372,3 +372,49 @@
 
 .auth-field__error { color: var(--color-danger); }
 .auth-field__success { color: var(--color-success); }
+
+
+/* Login interativo — mascotes CriaByte */
+.auth-mascots {
+  position: relative;
+  width: min(360px, 90%);
+  height: 108px;
+  margin: 24px 0 18px;
+  overflow: hidden;
+}
+.auth-mascot {
+  --delay: 0s;
+  --duration: 6.8s;
+  position: absolute;
+  bottom: 10px;
+  width: 58px;
+  height: 66px;
+  border-radius: 48% 48% 36% 36%;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 12px 28px rgba(5,15,40,.18);
+  animation: auth-mascot-float var(--duration) ease-in-out var(--delay) infinite alternate;
+}
+.auth-mascot::after {
+  content: '';
+  position: absolute;
+  left: 7px; right: 7px; bottom: -8px;
+  height: 18px;
+  background: inherit;
+  clip-path: polygon(0 0, 18% 100%, 36% 18%, 54% 100%, 72% 18%, 100% 100%, 100% 0);
+}
+.auth-mascot--1 { left: 4%; --delay: -.8s; --duration: 6.4s; transform: scale(.88); }
+.auth-mascot--2 { left: 28%; --delay: -2.1s; --duration: 7.2s; }
+.auth-mascot--3 { left: 54%; --delay: -3.7s; --duration: 6.7s; transform: scale(.82); }
+.auth-mascot--4 { left: 76%; --delay: -1.3s; --duration: 7.6s; transform: scale(.72); }
+.auth-mascot__eyes { position: absolute; top: 24px; left: 16px; display: flex; gap: 10px; z-index: 2; }
+.auth-mascot__eyes i { width: 8px; height: 12px; border-radius: 50%; background: #172554; transform-origin: center; transition: height .18s ease, transform .18s ease; }
+.auth-mascots--password .auth-mascot { animation-play-state: paused; }
+.auth-mascots--password:not(.auth-mascots--visible) .auth-mascot__eyes i { height: 2px; transform: translateY(5px); border-radius: 999px; }
+.auth-mascots--visible .auth-mascot__eyes i { height: 12px; transform: none; }
+@keyframes auth-mascot-float {
+  0% { translate: -14px -2px; rotate: -2deg; }
+  50% { translate: 8px -10px; rotate: 2deg; }
+  100% { translate: 24px -3px; rotate: -1deg; }
+}
+@media (prefers-reduced-motion: reduce) { .auth-mascot { animation: none; } }
+@media (max-width: 720px) { .auth-mascots { height: 74px; margin: 14px 0 8px; } .auth-mascot { width: 44px; height: 50px; } .auth-mascot__eyes { top: 18px; left: 12px; gap: 7px; } .auth-mascot__eyes i { width: 6px; height: 9px; } }

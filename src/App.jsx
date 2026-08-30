@@ -43,6 +43,7 @@ const AdminPartners = lazy(() => import('./admin/pages/AdminPartners'))
 const AdminModels3D = lazy(() => import('./admin/pages/AdminModels3D'))
 const AdminCompatibility = lazy(() => import('./admin/pages/AdminCompatibility'))
 const AdminMountPoints = lazy(() => import('./admin/pages/AdminMountPoints'))
+const AdminReviews = lazy(() => import('./admin/pages/AdminReviews'))
 const AdminUsers = lazy(() => import('./admin/pages/AdminUsers'))
 const AdminNotebooks = lazy(() => import('./admin/pages/AdminNotebooks'))
 const AdminNotebookForm = lazy(() => import('./admin/pages/AdminNotebookForm'))
@@ -151,6 +152,7 @@ export default function App() {
         <Route path="notebooks/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminNotebookForm /></AdminAccess></Lazy>} />
         <Route path="montados" element={<Lazy><AdminMounted /></Lazy>} />
         <Route path="montados/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminMountedForm /></AdminAccess></Lazy>} />
+        <Route path="avaliacoes" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminReviews /></AdminAccess></Lazy>} />
         <Route path="usuarios" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminUsers /></AdminAccess></Lazy>} />
         <Route path="auditoria" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminAudit /></AdminAccess></Lazy>} />
       </Route>

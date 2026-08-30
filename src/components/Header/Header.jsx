@@ -42,10 +42,12 @@ export default function Header() {
   const [tema, setTema] = useState(obterTemaInicial)
   const [buscaAberta, setBuscaAberta] = useState(false)
   const [busca, setBusca] = useState('')
+  const [notificacoesAbertas, setNotificacoesAbertas] = useState(false)
   const accountRef = useRef(null)
   const storeRef = useRef(null)
   const searchRef = useRef(null)
   const searchInputRef = useRef(null)
+  const notificationsRef = useRef(null)
   const lojaAtiva = ['/loja', '/pecas', '/notebooks', '/ofertas', '/produto'].some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`))
   const lojaLabel = getStoreSectionLabel(location)
 
@@ -66,6 +68,10 @@ export default function Header() {
       }
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setBuscaAberta(false)
+      setNotificacoesAbertas(false)
+      }
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setNotificacoesAbertas(false)
       }
     }
 
@@ -90,6 +96,8 @@ export default function Header() {
     setLojaAberta(false)
     setContaAberta(false)
     setBuscaAberta(false)
+    setNotificacoesAbertas(false)
+    setNotificacoesAbertas(false)
   }
 
   function toggleStore() {
@@ -102,6 +110,7 @@ export default function Header() {
     setContaAberta((value) => !value)
     setLojaAberta(false)
     setBuscaAberta(false)
+    setNotificacoesAbertas(false)
   }
 
   function toggleSearch() {
@@ -130,6 +139,9 @@ export default function Header() {
     await logout()
     fecharMenus()
   }
+
+  const notifications = Array.isArray(user?.notificacoes) ? user.notificacoes : []
+  const unreadNotifications = notifications.filter((item) => item?.lida !== true).length
 
   return (
     <header className="site-header">
@@ -255,6 +267,34 @@ export default function Header() {
 
           {!loading && !user && (
             <Link className="login-button" to="/entrar" onClick={fecharMenus}>Entrar</Link>
+          )}
+
+          {!loading && user && (
+            <div className={`header-notifications ${notificacoesAbertas ? 'header-notifications--open' : ''}`} ref={notificationsRef}>
+              <button
+                className="header-notifications__trigger"
+                type="button"
+                aria-label={unreadNotifications ? `${unreadNotifications} notificações não lidas` : 'Notificações'}
+                aria-expanded={notificacoesAbertas}
+                onClick={() => { setNotificacoesAbertas((value) => !value); setContaAberta(false); setLojaAberta(false); setBuscaAberta(false) }}
+              >
+                <span aria-hidden="true">🔔</span>
+                {unreadNotifications > 0 && <b>{unreadNotifications > 99 ? '99+' : unreadNotifications}</b>}
+              </button>
+              <div className="header-notifications__panel">
+                <header><strong>Notificações</strong><span>Comentários, respostas, likes e avaliações</span></header>
+                {notifications.length ? (
+                  <div className="header-notifications__list">
+                    {notifications.slice(0, 8).map((item, index) => (
+                      <Link key={item?.id || index} className={item?.lida === false ? 'is-unread' : ''} to={item?.url || item?.link || '/conta'} onClick={fecharMenus}>
+                        <strong>{item?.titulo || 'Nova atividade'}</strong>
+                        <span>{item?.mensagem || item?.texto || 'Há uma nova interação relacionada à sua conta.'}</span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : <p className="header-notifications__empty">Nenhuma notificação por enquanto.</p>}
+              </div>
+            </div>
           )}
 
           {!loading && user && (

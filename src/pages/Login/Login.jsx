@@ -18,6 +18,7 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(Boolean(localStorage.getItem('pcBuilderEmailLembrado')))
   const [showPassword, setShowPassword] = useState(false)
+  const [passwordFocused, setPasswordFocused] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const passwordChanged = searchParams.get('senhaAlterada') === '1'
@@ -68,6 +69,13 @@ export default function Login() {
               <li>Participação nas discussões da comunidade</li>
               <li>Integração gradual com o Montador 3D</li>
             </ul>
+            <div className={`auth-mascots ${passwordFocused ? 'auth-mascots--password' : ''} ${showPassword ? 'auth-mascots--visible' : ''}`} aria-hidden="true">
+              {[0, 1, 2, 3].map((item) => (
+                <span className={`auth-mascot auth-mascot--${item + 1}`} key={item}>
+                  <span className="auth-mascot__eyes"><i /><i /></span>
+                </span>
+              ))}
+            </div>
           </div>
           <p className="auth-intro__note">Sua sessão é protegida e permanece vinculada à sua conta.</p>
         </aside>
@@ -102,6 +110,8 @@ export default function Login() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
                   placeholder="Digite sua senha"
                   required
                 />
