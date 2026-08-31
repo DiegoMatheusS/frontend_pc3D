@@ -103,9 +103,15 @@ function hardwareInitialFromPreview(preview) {
   if (!preview) return EMPTY
   const source = preview?.normalizacao?.camposNormalizados || {}
   const categoria = normalizeHardwareCategory(source.categoria)
+  const schema = hardwareSchemaFor(categoria)
   const imagem = source.imagemUrl || preview?.coleta?.meta?.imagem || preview?.coleta?.meta?.ogImage || ''
-  const identityKeys = new Set(['categoria','nome','marca','modelo','descricao','mpn','gtin','ean','imagemUrl','preco','evidencias'])
-  const extras = Object.fromEntries(Object.entries(source).filter(([key, value]) => !identityKeys.has(key) && value !== null && value !== ''))
+  const technicalKeys = new Set([
+    ...(schema?.fields || []).map(([key]) => key),
+    ...(schema?.repeaters || []).map((item) => item.key),
+    ...(schema?.key ? [schema.key] : []),
+  ])
+  const identityKeys = new Set(['categoria','nome','marca','modelo','descricao','mpn','gtin','ean','imagemUrl','preco','evidencias', ...technicalKeys])
+  const extras = Object.fromEntries(Object.entries(source).filter(([key, value]) => !identityKeys.has(key) && value !== null && value !== '' && typeof value !== 'object'))
   return { ...EMPTY, categoria, nome: source.nome || '', marca: source.marca || '', modelo: source.modelo || '', descricao: source.descricao || '', mpn: source.mpn || '', gtin: normalizeGtin(source.gtin || source.ean || ''), imagemUrl: imagem || '', especificacoes: JSON.stringify({ ...(source.evidencias ? { evidencias: source.evidencias } : {}), ...extras }, null, 2) }
 }
 
@@ -199,8 +205,13 @@ export default function AdminHardwareForm() {
     const importedCategory = normalizeHardwareCategory(source.categoria, form.categoria)
     const importedSchema = hardwareSchemaFor(importedCategory)
     const imagem = source.imagemUrl || preview?.coleta?.meta?.imagem || preview?.coleta?.meta?.ogImage || ''
-    const identityKeys = new Set(['categoria','nome','marca','modelo','descricao','mpn','gtin','ean','imagemUrl','preco','evidencias'])
-    const extras = Object.fromEntries(Object.entries(source).filter(([key, value]) => !identityKeys.has(key) && value !== null && value !== ''))
+    const technicalKeys = new Set([
+      ...(importedSchema?.fields || []).map(([key]) => key),
+      ...(importedSchema?.repeaters || []).map((item) => item.key),
+      ...(importedSchema?.key ? [importedSchema.key] : []),
+    ])
+    const identityKeys = new Set(['categoria','nome','marca','modelo','descricao','mpn','gtin','ean','imagemUrl','preco','evidencias', ...technicalKeys])
+    const extras = Object.fromEntries(Object.entries(source).filter(([key, value]) => !identityKeys.has(key) && value !== null && value !== '' && typeof value !== 'object'))
     setForm((current) => ({
       ...current,
       categoria: importedCategory,

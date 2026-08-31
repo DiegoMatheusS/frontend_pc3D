@@ -28,6 +28,84 @@ function unwrapOne(data) {
   return data?.item || data?.dados || data?.produto || data?.hardware || data?.oferta || data?.parceiro || data?.usuario || data?.notebook || data?.build || data
 }
 
+
+function inferAiDestination(data = {}, payload = {}) {
+  const explicit = String(data?.destinoSugerido || data?.resultadoProdutoIa?.tipoCadastro || '').toUpperCase()
+  if (['HARDWARE', 'PRODUTO', 'NOTEBOOK', 'PC_MONTADO'].includes(explicit)) return explicit
+  if (explicit === 'BUILD' || explicit === 'PC_MONTADO_HARDWARE') return 'PC_MONTADO'
+
+  const route = String(data?.confirmacaoSugerida?.rota || '').toLowerCase()
+  if (route.includes('/hardwares')) return 'HARDWARE'
+  if (route.includes('/notebooks')) return 'NOTEBOOK'
+  if (route.includes('/builds') || route.includes('/montados')) return 'PC_MONTADO'
+  if (route.includes('/produtos')) return 'PRODUTO'
+
+  const hardwareSpecKeys = [
+    'especificacaoProcessador', 'especificacaoCooler', 'especificacaoPlacaMae', 'especificacaoMemoriaRam',
+    'especificacaoPlacaVideo', 'especificacaoArmazenamento', 'especificacaoFonte', 'especificacaoGabinete',
+    'especificacaoVentoinha',
+  ]
+  if (hardwareSpecKeys.some((key) => payload?.[key] && typeof payload[key] === 'object')) return 'HARDWARE'
+  return 'PRODUTO'
+}
+
+function normalizeAiImportResult(data) {
+  if (!data || typeof data !== 'object') return data
+
+  const payload = data?.cadastroSugerido?.payload
+    || data?.resultadoProdutoIa?.payloadParcialBackend
+    || data?.confirmacaoSugerida?.body
+    || data?.acaoFrontend?.payloadInicial
+    || data?.normalizacao?.camposNormalizados
+    || {}
+
+  const foundSpecs = data?.resultadoProdutoIa?.especificacoesEncontradas
+  const existingNormalized = data?.normalizacao?.camposNormalizados
+  const camposNormalizados = {
+    ...(foundSpecs && typeof foundSpecs === 'object' ? foundSpecs : {}),
+    ...(existingNormalized && typeof existingNormalized === 'object' ? existingNormalized : {}),
+    ...(payload && typeof payload === 'object' ? payload : {}),
+  }
+
+  const oferta = data?.ofertaSugerida
+    || data?.ofertaColetada
+    || data?.resultadoProdutoIa?.ofertaColetada
+    || null
+
+  const categoriaDetectada = data?.categoriaDetectada
+    || data?.categoriaSugerida
+    || data?.resultadoProdutoIa?.categoriaDetectada
+    || payload?.categoria
+    || null
+
+  const ausentes = data?.normalizacao?.ausentes
+    || data?.cadastroSugerido?.camposObrigatoriosAusentes
+    || data?.resultadoProdutoIa?.camposObrigatoriosAusentes
+    || []
+
+  const destinoSugerido = inferAiDestination(data, payload)
+
+  return {
+    ...data,
+    destinoSugerido,
+    categoriaDetectada,
+    categoriaSugerida: data?.categoriaSugerida || categoriaDetectada,
+    iaDisponivel: data?.iaDisponivel !== false && !data?.resultadoProdutoIa?.erro,
+    normalizacao: {
+      ...(data?.normalizacao || {}),
+      camposNormalizados,
+      ausentes: Array.isArray(ausentes) ? ausentes : [],
+      alertas: Array.isArray(data?.normalizacao?.alertas) ? data.normalizacao.alertas : [],
+      textoExplicativo: data?.normalizacao?.textoExplicativo
+        || 'Dados estruturados retornados pelo Produto IA. Revise os campos antes de salvar.',
+    },
+    ofertaSugerida: oferta ? {
+      ...oferta,
+      urlOriginal: oferta.urlOriginal || oferta.urlProduto || data?.urlOrigem || '',
+    } : null,
+  }
+}
+
 async function list(path) {
   return unwrapList(await apiRequest(path))
 }
@@ -237,7 +315,7 @@ export const adminService = {
 
   ai: {
     chat: (body) => oneRequest('/api/admin/ia/chat', 'POST', body),
-    importLink: (url, categoriaEsperada) => oneRequest('/api/admin/ia/importar-link', 'POST', { url, ...(categoriaEsperada ? { categoriaEsperada } : {}) }),
+    importLink: async (url, categoriaEsperada) => normalizeAiImportResult(await oneRequest('/api/admin/ia/importar-link', 'POST', { url, ...(categoriaEsperada ? { categoriaEsperada } : {}) })),
     analyzeProduct: (produtoId) => oneRequest('/api/admin/ia/analisar-produto', 'POST', { produtoId: Number(produtoId) }),
     generateProductDescription: (produtoId) => oneRequest('/api/admin/ia/gerar-descricao', 'POST', { produtoId: Number(produtoId) }),
     normalizeProduct: (conteudoBruto, urlOrigem) => oneRequest('/api/admin/ia/normalizar-produto', 'POST', { conteudoBruto, ...(urlOrigem ? { urlOrigem } : {}) }),

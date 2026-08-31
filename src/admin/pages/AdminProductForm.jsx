@@ -556,8 +556,9 @@ export default function AdminProductForm() {
       if (result?.destinoSugerido === 'PRODUTO') {
         applyImportPreview(result, false)
         toast.show('Dados encontrados pela IA foram preenchidos. Revise o Produto e as ofertas antes de salvar.')
-      } else if (result?.destinoSugerido === 'HARDWARE') {
-        toast.show('A página parece ser um Hardware. Use a ação abaixo para continuar no cadastro correto.', 'alerta')
+      } else if (['HARDWARE', 'NOTEBOOK', 'PC_MONTADO'].includes(result?.destinoSugerido)) {
+        applyImportPreview(result, false)
+        toast.show(`A IA identificou ${result.destinoSugerido === 'HARDWARE' ? 'um Hardware' : result.destinoSugerido === 'NOTEBOOK' ? 'um Notebook' : 'um PC Montado'}. Abrindo o cadastro correto com os campos preenchidos.`)
       } else {
         applyImportPreview(result, false)
       }
