@@ -65,17 +65,36 @@ function nestedHardwareSpecs(payload = {}) {
   }, {})
 }
 
+function inferGpuChipsetFromText(...values) {
+  const text = values.map((value) => String(value ?? '').trim()).filter(Boolean).join(' ')
+  if (!text) return undefined
+
+  const patterns = [
+    /\b(?:AMD\s+Radeon\s+|Radeon\s+)?(RX\s+\d{3,4}(?:\s+(?:XTX|XT|GRE))?)\b/i,
+    /\b(?:NVIDIA\s+GeForce\s+|GeForce\s+)?(RTX\s+\d{3,4}(?:\s+(?:Ti\s+SUPER|SUPER|Ti))?)\b/i,
+    /\b(?:NVIDIA\s+GeForce\s+|GeForce\s+)?(GTX\s+\d{3,4}(?:\s+(?:SUPER|Ti))?)\b/i,
+    /\b(?:Intel\s+)?(Arc\s+[AB]\d{3,4})\b/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    if (match?.[1]) return match[1].replace(/\s+/g, ' ').trim().toUpperCase().replace('TI', 'Ti')
+  }
+  return undefined
+}
+
 function normalizeAiTechnicalAliases(fields = {}, categoria = '') {
   const next = { ...fields }
   const category = String(categoria || next.categoria || '').toUpperCase()
 
   if (category === 'PLACA_VIDEO') {
     const gpu = firstAiValue(
-      next.gpu, next.gpuNome, next.nomeGpu, next.processadorGrafico, next.graphicsProcessor, next.chipset,
+      next.gpu, next.gpuNome, next.nomeGpu, next.processadorGrafico, next.graphicsProcessor,
     )
-    const chipset = firstAiValue(
-      next.chipset, next.tipoChipset, next.gpuChipset, next.chipsetGpu, gpu,
+    const chipsetExplicit = firstAiValue(
+      next.chipset, next.tipoChipset, next.gpuChipset, next.chipsetGpu,
     )
+    const chipset = chipsetExplicit ?? inferGpuChipsetFromText(next.modelo, next.nome, gpu)
     const consumo = firstAiValue(
       next.consumoWatts, next.tgpWatts, next.tgp, next.tbpWatts, next.tbp,
       next.boardPowerWatts, next.boardPower, next.totalBoardPowerWatts,
@@ -88,6 +107,53 @@ function normalizeAiTechnicalAliases(fields = {}, categoria = '') {
   }
 
   return next
+}
+
+function compactAiDescription(fields = {}, categoria = '') {
+  const category = String(categoria || fields?.categoria || '').toUpperCase()
+  const raw = String(fields?.descricao ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b(?:compre\s+j[aá]|comprar\s+agora|aproveite\s+agora|garanta\s+j[aá])\b[^.!?]*[.!?]?/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (category === 'PLACA_VIDEO') {
+    const marca = String(fields?.marca ?? '').trim()
+    const modelo = String(fields?.modelo ?? '').trim()
+    const chipset = String(fields?.chipset ?? '').trim()
+    const memoria = Number(fields?.memoriaVideoGb)
+    const tipoMemoria = String(fields?.tipoMemoriaVideo ?? '').trim()
+    const arquitetura = String(fields?.arquitetura ?? '').trim()
+    const barramento = Number(fields?.barramentoBits)
+    const pcie = Number(fields?.geracaoPcie)
+    const hdmi = Number(fields?.hdmi)
+    const displayPort = Number(fields?.displayPort)
+
+    const identidade = [marca, modelo].filter(Boolean).join(' ').trim() || chipset || 'selecionada'
+    const detalhes = []
+    if (Number.isFinite(memoria) && memoria > 0) detalhes.push(`${memoria} GB${tipoMemoria ? ` ${tipoMemoria}` : ''}`)
+    else if (tipoMemoria) detalhes.push(tipoMemoria)
+    if (arquitetura) detalhes.push(`arquitetura ${arquitetura}`)
+    if (Number.isFinite(barramento) && barramento > 0) detalhes.push(`barramento de ${barramento} bits`)
+    if (Number.isFinite(pcie) && pcie > 0) detalhes.push(`interface PCIe ${pcie}.0`)
+
+    const first = `Placa de vídeo ${identidade}${detalhes.length ? ` com ${detalhes.join(', ')}` : ''}.`
+    const conexoes = []
+    if (Number.isFinite(hdmi) && hdmi > 0) conexoes.push(`${hdmi}x HDMI`)
+    if (Number.isFinite(displayPort) && displayPort > 0) conexoes.push(`${displayPort}x DisplayPort`)
+    const secondParts = []
+    if (chipset && !modelo.toUpperCase().includes(chipset.toUpperCase())) secondParts.push(`chipset ${chipset}`)
+    if (conexoes.length) secondParts.push(`saídas ${conexoes.join(' e ')}`)
+    const second = secondParts.length ? `Conta com ${secondParts.join(' e ')}.` : ''
+    return `${first}${second ? ` ${second}` : ''}`.trim()
+  }
+
+  if (!raw) return ''
+  const sentences = raw.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [raw]
+  let short = sentences.slice(0, 3).join(' ').replace(/\s+/g, ' ').trim()
+  if (short.length > 520) short = `${short.slice(0, 517).replace(/[,;:\s]+$/g, '')}...`
+  return short
 }
 
 function normalizeAiImportResult(data) {
@@ -109,12 +175,20 @@ function normalizeAiImportResult(data) {
     || payload?.categoria
     || null
 
-  const camposNormalizados = normalizeAiTechnicalAliases({
+  const camposNormalizadosBase = normalizeAiTechnicalAliases({
     ...(foundSpecs && typeof foundSpecs === 'object' ? foundSpecs : {}),
     ...nestedHardwareSpecs(payload),
     ...(existingNormalized && typeof existingNormalized === 'object' ? existingNormalized : {}),
     ...(payload && typeof payload === 'object' ? payload : {}),
   }, categoriaDetectada)
+  const descricaoCompacta = compactAiDescription(camposNormalizadosBase, categoriaDetectada)
+  const camposNormalizados = {
+    ...camposNormalizadosBase,
+    ...(descricaoCompacta ? { descricao: descricaoCompacta } : {}),
+  }
+  const payloadNormalizado = payload && typeof payload === 'object'
+    ? { ...payload, ...camposNormalizados, ...(descricaoCompacta ? { descricao: descricaoCompacta } : {}) }
+    : payload
 
   const oferta = data?.ofertaSugerida
     || data?.ofertaColetada
@@ -130,6 +204,25 @@ function normalizeAiImportResult(data) {
 
   return {
     ...data,
+    ...(data?.cadastroSugerido && typeof data.cadastroSugerido === 'object' ? {
+      cadastroSugerido: { ...data.cadastroSugerido, payload: payloadNormalizado },
+    } : {}),
+    ...(data?.resultadoProdutoIa && typeof data.resultadoProdutoIa === 'object' ? {
+      resultadoProdutoIa: {
+        ...data.resultadoProdutoIa,
+        ...(data.resultadoProdutoIa.payloadParcialBackend && typeof data.resultadoProdutoIa.payloadParcialBackend === 'object'
+          ? { payloadParcialBackend: { ...data.resultadoProdutoIa.payloadParcialBackend, ...camposNormalizados } }
+          : {}),
+      },
+    } : {}),
+    ...(data?.confirmacaoSugerida && typeof data.confirmacaoSugerida === 'object' ? {
+      confirmacaoSugerida: {
+        ...data.confirmacaoSugerida,
+        ...(data.confirmacaoSugerida.body && typeof data.confirmacaoSugerida.body === 'object'
+          ? { body: { ...data.confirmacaoSugerida.body, ...camposNormalizados } }
+          : {}),
+      },
+    } : {}),
     destinoSugerido,
     categoriaDetectada,
     categoriaSugerida: data?.categoriaSugerida || categoriaDetectada,
