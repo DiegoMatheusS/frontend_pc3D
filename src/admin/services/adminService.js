@@ -49,6 +49,47 @@ function inferAiDestination(data = {}, payload = {}) {
   return 'PRODUTO'
 }
 
+function firstAiValue(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== '')
+}
+
+function nestedHardwareSpecs(payload = {}) {
+  const keys = [
+    'especificacaoProcessador', 'especificacaoCooler', 'especificacaoPlacaMae', 'especificacaoMemoriaRam',
+    'especificacaoPlacaVideo', 'especificacaoArmazenamento', 'especificacaoFonte', 'especificacaoGabinete',
+    'especificacaoVentoinha',
+  ]
+  return keys.reduce((result, key) => {
+    const value = payload?.[key]
+    return value && typeof value === 'object' && !Array.isArray(value) ? { ...result, ...value } : result
+  }, {})
+}
+
+function normalizeAiTechnicalAliases(fields = {}, categoria = '') {
+  const next = { ...fields }
+  const category = String(categoria || next.categoria || '').toUpperCase()
+
+  if (category === 'PLACA_VIDEO') {
+    const gpu = firstAiValue(
+      next.gpu, next.gpuNome, next.nomeGpu, next.processadorGrafico, next.graphicsProcessor, next.chipset,
+    )
+    const chipset = firstAiValue(
+      next.chipset, next.tipoChipset, next.gpuChipset, next.chipsetGpu, gpu,
+    )
+    const consumo = firstAiValue(
+      next.consumoWatts, next.tgpWatts, next.tgp, next.tbpWatts, next.tbp,
+      next.boardPowerWatts, next.boardPower, next.totalBoardPowerWatts,
+      next.totalBoardPower, next.powerConsumptionWatts,
+    )
+
+    if (gpu !== undefined) next.gpu = gpu
+    if (chipset !== undefined) next.chipset = chipset
+    if (consumo !== undefined) next.consumoWatts = consumo
+  }
+
+  return next
+}
+
 function normalizeAiImportResult(data) {
   if (!data || typeof data !== 'object') return data
 
@@ -61,21 +102,23 @@ function normalizeAiImportResult(data) {
 
   const foundSpecs = data?.resultadoProdutoIa?.especificacoesEncontradas
   const existingNormalized = data?.normalizacao?.camposNormalizados
-  const camposNormalizados = {
-    ...(foundSpecs && typeof foundSpecs === 'object' ? foundSpecs : {}),
-    ...(existingNormalized && typeof existingNormalized === 'object' ? existingNormalized : {}),
-    ...(payload && typeof payload === 'object' ? payload : {}),
-  }
-
-  const oferta = data?.ofertaSugerida
-    || data?.ofertaColetada
-    || data?.resultadoProdutoIa?.ofertaColetada
-    || null
 
   const categoriaDetectada = data?.categoriaDetectada
     || data?.categoriaSugerida
     || data?.resultadoProdutoIa?.categoriaDetectada
     || payload?.categoria
+    || null
+
+  const camposNormalizados = normalizeAiTechnicalAliases({
+    ...(foundSpecs && typeof foundSpecs === 'object' ? foundSpecs : {}),
+    ...nestedHardwareSpecs(payload),
+    ...(existingNormalized && typeof existingNormalized === 'object' ? existingNormalized : {}),
+    ...(payload && typeof payload === 'object' ? payload : {}),
+  }, categoriaDetectada)
+
+  const oferta = data?.ofertaSugerida
+    || data?.ofertaColetada
+    || data?.resultadoProdutoIa?.ofertaColetada
     || null
 
   const ausentes = data?.normalizacao?.ausentes
