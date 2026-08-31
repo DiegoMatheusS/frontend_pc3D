@@ -139,6 +139,67 @@ function technicalFromPreview(schema, source = {}) {
   return Object.fromEntries(keys.flatMap((key) => source[key] !== undefined && source[key] !== null ? [[key, source[key]]] : []))
 }
 
+
+function aiPreviewSource(preview = {}) {
+  return {
+    ...(preview?.normalizacao?.camposNormalizados && typeof preview.normalizacao.camposNormalizados === 'object'
+      ? preview.normalizacao.camposNormalizados
+      : {}),
+    ...(preview?.resultadoProdutoIa?.payloadParcialBackend && typeof preview.resultadoProdutoIa.payloadParcialBackend === 'object'
+      ? preview.resultadoProdutoIa.payloadParcialBackend
+      : {}),
+    ...(preview?.confirmacaoSugerida?.body && typeof preview.confirmacaoSugerida.body === 'object'
+      ? preview.confirmacaoSugerida.body
+      : {}),
+    ...(preview?.cadastroSugerido?.payload && typeof preview.cadastroSugerido.payload === 'object'
+      ? preview.cadastroSugerido.payload
+      : {}),
+    ...(preview?.acaoFrontend?.payloadInicial && typeof preview.acaoFrontend.payloadInicial === 'object'
+      ? preview.acaoFrontend.payloadInicial
+      : {}),
+  }
+}
+
+function findExistingHardwareFromAi(hardwareItems = [], preview = {}) {
+  const source = aiPreviewSource(preview)
+  const targetCategory = normalizeToken(source.categoria || preview?.categoriaDetectada || preview?.categoriaSugerida)
+  const targetBrand = normalizeToken(source.marca)
+  const targetModel = normalizeToken(source.modelo)
+  const targetMpn = normalizeToken(source.mpn)
+  const targetGtin = normalizeGtin(source.gtin || source.ean)
+  const targetName = normalizeToken(source.nome)
+
+  const scored = (Array.isArray(hardwareItems) ? hardwareItems : []).flatMap((hardware) => {
+    const hardwareCategory = normalizeToken(hardware?.categoria)
+    if (targetCategory && hardwareCategory && targetCategory !== hardwareCategory) return []
+
+    const brand = normalizeToken(hardware?.marca || hardware?.produto?.marca)
+    const model = normalizeToken(hardware?.modelo || hardware?.produto?.modelo)
+    const mpn = normalizeToken(hardware?.mpn || hardware?.produto?.mpn)
+    const gtin = normalizeGtin(hardware?.gtin || hardware?.produto?.gtin)
+    const name = normalizeToken(hardware?.nome || hardware?.produto?.nome)
+
+    let score = 0
+    const reasons = []
+    if (targetGtin && gtin && targetGtin === gtin) { score += 140; reasons.push('GTIN') }
+    if (targetMpn && mpn && targetMpn === mpn) { score += 110; reasons.push('MPN') }
+    if (targetBrand && brand && targetBrand === brand) { score += 25; reasons.push('marca') }
+    if (targetModel && model && targetModel === model) { score += 70; reasons.push('modelo') }
+    else if (targetModel && name && name.includes(targetModel)) { score += 65; reasons.push('modelo no nome') }
+    if (targetName && name && targetName === name) { score += 75; reasons.push('nome') }
+
+    // Não vincula automaticamente por nome/modelo fraco. GTIN/MPN ou marca+modelo exatos são seguros.
+    if (score < 90) return []
+    return [{ hardware, score, reasons }]
+  }).sort((a, b) => b.score - a.score)
+
+  if (!scored.length) return { hardware: null, ambiguous: [] }
+  const best = scored[0]
+  const tied = scored.filter((item) => item.score === best.score)
+  if (tied.length > 1) return { hardware: null, ambiguous: tied.map((item) => item.hardware) }
+  return { hardware: best.hardware, ambiguous: [] }
+}
+
 function offersForProduct(offers = [], productId) {
   if (!productId) return []
   return offers
@@ -553,15 +614,7 @@ export default function AdminProductForm() {
     try {
       const result = await adminService.ai.importLink(cleanText(importUrl))
       setImportPreview(result)
-      if (result?.destinoSugerido === 'PRODUTO') {
-        applyImportPreview(result, false)
-        toast.show('Dados encontrados pela IA foram preenchidos. Revise o Produto e as ofertas antes de salvar.')
-      } else if (['HARDWARE', 'NOTEBOOK', 'PC_MONTADO'].includes(result?.destinoSugerido)) {
-        applyImportPreview(result, false)
-        toast.show(`A IA identificou ${result.destinoSugerido === 'HARDWARE' ? 'um Hardware' : result.destinoSugerido === 'NOTEBOOK' ? 'um Notebook' : 'um PC Montado'}. Abrindo o cadastro correto com os campos preenchidos.`)
-      } else {
-        applyImportPreview(result, false)
-      }
+      await applySmartImportPreview(result, false)
     } catch (err) {
       toast.show(err?.message || 'Não foi possível analisar o link com a IA.', 'erro')
     } finally {
@@ -569,7 +622,56 @@ export default function AdminProductForm() {
     }
   }
 
-  function applyImportPreview(preview = importPreview, notify = true) {
+  async function applySmartImportPreview(preview = importPreview, notify = true) {
+    if (!preview) return
+
+    if (preview?.destinoSugerido === 'HARDWARE') {
+      // Se o usuário já escolheu um Hardware existente, nunca manda para criar outro.
+      if (selectedHardwareId) {
+        applyImportPreview(preview, notify, { skipSpecialRouting: true, preserveHardware: true })
+        if (notify) toast.show('Dados da IA aplicados ao Produto usando o Hardware já selecionado.')
+        return
+      }
+
+      let hardwarePool = hardwares
+      // Garante que a checagem não dependa do carregamento assíncrono da lista da tela.
+      // Se a IA responder antes dos Hardwares, recarrega a lista antes de decidir criar outro.
+      if (!hardwarePool.length || hardwareLoading) {
+        try {
+          const fresh = await adminService.hardwares.list()
+          hardwarePool = Array.isArray(fresh) ? fresh : []
+          if (hardwarePool.length) setHardwares(hardwarePool)
+        } catch { /* se a consulta falhar, mantém o fluxo normal abaixo */ }
+      }
+
+      const match = findExistingHardwareFromAi(hardwarePool, preview)
+      if (match.hardware?.id) {
+        await selectHardware(String(match.hardware.id))
+        applyImportPreview(preview, false, { skipSpecialRouting: true, preserveHardware: true })
+        setImportPreview((current) => current ? { ...current, hardwareExistenteId: match.hardware.id } : current)
+        toast.show(`Hardware #${match.hardware.id} já existe. Mantive você no cadastro de Produto e vinculei o Hardware existente.`)
+        return
+      }
+
+      if (match.ambiguous.length) {
+        const source = aiPreviewSource(preview)
+        setHardwareSearch(cleanText(source.mpn || source.modelo || source.nome))
+        toast.show('Encontrei mais de um Hardware compatível. Selecione o correto abaixo; não vou criar outro automaticamente.', 'alerta')
+        return
+      }
+
+      applyImportPreview(preview, false)
+      toast.show('Esse Hardware não foi encontrado no cadastro. Abrindo o cadastro de Hardware com os campos preenchidos.')
+      return
+    }
+
+    applyImportPreview(preview, notify)
+    if (!notify && preview?.destinoSugerido === 'PRODUTO') {
+      toast.show('Dados encontrados pela IA foram preenchidos. Revise o Produto e as ofertas antes de salvar.')
+    }
+  }
+
+  function applyImportPreview(preview = importPreview, notify = true, { skipSpecialRouting = false, preserveHardware = false } = {}) {
     const normalized = preview?.normalizacao?.camposNormalizados || {}
     const payload = preview?.cadastroSugerido?.payload || preview?.acaoFrontend?.payloadInicial || {}
     const source = { ...normalized, ...payload }
@@ -577,17 +679,17 @@ export default function AdminProductForm() {
       toast.show('Não existem dados normalizados para aplicar. Faça o cadastro manualmente.', 'alerta')
       return
     }
-    if (preview?.destinoSugerido === 'HARDWARE') {
+    if (!skipSpecialRouting && preview?.destinoSugerido === 'HARDWARE') {
       storeAiImportPreview(preview)
       navigate('/admin/hardwares/novo?origem=ia-importacao')
       return
     }
-    if (preview?.destinoSugerido === 'NOTEBOOK') {
+    if (!skipSpecialRouting && preview?.destinoSugerido === 'NOTEBOOK') {
       storeAiImportPreview(preview)
       navigate('/admin/notebooks/novo?origem=ia-importacao')
       return
     }
-    if (preview?.destinoSugerido === 'PC_MONTADO') {
+    if (!skipSpecialRouting && preview?.destinoSugerido === 'PC_MONTADO') {
       storeAiImportPreview(preview)
       navigate('/admin/montados/novo?origem=ia-importacao')
       return
@@ -599,7 +701,7 @@ export default function AdminProductForm() {
     const nextCategoryId = category?.id || source.categoriaId || form.categoriaId
     const importedSchema = productSchemaFor(category || selectedCategory)
     const image = source.imagemUrl || preview?.coleta?.meta?.imagem || preview?.coleta?.meta?.ogImage || ''
-    setSelectedHardwareId('')
+    if (!preserveHardware) setSelectedHardwareId('')
     setForm((current) => ({
       ...current,
       categoriaId: nextCategoryId,
@@ -932,7 +1034,7 @@ export default function AdminProductForm() {
             <PreviewList title="Não encontrado" items={importPreview.normalizacao?.ausentes} tone="missing" />
             <div className="admin-import-preview-actions">
               <button className="btn btn-secundario" type="button" onClick={() => { setImportPreview(null); setImportUrl('') }}>Descartar prévia</button>
-              <button className="btn btn-primario" type="button" onClick={() => applyImportPreview()}>{importPreview.destinoSugerido === 'HARDWARE' ? 'Continuar no cadastro de Hardware' : 'Aplicar prévia ao Produto'}</button>
+              <button className="btn btn-primario" type="button" onClick={() => applySmartImportPreview()}>{importPreview.destinoSugerido === 'HARDWARE' ? (selectedHardwareId ? 'Aplicar ao Produto com Hardware existente' : 'Verificar Hardware e continuar') : 'Aplicar prévia ao Produto'}</button>
             </div>
             <small className="admin-help">A IA apenas preenche campos. Revise tudo e salve manualmente.</small>
           </div>}
