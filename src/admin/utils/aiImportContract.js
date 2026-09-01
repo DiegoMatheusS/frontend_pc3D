@@ -37,7 +37,23 @@ function csvValue(value) {
   return value
 }
 
-function normalizeTechnicalAliases(category, spec = {}) {
+function normalizeProcessorSocket(value, context = '') {
+  const raw = safeText(value).toUpperCase()
+  const haystack = `${raw} ${safeText(context)}`.toUpperCase()
+
+  // Mantém sockets completos e normaliza variações comuns: LGA 1151, LGA-1151 e LGA1151.
+  const lga = haystack.match(/\bLGA[\s_-]*(\d{3,5})\b/i)
+  if (lga) return `LGA${lga[1]}`
+
+  const am = haystack.match(/\b(AM[2345]|FM[12]|TR4|STRX4|STR5)\b/i)
+  if (am) return am[1].toUpperCase()
+
+  // Se a IA devolveu apenas "LGA", não persiste o valor incompleto.
+  if (/^LGA$/i.test(raw)) return ''
+  return raw
+}
+
+function normalizeTechnicalAliases(category, spec = {}, context = '') {
   const next = { ...object(spec) }
   const cat = normalizeCategory(category)
 
@@ -66,6 +82,15 @@ function normalizeTechnicalAliases(category, spec = {}) {
   }
 
   if (cat === 'PROCESSADOR') {
+    const normalizedSocket = normalizeProcessorSocket(next.socket, context)
+    if (normalizedSocket) next.socket = normalizedSocket
+    else delete next.socket
+
+    // Data de lançamento não deve ser preenchida automaticamente pela IA.
+    delete next.dataLancamento
+    delete next.dataDeLancamento
+    delete next.releaseDate
+
     const aliases = {
       frequenciaBaseMhz: firstDefined(next.frequenciaBaseMhz, next.clockBaseMhz),
       frequenciaTurboMhz: firstDefined(next.frequenciaTurboMhz, next.clockTurboMhz),
@@ -119,16 +144,6 @@ export function getAiPayload(response = {}) {
         : Object.keys(confirmationBody).length ? confirmationBody
           : legacyNormalized
 
-  const partialSpec = specKey ? object(partialPayload?.[specKey]) : {}
-  const cadastroSpec = specKey ? object(cadastroPayload?.[specKey]) : {}
-  const primarySpec = specKey ? object(primaryPayload?.[specKey]) : {}
-  const normalizedSpec = normalizeTechnicalAliases(category, {
-    ...foundSpecs,
-    ...partialSpec,
-    ...cadastroSpec,
-    ...primarySpec,
-  })
-
   const merged = {
     ...legacyNormalized,
     ...actionPayload,
@@ -137,7 +152,31 @@ export function getAiPayload(response = {}) {
     ...cadastroPayload,
   }
 
+  const partialSpec = specKey ? object(partialPayload?.[specKey]) : {}
+  const cadastroSpec = specKey ? object(cadastroPayload?.[specKey]) : {}
+  const primarySpec = specKey ? object(primaryPayload?.[specKey]) : {}
+  const technicalContext = [
+    merged?.nome,
+    merged?.modelo,
+    merged?.descricao,
+    response?.urlOrigem,
+    response?.urlOriginal,
+    response?.resultadoProdutoIa?.urlOrigem,
+    response?.resultadoProdutoIa?.urlProduto,
+  ].filter(Boolean).join(' ')
+  const normalizedSpec = normalizeTechnicalAliases(category, {
+    ...foundSpecs,
+    ...partialSpec,
+    ...cadastroSpec,
+    ...primarySpec,
+  }, technicalContext)
+
   if (category && !merged.categoria) merged.categoria = category
+  if (category === 'PROCESSADOR') {
+    delete merged.dataLancamento
+    delete merged.dataDeLancamento
+    delete merged.releaseDate
+  }
   if (specKey && Object.keys(normalizedSpec).length) merged[specKey] = normalizedSpec
 
   // Facilita o preenchimento dos formulários atuais sem transformar texto bruto em descrição.

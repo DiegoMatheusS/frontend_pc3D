@@ -96,6 +96,27 @@ function normalizeToken(value) {
     .replace(/[^a-z0-9]+/g, '')
 }
 
+function processorModelSignature(...values) {
+  const text = values.filter(Boolean).join(' ')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+
+  // Intel Core i3/i5/i7/i9: aceita "i5-9500", "i5 9500" e "i59500".
+  const intel = text.match(/\b(I[3579])\s*[-_ ]?\s*(\d{4,5}[A-Z]{0,3})\b/i)
+  if (intel) return `${intel[1].toUpperCase()}-${intel[2].toUpperCase()}`
+
+  // Intel Core Ultra.
+  const ultra = text.match(/\bCORE\s+ULTRA\s+([3579])\s+([0-9]{3}[A-Z]{0,2})\b/i)
+  if (ultra) return `CORE-ULTRA-${ultra[1]}-${ultra[2].toUpperCase()}`
+
+  // AMD Ryzen.
+  const ryzen = text.match(/\bRYZEN\s+([3579])\s+([0-9]{4}[A-Z0-9]{0,4})\b/i)
+  if (ryzen) return `RYZEN-${ryzen[1]}-${ryzen[2].toUpperCase()}`
+
+  return ''
+}
+
 function findCategoryFromPreview(categories, sourceCategory) {
   const target = normalizeToken(sourceCategory)
   if (!target) return null
@@ -187,6 +208,9 @@ function findExistingHardwareFromAi(hardwareItems = [], preview = {}) {
   const targetMpn = normalizeToken(source.mpn)
   const targetGtin = normalizeGtin(source.gtin || source.ean)
   const targetName = normalizeToken(source.nome)
+  const targetProcessorSignature = targetCategory === 'processador'
+    ? processorModelSignature(source.modelo, source.nome, source.mpn)
+    : ''
 
   const scored = (Array.isArray(hardwareItems) ? hardwareItems : []).flatMap((hardware) => {
     const hardwareCategory = normalizeToken(hardware?.categoria)
@@ -197,12 +221,19 @@ function findExistingHardwareFromAi(hardwareItems = [], preview = {}) {
     const mpn = normalizeToken(hardware?.mpn || hardware?.produto?.mpn)
     const gtin = normalizeGtin(hardware?.gtin || hardware?.produto?.gtin)
     const name = normalizeToken(hardware?.nome || hardware?.produto?.nome)
+    const processorSignature = targetProcessorSignature
+      ? processorModelSignature(hardware?.modelo, hardware?.nome, hardware?.mpn, hardware?.produto?.modelo, hardware?.produto?.nome)
+      : ''
 
     let score = 0
     const reasons = []
     if (targetGtin && gtin && targetGtin === gtin) { score += 140; reasons.push('GTIN') }
     if (targetMpn && mpn && targetMpn === mpn) { score += 110; reasons.push('MPN') }
     if (targetBrand && brand && targetBrand === brand) { score += 25; reasons.push('marca') }
+    if (targetProcessorSignature && processorSignature && targetProcessorSignature === processorSignature) {
+      score += 100
+      reasons.push(`modelo CPU ${targetProcessorSignature}`)
+    }
     if (targetModel && model && targetModel === model) { score += 70; reasons.push('modelo') }
     else if (targetModel && name && name.includes(targetModel)) { score += 65; reasons.push('modelo no nome') }
     if (targetName && name && targetName === name) { score += 75; reasons.push('nome') }
@@ -705,6 +736,20 @@ export default function AdminProductForm() {
       if (selectedHardwareId) {
         applyImportPreview(preview, notify, { skipSpecialRouting: true, preserveHardware: true })
         if (notify) toast.show('Dados da IA aplicados ao Produto usando o Hardware já selecionado.')
+        return
+      }
+
+      const reconciliation = getAiReconciliation(preview)
+      const reconciledHardwareId = Number(
+        reconciliation?.hardwareExistente?.id
+        || reconciliation?.hardwareId
+        || preview?.hardwareExistenteId
+      ) || null
+      if (reconciledHardwareId) {
+        await selectHardware(String(reconciledHardwareId))
+        applyImportPreview(preview, false, { skipSpecialRouting: true, preserveHardware: true })
+        setImportPreview((current) => current ? { ...current, hardwareExistenteId: reconciledHardwareId } : current)
+        toast.show(`Hardware #${reconciledHardwareId} já existe. Mantive você no cadastro de Produto e vinculei o Hardware existente.`)
         return
       }
 
