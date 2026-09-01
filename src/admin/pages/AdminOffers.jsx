@@ -6,6 +6,33 @@ import { AdminError, AdminLoading, AdminPageHeader, AdminStatus, EmptyRow, forma
 import { useAdminToast } from '../components/AdminToast'
 import { useAdminPermissions } from '../components/AdminAccess'
 
+function normalizePriceStatus(value) {
+  const status = String(value || '').trim().toUpperCase()
+  if (status === 'ATUALIZADA') return 'ATUALIZADO'
+  if (status === 'FALHOU' || status === 'FALHA') return 'ERRO'
+  return status || 'VERIFICADA'
+}
+
+function priceCheckValues(result = {}) {
+  return {
+    status: normalizePriceStatus(result.status),
+    savedPrice: result.precoAnteriorBanco ?? result.precoSalvo ?? result.precoAnterior ?? null,
+    foundPrice: result.precoEncontrado ?? result.precoAtual ?? result.novoPreco ?? null,
+    previousFoundPrice: result.precoAnteriorEncontrado ?? result.precoAnteriorColetado ?? null,
+    variation: result.variacaoPercentual ?? result.variacao ?? null,
+    source: result.fontePreco ?? result.origemPreco ?? result.fonte ?? '',
+    verifiedAt: result.verificadoEm ?? result.dataUltimaVerificacao ?? result.atualizadoEm ?? null,
+    url: result.urlFinal ?? result.urlConsultada ?? result.urlOriginal ?? '',
+  }
+}
+
+function formatVariation(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '—'
+  const sign = number > 0 ? '+' : ''
+  return `${sign}${number.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
+}
+
 export default function AdminOffers() {
   const toast = useAdminToast()
   const { canWriteCatalog, canDeleteCatalog, isAdmin } = useAdminPermissions()
@@ -166,8 +193,11 @@ export default function AdminOffers() {
       try { sessionStorage.setItem('criabyteUltimoRelatorioPrecos', JSON.stringify(result)) } catch { /* opcional */ }
       await load()
       const remaining = Number(result?.restantesElegiveis || 0)
-      const summary = `${result?.verificadas ?? 0} verificadas · ${result?.atualizadas ?? 0} atualizadas · ${result?.semAlteracao ?? 0} sem alteração · ${result?.indisponiveis ?? 0} indisponíveis · ${result?.falharam ?? 0} falharam`
-      toast.show(remaining > 0 ? `${summary}. Restam ${remaining} para outro lote.` : summary, 'sucesso')
+      const revisar = result?.revisar ?? result?.revisaoNecessaria ?? 0
+      const bloqueadas = result?.bloqueadas ?? result?.bloqueados ?? 0
+      const erros = result?.erros ?? result?.falharam ?? 0
+      const summary = `${result?.verificadas ?? 0} verificadas · ${result?.atualizadas ?? 0} atualizadas · ${result?.semAlteracao ?? 0} sem alteração · ${revisar} revisar · ${bloqueadas} bloqueadas · ${erros} erros`
+      toast.show(remaining > 0 ? `${summary}. Restam ${remaining} para outro lote.` : summary, (revisar || bloqueadas || erros) ? 'alerta' : 'sucesso')
     } catch (err) {
       toast.show(err?.message || 'Não foi possível verificar os preços.', 'erro')
     } finally {
@@ -185,14 +215,16 @@ export default function AdminOffers() {
 
   function checkDetail(result) {
     if (!result) return ''
+    const values = priceCheckValues(result)
     const parts = [
       result.motivo,
       result.detalhe,
       result.mensagem,
       result.erro,
-      result.origemPreco ? `Origem: ${result.origemPreco}` : '',
+      values.source ? `Fonte: ${values.source}` : '',
+      result.produtoIaUtilizada === true ? 'Projeto IA utilizada' : '',
       result.httpStatus ? `HTTP ${result.httpStatus}` : '',
-      result.urlFinal ? `URL final: ${result.urlFinal}` : '',
+      result.identidadeConfirmada === false ? 'Identidade do produto não confirmada' : '',
     ].filter(Boolean)
     return [...new Set(parts)].join(' · ')
   }
@@ -206,8 +238,10 @@ export default function AdminOffers() {
       const result = normalizeSingleCheck(payload, offerId) || { ofertaId: offerId, status: 'VERIFICADA' }
       setOfferCheckResults((current) => ({ ...current, [offerId]: { result } }))
       await load()
-      const statusText = String(result.status || 'VERIFICADA').replaceAll('_', ' ')
-      toast.show(`Oferta #${offerId}: ${statusText}.`, result.status === 'FALHOU' ? 'erro' : 'sucesso')
+      const status = normalizePriceStatus(result.status)
+      const statusText = status.replaceAll('_', ' ')
+      const tone = ['ERRO', 'BLOQUEADO'].includes(status) ? 'erro' : status === 'REVISAR' ? 'alerta' : 'sucesso'
+      toast.show(`Oferta #${offerId}: ${statusText}.`, tone)
     } catch (err) {
       const endpointMissing = Number(err?.status) === 404
       const message = endpointMissing
@@ -237,10 +271,32 @@ export default function AdminOffers() {
           <span><strong>{priceReport.verificadas ?? 0}</strong> verificadas</span>
           <span><strong>{priceReport.atualizadas ?? 0}</strong> atualizadas</span>
           <span><strong>{priceReport.semAlteracao ?? 0}</strong> sem alteração</span>
-          <span><strong>{priceReport.indisponiveis ?? 0}</strong> indisponíveis</span>
-          <span><strong>{priceReport.falharam ?? 0}</strong> falharam</span>
+          <span><strong>{priceReport.revisar ?? priceReport.revisaoNecessaria ?? 0}</strong> revisar</span>
+          <span><strong>{priceReport.bloqueadas ?? priceReport.bloqueados ?? 0}</strong> bloqueadas</span>
+          <span><strong>{priceReport.erros ?? priceReport.falharam ?? 0}</strong> erros</span>
         </div>
-        {Array.isArray(priceReport.resultados) && priceReport.resultados.length ? <div className="admin-table-wrap"><table className="admin-table admin-price-report-table"><thead><tr><th>Produto</th><th>Parceiro</th><th>Resultado</th><th>Preço anterior</th><th>Preço novo</th><th>Detalhe</th></tr></thead><tbody>{priceReport.resultados.map((result) => <tr key={`${result.ofertaId}-${result.status}`} className={result.status === 'ATUALIZADA' ? 'admin-price-report-row--changed' : ''}><td><strong>{result.produto || `Oferta #${result.ofertaId}`}</strong><br /><small>Oferta #{result.ofertaId}</small></td><td>{result.parceiro || '—'}</td><td><AdminStatus value={result.status} /></td><td>{result.precoAnterior == null ? '—' : formatMoney(result.precoAnterior)}</td><td>{result.precoAtual == null ? '—' : <strong>{formatMoney(result.precoAtual)}</strong>}</td><td>{result.status === 'ATUALIZADA' ? <strong className="admin-price-change">{formatMoney(result.precoAnterior)} → {formatMoney(result.precoAtual)}</strong> : (result.motivo || result.origemPreco || '—')}</td></tr>)}</tbody></table></div> : <div className="admin-empty">O backend não retornou itens detalhados para este lote.</div>}
+        {Array.isArray(priceReport.resultados) && priceReport.resultados.length ? <div className="admin-table-wrap"><table className="admin-table admin-price-report-table"><thead><tr><th>Produto</th><th>Preço banco</th><th>Preço encontrado</th><th>Anterior encontrado</th><th>Variação</th><th>Fonte</th><th>Status</th><th>Última verificação</th><th>Ações / detalhe</th></tr></thead><tbody>{priceReport.resultados.map((result) => {
+          const values = priceCheckValues(result)
+          const offer = (data?.offers || []).find((item) => Number(item.id) === Number(result.ofertaId))
+          return <tr key={`${result.ofertaId}-${values.status}`} className={`admin-price-report-row admin-price-report-row--${values.status.toLowerCase()}`}>
+            <td><strong>{result.produtoNome || result.produto || offer?.produtoNome || `Oferta #${result.ofertaId}`}</strong><br /><small>Oferta #{result.ofertaId}</small>{result.parceiro && <><br /><small>{result.parceiro}</small></>}</td>
+            <td>{values.savedPrice == null ? '—' : formatMoney(values.savedPrice)}</td>
+            <td>{values.foundPrice == null ? '—' : <strong>{formatMoney(values.foundPrice)}</strong>}</td>
+            <td>{values.previousFoundPrice == null ? '—' : formatMoney(values.previousFoundPrice)}</td>
+            <td><strong>{formatVariation(values.variation)}</strong></td>
+            <td>{values.source || '—'}</td>
+            <td><AdminStatus value={values.status} /></td>
+            <td>{values.verifiedAt ? formatDate(values.verifiedAt) : '—'}</td>
+            <td><div className="admin-price-report-actions">
+              <span>{checkDetail(result) || (values.status === 'ATUALIZADO' ? 'Preço confirmado e salvo.' : values.status === 'SEM_ALTERACAO' ? 'O preço encontrado é igual ao salvo.' : '—')}</span>
+              <div className="admin-row-actions">
+                {offer && <Link className="admin-action-button" to={`/admin/ofertas/${offer.id}`}>Rever oferta</Link>}
+                {values.url && <a className="admin-action-button" href={values.url} target="_blank" rel="noopener noreferrer">Abrir link</a>}
+                {offer && canWriteCatalog && <button className="admin-action-button" type="button" disabled={checkingOfferId === Number(offer.id) || checkingPrices} onClick={() => verifyOnePrice(offer)}>Verificar novamente</button>}
+              </div>
+            </div></td>
+          </tr>
+        })}</tbody></table></div> : <div className="admin-empty">O backend não retornou itens detalhados para este lote.</div>}
       </div>
     </section>}
 
@@ -266,7 +322,7 @@ export default function AdminOffers() {
                 <td data-label="Frete">{item.frete != null ? formatMoney(item.frete) : '—'}</td>
                 <td data-label="Status"><AdminStatus value={item.status || 'ATIVA'} /></td>
                 <td data-label="Validade">{formatDate(item.validoAte)}</td>
-                <td data-label="Ações"><div className="admin-offer-row-actions"><div className="admin-row-actions">{canWriteCatalog && <button className="admin-action-button" type="button" disabled={checkingOfferId === Number(item.id) || checkingPrices} onClick={() => verifyOnePrice(item)}>{checkingOfferId === Number(item.id) ? 'Verificando...' : 'Verificar preço'}</button>}{canWriteCatalog && <Link className="admin-action-button" to={`/admin/ofertas/${item.id}`}>Editar</Link>}{canWriteCatalog && offerStatus(item) !== 'ATIVA' && <button className="admin-action-button admin-action-button--success" type="button" onClick={() => reactivate(item)}>Reativar</button>}{canDeleteCatalog && offerStatus(item) !== 'DESCONTINUADA' && <button className="admin-action-button" type="button" onClick={() => remove(item)}>Descontinuar</button>}{!canWriteCatalog && !canDeleteCatalog && <span className="admin-muted">Somente leitura</span>}</div>{offerCheckResults[Number(item.id)]?.result && <div className="admin-offer-check-result"><AdminStatus value={offerCheckResults[Number(item.id)].result.status || 'VERIFICADA'} /><small>{offerCheckResults[Number(item.id)].result.precoAnterior != null || offerCheckResults[Number(item.id)].result.precoAtual != null ? `${offerCheckResults[Number(item.id)].result.precoAnterior == null ? '—' : formatMoney(offerCheckResults[Number(item.id)].result.precoAnterior)} → ${offerCheckResults[Number(item.id)].result.precoAtual == null ? '—' : formatMoney(offerCheckResults[Number(item.id)].result.precoAtual)}` : ''}</small>{checkDetail(offerCheckResults[Number(item.id)].result) && <small>{checkDetail(offerCheckResults[Number(item.id)].result)}</small>}</div>}{offerCheckResults[Number(item.id)]?.error && <div className="admin-offer-check-result admin-offer-check-result--error"><strong>Não verificado</strong><small>{offerCheckResults[Number(item.id)].error}</small></div>}</div></td>
+                <td data-label="Ações"><div className="admin-offer-row-actions"><div className="admin-row-actions">{canWriteCatalog && <button className="admin-action-button" type="button" disabled={checkingOfferId === Number(item.id) || checkingPrices} onClick={() => verifyOnePrice(item)}>{checkingOfferId === Number(item.id) ? 'Verificando...' : 'Verificar preço'}</button>}{canWriteCatalog && <Link className="admin-action-button" to={`/admin/ofertas/${item.id}`}>Editar</Link>}{canWriteCatalog && offerStatus(item) !== 'ATIVA' && <button className="admin-action-button admin-action-button--success" type="button" onClick={() => reactivate(item)}>Reativar</button>}{canDeleteCatalog && offerStatus(item) !== 'DESCONTINUADA' && <button className="admin-action-button" type="button" onClick={() => remove(item)}>Descontinuar</button>}{!canWriteCatalog && !canDeleteCatalog && <span className="admin-muted">Somente leitura</span>}</div>{offerCheckResults[Number(item.id)]?.result && (() => { const result = offerCheckResults[Number(item.id)].result; const values = priceCheckValues(result); return <div className={`admin-offer-check-result admin-offer-check-result--${values.status.toLowerCase()}`}><AdminStatus value={values.status} /><small>{values.savedPrice != null || values.foundPrice != null ? `${values.savedPrice == null ? '—' : formatMoney(values.savedPrice)} → ${values.foundPrice == null ? '—' : formatMoney(values.foundPrice)}` : ''}</small>{values.variation != null && <small>Variação: {formatVariation(values.variation)}</small>}{values.source && <small>Fonte: {values.source}</small>}{checkDetail(result) && <small>{checkDetail(result)}</small>}{values.url && <a href={values.url} target="_blank" rel="noopener noreferrer">Abrir link verificado ↗</a>}</div> })()}{offerCheckResults[Number(item.id)]?.error && <div className="admin-offer-check-result admin-offer-check-result--error"><strong>Não verificado</strong><small>{offerCheckResults[Number(item.id)].error}</small></div>}</div></td>
               </tr>
             }) : <EmptyRow columns={8} />}
           </tbody>
