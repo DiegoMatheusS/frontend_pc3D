@@ -1,0 +1,680 @@
+/* Ponte visual temporária enquanto o motor Three.js legado é usado dentro do React. */
+.builder-page .pcbuilder-container { width: 100%; }
+.builder-page .pcbuilder-painel { min-height: 0; }
+.builder-page .pcbuilder-3d-area { min-height: 0; }
+
+[data-theme='dark'] .builder-page .pcbuilder-container,
+[data-theme='dark'] .builder-page .pcbuilder-painel { background: #111827; }
+[data-theme='dark'] .builder-page .pcbuilder-3d-area { background: radial-gradient(circle at 46% 42%, #1f2937 0%, #111827 52%, #0b1220 100%); }
+[data-theme='dark'] .builder-page .mensagem-palco h2 { color: #e2e8f0; }
+[data-theme='dark'] .builder-page .mensagem-palco p { color: #94a3b8; }
+
+/* =========================================================
+   LARGURA / VIEWPORT DO MONTADOR REACT
+   O legado não pode aumentar a largura da aplicação.
+========================================================= */
+body.builder-route-active,
+body.builder-route-active #root,
+body.builder-route-active .app-shell,
+body.builder-route-active .app-main,
+body.builder-route-active .builder-page,
+.builder-page .pcbuilder-container {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.builder-route-active {
+  overflow-x: hidden;
+}
+
+body.builder-route-active #root,
+body.builder-route-active .app-shell,
+body.builder-route-active .app-main,
+.builder-page {
+  overflow-x: clip;
+}
+
+.builder-page,
+.builder-page .pcbuilder-container,
+.builder-page .pcbuilder-3d-area,
+.builder-page .pcbuilder-palco-3d,
+.builder-page .pcbuilder-painel,
+.builder-page .painel-cabecalho,
+.builder-page .painel-cabecalho-linha,
+.builder-page .painel-lista-pecas,
+.builder-page .painel-resumo,
+.builder-page .painel-pesquisa-hardware,
+.builder-page .campo-pesquisa-builder,
+.builder-page .lista-categorias,
+.builder-page .card-peca-mini,
+.builder-page .card-slot-builder,
+.builder-page .resumo-info,
+.builder-page .resumo-acoes-builder {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 821px) {
+  .builder-page .pcbuilder-container {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(430px, 31vw, 480px);
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  .builder-page .pcbuilder-3d-area {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .builder-page .pcbuilder-palco-3d,
+  .builder-page #canvas-3d-container {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .builder-page .pcbuilder-painel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    width: auto;
+    min-width: 0;
+    max-width: 480px;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .builder-page .painel-lista-pecas {
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    padding-bottom: 14px;
+  }
+
+  .builder-page .painel-resumo {
+    position: relative;
+    bottom: auto;
+    margin-top: 0;
+    flex-shrink: 0;
+  }
+}
+
+.builder-page .info-peca-mini,
+.builder-page .info-peca-mini h4,
+.builder-page .preco-peca-mini {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.builder-page .info-peca-mini h4,
+.builder-page .link-loja-peca,
+.builder-page .compatibilidade-card-builder {
+  overflow-wrap: anywhere;
+}
+
+
+/* v18.1: pesquisa compacta — no cabeçalho do montador fica apenas a lupa. */
+.builder-page .btn-alternar-pesquisa--icone {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+}
+
+.builder-page .btn-alternar-pesquisa--icone > span {
+  font-size: 1.05rem;
+}
+
+@media (max-width: 1050px) and (min-width: 821px) {
+  .builder-page .pcbuilder-container {
+    grid-template-columns: minmax(0, 1fr) 420px;
+  }
+
+  .builder-page .pcbuilder-painel {
+    max-width: 420px;
+  }
+
+  .builder-page .texto-btn-pesquisa {
+    display: none;
+  }
+
+  .builder-page .btn-alternar-pesquisa {
+    width: 36px;
+    padding: 0;
+  }
+}
+
+
+/* No /montar o acesso à IA fica no botão “Montar com IA” do próprio painel. */
+body.builder-route-active .ia-btn-flutuante,
+body.builder-route-active .ia-balao-boas-vindas {
+  display: none !important;
+}
+
+@media (max-width: 820px) {
+  .builder-page .pcbuilder-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .builder-page .pcbuilder-painel,
+  .builder-page .painel-lista-pecas {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .builder-page .painel-acoes-cabecalho {
+    justify-content: flex-start;
+  }
+}
+
+/* =========================================================
+   TEMA ESCURO — MONTADOR REACT + PONTE LEGADA
+   O painel inteiro acompanha o tema global do React.
+========================================================= */
+:root[data-theme='dark'] .builder-page {
+  --builder-dark-bg: #0b1220;
+  --builder-dark-panel: #111827;
+  --builder-dark-panel-2: #162033;
+  --builder-dark-card: #182235;
+  --builder-dark-card-soft: #1c2940;
+  --builder-dark-border: #2a3950;
+  --builder-dark-text: #f1f5f9;
+  --builder-dark-muted: #a7b3c6;
+}
+
+:root[data-theme='dark'] .builder-page .pcbuilder-container,
+:root[data-theme='dark'] .builder-page .pcbuilder-painel,
+:root[data-theme='dark'] .builder-page .painel-lista-pecas {
+  color: var(--builder-dark-text);
+  background: var(--builder-dark-panel);
+  border-color: var(--builder-dark-border);
+}
+
+:root[data-theme='dark'] .builder-page .painel-cabecalho,
+:root[data-theme='dark'] .builder-page .painel-resumo {
+  color: var(--builder-dark-text);
+  background: rgba(22, 32, 51, 0.98);
+  border-color: var(--builder-dark-border);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .2);
+}
+
+:root[data-theme='dark'] .builder-page .painel-cabecalho h1,
+:root[data-theme='dark'] .builder-page .info-peca-mini h4,
+:root[data-theme='dark'] .builder-page .resumo-metrica strong,
+:root[data-theme='dark'] .builder-page .modal-resumo-cabecalho h2,
+:root[data-theme='dark'] .builder-page .resumo-final-secao h3,
+:root[data-theme='dark'] .builder-page .item-componente-resumo-info strong,
+:root[data-theme='dark'] .builder-page .item-link-compra-resumo-final strong {
+  color: var(--builder-dark-text);
+}
+
+:root[data-theme='dark'] .builder-page .painel-etiqueta,
+:root[data-theme='dark'] .builder-page .categoria-peca-mini,
+:root[data-theme='dark'] .builder-page .status-salvamento-builder,
+:root[data-theme='dark'] .builder-page .mensagem-builder,
+:root[data-theme='dark'] .builder-page .recomendacao-fluxo-fan,
+:root[data-theme='dark'] .builder-page .resumo-metrica span,
+:root[data-theme='dark'] .builder-page .modal-resumo-cabecalho p,
+:root[data-theme='dark'] .builder-page .item-componente-categoria,
+:root[data-theme='dark'] .builder-page .item-componente-detalhes,
+:root[data-theme='dark'] .builder-page .texto-compra-resumo-final {
+  color: var(--builder-dark-muted);
+}
+
+:root[data-theme='dark'] .builder-page .card-peca-mini,
+:root[data-theme='dark'] .builder-page .card-slot-builder,
+:root[data-theme='dark'] .builder-page .painel-pesquisa-hardware,
+:root[data-theme='dark'] .builder-page .campo-pesquisa-builder,
+:root[data-theme='dark'] .builder-page .btn-alternar-pesquisa,
+:root[data-theme='dark'] .builder-page .filtro-compativeis-builder {
+  color: var(--builder-dark-text);
+  background: var(--builder-dark-card);
+  border-color: var(--builder-dark-border);
+}
+
+:root[data-theme='dark'] .builder-page .card-peca-mini:hover,
+:root[data-theme='dark'] .builder-page .card-slot-builder:hover {
+  background: var(--builder-dark-card-soft);
+  border-color: #4c6b99;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .2);
+}
+
+:root[data-theme='dark'] .builder-page .card-peca-mini.selecionada {
+  background: linear-gradient(135deg, rgba(6, 118, 71, .22), rgba(5, 150, 105, .1));
+  border-color: #34d399;
+}
+
+:root[data-theme='dark'] .builder-page .card-peca-mini.selecionada::after {
+  color: #a7f3d0;
+  background: #064e3b;
+  border-color: #047857;
+}
+
+:root[data-theme='dark'] .builder-page .imagem-peca-mini,
+:root[data-theme='dark'] .builder-page .card-peca-mini img {
+  background: #0f172a;
+}
+
+:root[data-theme='dark'] .builder-page .categoria-btn {
+  color: #cbd5e1;
+  background: #182235;
+  border-color: #2a3950;
+}
+
+:root[data-theme='dark'] .builder-page .categoria-btn:hover {
+  color: #93c5fd;
+  background: rgba(37, 99, 235, .16);
+  border-color: #365f9d;
+}
+
+:root[data-theme='dark'] .builder-page .categoria-btn.ativo {
+  color: #fff;
+  background: #2563eb;
+  border-color: #3b82f6;
+}
+
+:root[data-theme='dark'] .builder-page .campo-pesquisa-builder input,
+:root[data-theme='dark'] .builder-page .controle-fluxo-fan select,
+:root[data-theme='dark'] .builder-page .select-fluxo-fan,
+:root[data-theme='dark'] .builder-page .select-fluxo-fan-instalado {
+  color: var(--builder-dark-text);
+  background: #0f172a;
+  border-color: var(--builder-dark-border);
+}
+
+:root[data-theme='dark'] .builder-page .campo-pesquisa-builder input::placeholder {
+  color: #718096;
+}
+
+:root[data-theme='dark'] .builder-page .btn-limpar-build,
+:root[data-theme='dark'] .builder-page .btn-voltar-slots,
+:root[data-theme='dark'] .builder-page .btn-continuar-editando {
+  color: #cbd5e1;
+  background: #182235;
+  border-color: #34445e;
+}
+
+:root[data-theme='dark'] .builder-page .status-build[data-tipo='neutro'] {
+  color: #cbd5e1;
+  background: #273449;
+}
+
+:root[data-theme='dark'] .builder-page .pcbuilder-3d-area {
+  background: radial-gradient(circle at 46% 42%, #1f2937 0%, #111827 52%, #0b1220 100%);
+}
+
+:root[data-theme='dark'] .builder-page .controles-camera {
+  color: #dbeafe;
+  background: rgba(17, 24, 39, .78);
+  border-color: rgba(71, 85, 105, .82);
+}
+
+:root[data-theme='dark'] .builder-page .controles-camera button {
+  color: #cbd5e1;
+}
+
+:root[data-theme='dark'] .builder-page .controles-camera button:hover:not(:disabled) {
+  color: #93c5fd;
+  background: rgba(37, 99, 235, .18);
+}
+
+:root[data-theme='dark'] .builder-page .modal-resumo-overlay {
+  background: rgba(2, 6, 23, .76);
+}
+
+:root[data-theme='dark'] .builder-page .modal-resumo-conteudo,
+:root[data-theme='dark'] .builder-page .modal-resumo-cabecalho,
+:root[data-theme='dark'] .builder-page .modal-resumo-corpo,
+:root[data-theme='dark'] .builder-page .modal-resumo-rodape,
+:root[data-theme='dark'] .builder-page .resumo-final-secao,
+:root[data-theme='dark'] .builder-page .resumo-final-metrica,
+:root[data-theme='dark'] .builder-page .item-componente-resumo-final,
+:root[data-theme='dark'] .builder-page .item-link-compra-resumo-final,
+:root[data-theme='dark'] .builder-page .fluxo-ar-resumo-final {
+  color: var(--builder-dark-text);
+  background: #111827;
+  border-color: var(--builder-dark-border);
+}
+
+:root[data-theme='dark'] .builder-page .modal-resumo-cabecalho,
+:root[data-theme='dark'] .builder-page .modal-resumo-rodape {
+  background: #162033;
+}
+
+:root[data-theme='dark'] .builder-page .resumo-final-metrica,
+:root[data-theme='dark'] .builder-page .item-componente-resumo-final,
+:root[data-theme='dark'] .builder-page .item-link-compra-resumo-final,
+:root[data-theme='dark'] .builder-page .fluxo-ar-resumo-final {
+  background: #182235;
+}
+
+:root[data-theme='dark'] .builder-page .btn-fechar-modal-resumo {
+  color: #cbd5e1;
+  background: #1e293b;
+  border-color: #334155;
+}
+
+/* Botão novo do resumo final. */
+.builder-page .btn-publicar-build {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 41px;
+  padding: 10px 16px;
+  color: #fff;
+  background: #2563eb;
+  border: 1px solid #2563eb;
+  border-radius: 9px;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+}
+
+.builder-page .btn-publicar-build:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 540px) {
+  .builder-page .btn-publicar-build { width: 100%; }
+}
+
+/* =========================================================
+   v26 — acabamento do modo escuro no resumo do montador
+========================================================= */
+:root[data-theme='dark'] .builder-page .resumo-metrica {
+  color: var(--builder-dark-text);
+  background: #182235;
+  border-color: #314159;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+}
+
+:root[data-theme='dark'] .builder-page .resumo-metrica span {
+  color: #9fb0c8;
+}
+
+:root[data-theme='dark'] .builder-page .resumo-metrica strong {
+  color: #6ee7b7;
+}
+
+:root[data-theme='dark'] .builder-page .resumo-metrica-menor strong {
+  color: #e2e8f0;
+}
+
+:root[data-theme='dark'] .builder-page .btn-comprar-pecas-builder {
+  color: #dbeafe;
+  background: #182235;
+  border-color: #3b557a;
+}
+
+:root[data-theme='dark'] .builder-page .btn-comprar-pecas-builder:hover {
+  color: #fff;
+  background: #203251;
+  border-color: #4d77b7;
+}
+
+:root[data-theme='dark'] .builder-page .aviso-compra-builder,
+:root[data-theme='dark'] .builder-page .status-finalizacao {
+  color: #94a3b8;
+}
+
+:root[data-theme='dark'] .builder-page .btn-limpar-build:hover {
+  color: #fecaca;
+  background: rgba(185, 28, 28, .14);
+  border-color: #7f1d1d;
+}
+
+/* =========================================================
+   v37.1 — diálogos do montador (confirmar / solicitar texto)
+   O <dialog> é anexado diretamente ao body pelo legado, então
+   os seletores não dependem de .builder-page.
+========================================================= */
+.pcbuilder-dialogo {
+  width: min(92vw, 460px);
+  max-width: 460px;
+  margin: auto;
+  padding: 0;
+  color: #172033;
+  background: transparent;
+  border: 0;
+  border-radius: 18px;
+  overflow: visible;
+}
+
+.pcbuilder-dialogo::backdrop {
+  background: rgba(15, 23, 42, .56);
+  backdrop-filter: blur(3px);
+}
+
+.pcbuilder-dialogo[open] {
+  animation: pcbuilder-dialogo-entrada .16s ease-out;
+}
+
+.pcbuilder-dialogo-conteudo {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 24px;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: #172033;
+  background: #fff;
+  border: 1px solid #dbe4f0;
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .22), 0 6px 20px rgba(15, 23, 42, .10);
+}
+
+.pcbuilder-dialogo-etiqueta {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.pcbuilder-dialogo h2 {
+  margin: 0;
+  color: #172033;
+  font-size: clamp(1.18rem, 3vw, 1.42rem);
+  line-height: 1.2;
+  letter-spacing: -.02em;
+}
+
+.pcbuilder-dialogo-mensagem {
+  margin: 0;
+  color: #64748b;
+  font-size: .95rem;
+  line-height: 1.55;
+}
+
+.pcbuilder-dialogo-campo {
+  display: grid;
+  gap: 7px;
+  color: #475569;
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+.pcbuilder-dialogo-campo[hidden] {
+  display: none;
+}
+
+.pcbuilder-dialogo-campo input {
+  width: 100%;
+  min-height: 43px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  color: #172033;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  outline: none;
+  font: inherit;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+.pcbuilder-dialogo-campo input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .14);
+}
+
+.pcbuilder-dialogo-campo input[aria-invalid='true'] {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, .10);
+}
+
+.pcbuilder-dialogo-acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 4px;
+}
+
+.pcbuilder-dialogo-acoes button {
+  min-height: 41px;
+  padding: 9px 15px;
+  border: 1px solid #d6deea;
+  border-radius: 10px;
+  font: inherit;
+  font-size: .86rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+.pcbuilder-dialogo-acoes [data-cancelar] {
+  color: #334155;
+  background: #fff;
+}
+
+.pcbuilder-dialogo-acoes [data-cancelar]:hover {
+  color: #0f172a;
+  background: #f8fafc;
+  border-color: #b9c5d5;
+}
+
+.pcbuilder-dialogo-acoes [data-confirmar] {
+  color: #fff;
+  background: #2563eb;
+  border-color: #2563eb;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, .20);
+}
+
+.pcbuilder-dialogo-acoes [data-confirmar]:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.pcbuilder-dialogo-acoes button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, .28);
+  outline-offset: 2px;
+}
+
+:root[data-theme='dark'] .pcbuilder-dialogo-conteudo {
+  color: #f1f5f9;
+  background: #111827;
+  border-color: #2a3950;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .46);
+}
+
+:root[data-theme='dark'] .pcbuilder-dialogo-etiqueta {
+  color: #93c5fd;
+  background: rgba(37, 99, 235, .13);
+  border-color: rgba(96, 165, 250, .24);
+}
+
+:root[data-theme='dark'] .pcbuilder-dialogo h2 {
+  color: #f1f5f9;
+}
+
+:root[data-theme='dark'] .pcbuilder-dialogo-mensagem,
+:root[data-theme='dark'] .pcbuilder-dialogo-campo {
+  color: #a7b3c6;
+}
+
+:root[data-theme='dark'] .pcbuilder-dialogo-campo input {
+  color: #f1f5f9;
+  background: #182235;
+  border-color: #334155;
+}
+
+:root[data-theme='dark'] .pcbuilder-dialogo-acoes [data-cancelar] {
+  color: #dbe5f2;
+  background: #182235;
+  border-color: #334155;
+}
+
+:root[data-theme='dark'] .pcbuilder-dialogo-acoes [data-cancelar]:hover {
+  color: #fff;
+  background: #20304a;
+  border-color: #475569;
+}
+
+@media (max-width: 520px) {
+  .pcbuilder-dialogo {
+    width: calc(100vw - 28px);
+  }
+
+  .pcbuilder-dialogo-conteudo {
+    gap: 12px;
+    padding: 20px;
+    border-radius: 16px;
+  }
+
+  .pcbuilder-dialogo-acoes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pcbuilder-dialogo-acoes button {
+    width: 100%;
+  }
+}
+
+@keyframes pcbuilder-dialogo-entrada {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcbuilder-dialogo[open] { animation: none; }
+  .pcbuilder-dialogo-acoes button { transition: none; }
+}
+
+/* v54 — pesquisa legível no modo escuro. O seletor por ID vence o legado claro. */
+:root[data-theme='dark'] .builder-page #pesquisa-hardware-builder {
+  color: #f1f5f9 !important;
+  -webkit-text-fill-color: #f1f5f9;
+  caret-color: #93c5fd;
+  background: transparent !important;
+}
+:root[data-theme='dark'] .builder-page #pesquisa-hardware-builder::placeholder {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8;
+  opacity: 1;
+}
+:root[data-theme='dark'] .builder-page .painel-pesquisa-hardware label {
+  color: #cbd5e1;
+}

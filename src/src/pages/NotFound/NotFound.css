@@ -1,0 +1,5 @@
+.not-found-page { min-height: 65vh; display: grid; place-items: center; padding: 56px 20px; }
+.not-found-page__content { max-width: 680px; text-align: center; }
+.not-found-page h1 { margin: 8px 0 10px; font-size: clamp(2rem, 5vw, 4rem); }
+.not-found-page p { margin: 0 auto 22px; color: var(--color-text-soft); line-height: 1.7; }
+.not-found-page__content > div { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
