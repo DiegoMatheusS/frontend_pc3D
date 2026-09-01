@@ -1250,3 +1250,31 @@
 .admin-review-comment { max-width:560px; margin:5px 0; color:var(--admin-muted); line-height:1.45; white-space:pre-wrap; }
 .admin-review-table td:first-child { min-width:280px; }
 @media (max-width: 780px) { .admin-review-toolbar { grid-template-columns:1fr; } .admin-review-editor-head { align-items:stretch; flex-direction:column; } }
+
+/* v35 — cadastro por URL dentro do Assistente Admin */
+.admin-ia-quick-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:2px; }
+.admin-ia-quick-actions button { min-width:0; display:grid; grid-template-columns:auto 1fr; gap:1px 8px; align-items:center; padding:10px; border:1px solid var(--admin-border); border-radius:10px; background:var(--admin-surface); color:var(--admin-text); text-align:left; cursor:pointer; }
+.admin-ia-quick-actions button:hover { border-color:var(--admin-primary); background:var(--admin-primary-soft); }
+.admin-ia-quick-actions button > span { grid-row:1 / 3; width:27px; height:27px; display:grid; place-items:center; border-radius:8px; background:var(--admin-surface-2); font-weight:900; }
+.admin-ia-quick-actions button strong { min-width:0; font-size:11px; line-height:1.25; }
+.admin-ia-quick-actions button small { color:var(--admin-muted); font-size:9px; line-height:1.25; }
+.admin-ia-registration-card { align-self:stretch; display:grid; gap:11px; padding:12px; border:1px solid color-mix(in srgb,var(--admin-primary) 32%,var(--admin-border)); border-radius:12px; background:color-mix(in srgb,var(--admin-primary-soft) 44%,var(--admin-surface)); }
+.admin-ia-registration-head { display:grid; grid-template-columns:48px minmax(0,1fr); gap:10px; align-items:center; }
+.admin-ia-registration-head img,.admin-ia-registration-placeholder { width:48px; height:48px; border:1px solid var(--admin-border); border-radius:9px; background:var(--admin-surface); object-fit:contain; }
+.admin-ia-registration-placeholder { display:grid; place-items:center; color:var(--admin-primary); font-weight:900; }
+.admin-ia-registration-head > div { min-width:0; display:grid; gap:2px; }
+.admin-ia-registration-head small,.admin-ia-registration-head span { color:var(--admin-muted); font-size:9px; overflow-wrap:anywhere; }
+.admin-ia-registration-head strong { font-size:12px; line-height:1.35; overflow-wrap:anywhere; }
+.admin-ia-registration-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.admin-ia-registration-grid > div { min-width:0; display:grid; gap:2px; padding:8px; border:1px solid var(--admin-border); border-radius:8px; background:var(--admin-surface); }
+.admin-ia-registration-grid span,.admin-ia-registration-plan span { color:var(--admin-muted); font-size:9px; text-transform:uppercase; letter-spacing:.035em; }
+.admin-ia-registration-grid strong { font-size:10px; line-height:1.35; overflow-wrap:anywhere; }
+.admin-ia-registration-grid small { color:var(--admin-muted); font-size:9px; }
+.admin-ia-registration-plan,.admin-ia-registration-warning { display:grid; gap:3px; padding:8px 9px; border-radius:8px; background:var(--admin-surface); border:1px solid var(--admin-border); }
+.admin-ia-registration-plan strong { font-size:9px; line-height:1.45; overflow-wrap:anywhere; }
+.admin-ia-registration-warning { border-color:color-mix(in srgb,var(--admin-warning) 40%,var(--admin-border)); background:var(--admin-warning-soft); }
+.admin-ia-registration-warning strong { font-size:10px; }
+.admin-ia-registration-warning span { color:var(--admin-text); font-size:9px; line-height:1.4; }
+.admin-ia-registration-note { margin:0; color:var(--admin-muted); font-size:9px; line-height:1.45; }
+.admin-ia-registration-actions { display:flex; justify-content:flex-end; gap:7px; flex-wrap:wrap; }
+@media (max-width:420px){ .admin-ia-quick-actions,.admin-ia-registration-grid{grid-template-columns:1fr;} }

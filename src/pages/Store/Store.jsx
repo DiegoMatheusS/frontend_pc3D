@@ -187,6 +187,10 @@ export default function Store({ defaultGroup = 'todos' }) {
 
       setGroups(safeGroups)
       setProducts(safeProducts)
+      const likedFromBackend = safeProducts.filter((product) => product?.likedByUser === true).map((product) => String(product.id))
+      if (likedFromBackend.length) {
+        setLikedProductIds((current) => new Set([...current, ...likedFromBackend]))
+      }
       setVisibleCount(20)
     }).catch((error) => {
       if (!active) return

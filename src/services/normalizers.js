@@ -399,6 +399,8 @@ export function normalizeProduct(item) {
     hoverImage: item.imagemHoverUrl || item.hoverImage || item.imageHover || product?.imagemHoverUrl || product?.hoverImage || hardware?.imagemHoverUrl || peripheral?.imagemHoverUrl || setupItem?.imagemHoverUrl || null,
     rating: number(item.mediaAvaliacoes ?? item.avaliacao?.media ?? item.rating),
     reviewsCount: number(item.quantidadeAvaliacoes ?? item.avaliacao?.quantidade ?? item.reviewsCount),
+    likesCount: number(item.likesCount ?? item.curtidasCount ?? item.quantidadeCurtidas ?? item.curtidas ?? product?.likesCount ?? product?.curtidasCount),
+    likedByUser: Boolean(item.likedByUser ?? item.curtidoPeloUsuario ?? item.usuarioCurtiu ?? item.jaCurtiu ?? product?.likedByUser ?? product?.curtidoPeloUsuario),
     builderCompatible: item.builderCompatible === true || has3d,
     builderId: item.hardware?.id ?? item.hardwareId3D ?? item.builderId ?? item.id,
     price,

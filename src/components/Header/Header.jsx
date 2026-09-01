@@ -32,8 +32,45 @@ function initials(name = '') {
   return `${parts[0]?.[0] || 'C'}${parts[1]?.[0] || 'B'}`.toUpperCase()
 }
 
+function notificationView(item = {}) {
+  const type = String(item?.tipo || item?.type || '').toUpperCase()
+  const reason = String(item?.motivo || item?.detalhes?.motivo || item?.metadata?.motivo || '').trim()
+
+  if (type === 'SUGESTAO_OFERTA_APROVADA') {
+    return {
+      title: item?.titulo || 'Sugestão de oferta aprovada',
+      message: item?.mensagem || item?.texto || 'Sua sugestão de oferta foi aprovada e publicada.',
+      url: item?.url || item?.link || (item?.produtoId ? `/produto/${item.produtoId}` : '/conta'),
+      tone: 'success',
+    }
+  }
+
+  if (type === 'SUGESTAO_OFERTA_REJEITADA') {
+    const base = item?.mensagem || item?.texto || 'Sua sugestão de oferta foi rejeitada.'
+    return {
+      title: item?.titulo || 'Sugestão de oferta rejeitada',
+      message: reason && !String(base).includes(reason) ? `${base} Motivo: ${reason}` : base,
+      url: item?.url || item?.link || '/conta',
+      tone: 'danger',
+    }
+  }
+
+  if (type.includes('COMENT')) return { title: item?.titulo || 'Novo comentário', message: item?.mensagem || item?.texto || 'Há um novo comentário relacionado ao seu conteúdo.', url: item?.url || item?.link || '/conta', tone: 'info' }
+  if (type.includes('RESPOST')) return { title: item?.titulo || 'Nova resposta', message: item?.mensagem || item?.texto || 'Responderam a um dos seus comentários.', url: item?.url || item?.link || '/conta', tone: 'info' }
+  if (type.includes('LIKE') || type.includes('CURTID')) return { title: item?.titulo || 'Nova curtida', message: item?.mensagem || item?.texto || 'Seu conteúdo recebeu uma nova curtida.', url: item?.url || item?.link || '/conta', tone: 'like' }
+  if (type.includes('AVALI') || type.includes('ESTRELA')) return { title: item?.titulo || 'Nova avaliação', message: item?.mensagem || item?.texto || 'Há uma nova avaliação relacionada ao seu conteúdo.', url: item?.url || item?.link || '/conta', tone: 'rating' }
+
+  return {
+    title: item?.titulo || 'Nova atividade',
+    message: item?.mensagem || item?.texto || 'Há uma nova interação relacionada à sua conta.',
+    url: item?.url || item?.link || '/conta',
+    tone: 'default',
+  }
+}
+
 export default function Header() {
-  const { user, loading, logout } = useAuth()
+  const { user, loading, logout, refresh } = useAuth()
+  const isLoggedIn = Boolean(user)
   const location = useLocation()
   const navigate = useNavigate()
   const [menuAberto, setMenuAberto] = useState(false)
@@ -59,6 +96,22 @@ export default function Header() {
   }, [tema])
 
   useEffect(() => {
+    if (!isLoggedIn || typeof refresh !== 'function') return undefined
+    let active = true
+    const updateNotifications = () => {
+      if (!active || document.visibilityState === 'hidden') return
+      refresh().catch(() => { /* notificação não deve derrubar o Header */ })
+    }
+    const timer = window.setInterval(updateNotifications, 60000)
+    window.addEventListener('focus', updateNotifications)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+      window.removeEventListener('focus', updateNotifications)
+    }
+  }, [isLoggedIn, refresh])
+
+  useEffect(() => {
     function handleOutsideClick(event) {
       if (accountRef.current && !accountRef.current.contains(event.target)) {
         setContaAberta(false)
@@ -68,7 +121,6 @@ export default function Header() {
       }
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setBuscaAberta(false)
-      setNotificacoesAbertas(false)
       }
       if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
         setNotificacoesAbertas(false)
@@ -96,7 +148,6 @@ export default function Header() {
     setLojaAberta(false)
     setContaAberta(false)
     setBuscaAberta(false)
-    setNotificacoesAbertas(false)
     setNotificacoesAbertas(false)
   }
 
@@ -276,21 +327,31 @@ export default function Header() {
                 type="button"
                 aria-label={unreadNotifications ? `${unreadNotifications} notificações não lidas` : 'Notificações'}
                 aria-expanded={notificacoesAbertas}
-                onClick={() => { setNotificacoesAbertas((value) => !value); setContaAberta(false); setLojaAberta(false); setBuscaAberta(false) }}
+                onClick={() => {
+                  setNotificacoesAbertas((value) => {
+                    const next = !value
+                    if (next && typeof refresh === 'function') refresh().catch(() => {})
+                    return next
+                  })
+                  setContaAberta(false); setLojaAberta(false); setBuscaAberta(false)
+                }}
               >
                 <span aria-hidden="true">🔔</span>
                 {unreadNotifications > 0 && <b>{unreadNotifications > 99 ? '99+' : unreadNotifications}</b>}
               </button>
               <div className="header-notifications__panel">
-                <header><strong>Notificações</strong><span>Comentários, respostas, likes e avaliações</span></header>
+                <header><strong>Notificações</strong><span>Sugestões, comentários, respostas, likes e avaliações</span></header>
                 {notifications.length ? (
                   <div className="header-notifications__list">
-                    {notifications.slice(0, 8).map((item, index) => (
-                      <Link key={item?.id || index} className={item?.lida === false ? 'is-unread' : ''} to={item?.url || item?.link || '/conta'} onClick={fecharMenus}>
-                        <strong>{item?.titulo || 'Nova atividade'}</strong>
-                        <span>{item?.mensagem || item?.texto || 'Há uma nova interação relacionada à sua conta.'}</span>
-                      </Link>
-                    ))}
+                    {notifications.slice(0, 8).map((item, index) => {
+                      const view = notificationView(item)
+                      return (
+                        <Link key={item?.id || index} className={`${item?.lida === false ? 'is-unread ' : ''}notification-tone-${view.tone}`.trim()} to={view.url} onClick={fecharMenus}>
+                          <strong>{view.title}</strong>
+                          <span>{view.message}</span>
+                        </Link>
+                      )
+                    })}
                   </div>
                 ) : <p className="header-notifications__empty">Nenhuma notificação por enquanto.</p>}
               </div>

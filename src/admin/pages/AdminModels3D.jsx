@@ -5,7 +5,6 @@ import { AdminError, AdminLoading, AdminPageHeader, EmptyRow, formatDate } from 
 import { useAdminToast } from '../components/AdminToast'
 
 const R2_PUBLIC_BASE_URL = 'https://pub-f75dfbdc12814aea925f2615df4d32a5.r2.dev/'
-const HOME_MODEL_STORAGE_KEY = 'criabyte:home-modelo3d:v1'
 
 const EMPTY = {
   id: null, hardwareId: '', nome: '', arquivoUrl: '', formato: 'GLB', versao: '',
@@ -49,14 +48,7 @@ export default function AdminModels3D() {
   const [loadingModels, setLoadingModels] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deletingModelId, setDeletingModelId] = useState(null)
-  const [homeModelId, setHomeModelId] = useState(() => {
-    try {
-      const saved = JSON.parse(window.localStorage.getItem(HOME_MODEL_STORAGE_KEY) || 'null')
-      return saved?.modelId ? String(saved.modelId) : ''
-    } catch {
-      return ''
-    }
-  })
+  const [homeModelId, setHomeModelId] = useState('')
 
   useEffect(() => { adminService.hardwares.list().then(setHardwares).catch(setError) }, [])
   useEffect(() => {
@@ -64,7 +56,12 @@ export default function AdminModels3D() {
     let active = true
     Promise.all(hardwares.map(async (hardware) => {
       try { return (await adminService.hardwares.models(hardware.id)).map((model) => ({ ...model, hardwareId: hardware.id, hardwareNome: hardware.nome })) } catch { return [] }
-    })).then((groups) => active && setModels(groups.flat())).finally(() => active && setLoadingModels(false))
+    })).then((groups) => {
+      if (!active) return
+      const nextModels = groups.flat()
+      setModels(nextModels)
+      setHomeModelId(String(nextModels.find((model) => model?.mostrarNoHome === true)?.id || ''))
+    }).finally(() => active && setLoadingModels(false))
     return () => { active = false }
   }, [hardwares])
 
@@ -84,7 +81,22 @@ export default function AdminModels3D() {
 
   async function reloadHardware(hardwareId) {
     const updated = (await adminService.hardwares.models(Number(hardwareId))).map((model) => ({ ...model, hardwareId: Number(hardwareId), hardwareNome: hardwareMap.get(Number(hardwareId)) }))
-    setModels((current) => [...current.filter((model) => Number(model.hardwareId) !== Number(hardwareId)), ...updated])
+    const next = [...models.filter((model) => Number(model.hardwareId) !== Number(hardwareId)), ...updated]
+    setModels(next)
+    setHomeModelId(String(next.find((model) => model?.mostrarNoHome === true)?.id || ''))
+  }
+
+  async function reloadAllModels() {
+    const groups = await Promise.all((hardwares || []).map(async (hardware) => {
+      try {
+        return (await adminService.hardwares.models(hardware.id)).map((model) => ({ ...model, hardwareId: hardware.id, hardwareNome: hardware.nome }))
+      } catch {
+        return []
+      }
+    }))
+    const next = groups.flat()
+    setModels(next)
+    setHomeModelId(String(next.find((model) => model?.mostrarNoHome === true)?.id || ''))
   }
 
   function clearForm() {
@@ -130,18 +142,6 @@ export default function AdminModels3D() {
       NUMERIC.forEach((key) => { const numero = parseNumeroFormulario(form[key]); if (numero !== undefined) body[key] = numero })
       if (form.id) await adminService.hardwares.updateModel(form.id, body)
       else await adminService.hardwares.createModel(Number(form.hardwareId), body)
-      if (form.id && String(homeModelId) === String(form.id)) {
-        try {
-          const saved = JSON.parse(window.localStorage.getItem(HOME_MODEL_STORAGE_KEY) || '{}')
-          window.localStorage.setItem(HOME_MODEL_STORAGE_KEY, JSON.stringify({
-            ...saved,
-            modelId: form.id,
-            hardwareId: form.hardwareId,
-            arquivoUrl: body.arquivoUrl,
-            nome: body.nome || '',
-          }))
-        } catch { /* seleção local da Home não bloqueia a edição */ }
-      }
       toast.show(form.id ? 'Modelo 3D atualizado.' : (canReview ? 'Modelo 3D cadastrado como PENDENTE. Clique em Aprovar para liberar no 3D público.' : 'Modelo 3D cadastrado e enviado para aprovação.'))
       const hardwareId = form.hardwareId
       clearForm()
@@ -156,10 +156,6 @@ export default function AdminModels3D() {
   async function toggle(model) {
     try {
       await adminService.hardwares.setModelStatus(model.id, model.ativo === false)
-      if (model.ativo !== false && String(homeModelId) === String(model.id)) {
-        window.localStorage.removeItem(HOME_MODEL_STORAGE_KEY)
-        setHomeModelId('')
-      }
       toast.show(model.ativo === false ? 'Modelo ativado.' : 'Modelo desativado.')
       await reloadHardware(model.hardwareId)
     } catch (err) { toast.show(err.message, 'erro') }
@@ -178,11 +174,6 @@ export default function AdminModels3D() {
     try {
       await adminService.hardwares.removeModel(model.id)
 
-      if (String(homeModelId) === String(model.id)) {
-        try { window.localStorage.removeItem(HOME_MODEL_STORAGE_KEY) } catch { /* noop */ }
-        setHomeModelId('')
-      }
-
       if (String(form.id) === String(model.id)) clearForm()
       toast.show('Modelo 3D excluído permanentemente.')
       await reloadHardware(model.hardwareId)
@@ -198,7 +189,8 @@ export default function AdminModels3D() {
     return String(hardware?.categoria || '').toUpperCase() === 'PLACA_VIDEO'
   }
 
-  function setAsHomeModel(model) {
+  async function setAsHomeModel(model) {
+    if (!canEdit) return
     if (!isGpuModel(model)) {
       toast.show('A Home usa um modelo de placa de vídeo.', 'erro')
       return
@@ -208,25 +200,17 @@ export default function AdminModels3D() {
       return
     }
 
+    const isCurrent = model?.mostrarNoHome === true || String(homeModelId) === String(model.id)
     try {
-      const isCurrent = String(homeModelId) === String(model.id)
-      if (isCurrent) {
-        window.localStorage.removeItem(HOME_MODEL_STORAGE_KEY)
-        setHomeModelId('')
-        toast.show('Seleção da Home removida. A Home voltará à escolha automática.')
-        return
-      }
-
-      window.localStorage.setItem(HOME_MODEL_STORAGE_KEY, JSON.stringify({
-        modelId: model.id,
-        hardwareId: model.hardwareId,
-        arquivoUrl: montarUrlR2(model.arquivoUrl),
-        nome: model.nome || '',
-      }))
-      setHomeModelId(String(model.id))
-      toast.show('Modelo selecionado para a Home neste navegador.')
-    } catch {
-      toast.show('Não foi possível salvar a seleção da Home neste navegador.', 'erro')
+      await adminService.hardwares.updateModel(model.id, { mostrarNoHome: !isCurrent })
+      await reloadAllModels()
+      toast.show(isCurrent ? 'Modelo removido da Home.' : 'Modelo definido para a Home e salvo no banco.')
+    } catch (error) {
+      const message = String(error?.message || '')
+      const unsupported = /mostrarNoHome|não deve existir|nao deve existir|should not exist|property/i.test(message)
+      toast.show(unsupported
+        ? 'O frontend está pronto, mas o backend ainda precisa aceitar e persistir o campo mostrarNoHome.'
+        : (message || 'Não foi possível alterar o modelo da Home.'), 'erro')
     }
   }
 
@@ -309,7 +293,7 @@ export default function AdminModels3D() {
         <td data-label="Aprovação"><span className={`admin-status ${model.aprovado ? 'status-publicado' : 'status-rascunho'}`}>{model.aprovado ? 'APROVADO' : 'PENDENTE · NÃO APARECE NO 3D'}</span></td>
         <td data-label="Status"><span className={`admin-status ${model.ativo === false ? 'status-inativo' : 'status-ativo'}`}>{model.ativo === false ? 'INATIVO' : 'ATIVO'}</span></td>
         <td data-label="Atualização">{formatDate(model.atualizadoEm)}</td>
-        <td data-label="Ações"><div className="admin-row-actions admin-models3d-actions">{canEdit && <button className="admin-action-button" type="button" onClick={() => edit(model)}>Editar</button>}{canReview && !model.aprovado && <button className="admin-action-button" type="button" onClick={() => approve(model)}>Aprovar</button>}{isGpuModel(model) && <button className={`admin-action-button${String(homeModelId) === String(model.id) ? ' is-home-model' : ''}`} type="button" disabled={model.ativo === false || !model.aprovado} onClick={() => setAsHomeModel(model)}>{String(homeModelId) === String(model.id) ? 'Na Home' : 'Home'}</button>}{canReview && <button className="admin-action-button" type="button" onClick={() => toggle(model)}>{model.ativo === false ? 'Ativar' : 'Desativar'}</button>}{canDelete && <button className="admin-action-button admin-action-button--danger" type="button" disabled={deletingModelId !== null} onClick={() => removeModel(model)}>{String(deletingModelId) === String(model.id) ? 'Excluindo...' : 'Excluir'}</button>}</div></td>
+        <td data-label="Ações"><div className="admin-row-actions admin-models3d-actions">{canEdit && <button className="admin-action-button" type="button" onClick={() => edit(model)}>Editar</button>}{canReview && !model.aprovado && <button className="admin-action-button" type="button" onClick={() => approve(model)}>Aprovar</button>}{canEdit && isGpuModel(model) && <button className={`admin-action-button${model?.mostrarNoHome === true || String(homeModelId) === String(model.id) ? ' is-home-model' : ''}`} type="button" disabled={model.ativo === false || !model.aprovado} onClick={() => setAsHomeModel(model)}>{model?.mostrarNoHome === true || String(homeModelId) === String(model.id) ? 'Na Home' : 'Mostrar na Home'}</button>}{canReview && <button className="admin-action-button" type="button" onClick={() => toggle(model)}>{model.ativo === false ? 'Ativar' : 'Desativar'}</button>}{canDelete && <button className="admin-action-button admin-action-button--danger" type="button" disabled={deletingModelId !== null} onClick={() => removeModel(model)}>{String(deletingModelId) === String(model.id) ? 'Excluindo...' : 'Excluir'}</button>}</div></td>
       </tr>) : <EmptyRow columns={8} />}
     </tbody></table></div></section>
   </>

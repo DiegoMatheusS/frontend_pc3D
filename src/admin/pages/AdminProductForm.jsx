@@ -6,7 +6,7 @@ import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../compone
 import { useAdminToast } from '../components/AdminToast'
 import { AdminTechnicalFields, normalizeSpec, productSchemaFor, readSpec } from '../components/AdminTechnicalFields'
 import { getSpecializedProductTarget } from '../utils/productRouting'
-import { storeAiImportPreview } from '../utils/aiImportTransfer'
+import { consumeAiImportPreview, storeAiImportPreview } from '../utils/aiImportTransfer'
 
 const EMPTY = {
   categoriaId: '', nome: '', marca: '', modelo: '', descricao: '', mpn: '', gtin: '',
@@ -266,6 +266,8 @@ export default function AdminProductForm() {
   const canWriteAi = role === 'ADMIN' || role === 'EDITOR'
   const canImportLink = role === 'ADMIN'
 
+  const [transferredPreview] = useState(() => editing ? null : consumeAiImportPreview())
+  const [transferredPreviewApplied, setTransferredPreviewApplied] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [technical, setTechnical] = useState({})
   const [categories, setCategories] = useState([])
@@ -284,9 +286,9 @@ export default function AdminProductForm() {
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [importUrl, setImportUrl] = useState('')
+  const [importUrl, setImportUrl] = useState(() => transferredPreview?.urlOrigem || searchParams.get('url') || '')
   const [importing, setImporting] = useState(false)
-  const [importPreview, setImportPreview] = useState(null)
+  const [importPreview, setImportPreview] = useState(transferredPreview)
   const [aiBusy, setAiBusy] = useState('')
   const [aiAnalysis, setAiAnalysis] = useState('')
   const [suggestionPrefill, setSuggestionPrefill] = useState(null)
@@ -338,6 +340,13 @@ export default function AdminProductForm() {
     () => hardwares.find((hardware) => Number(hardware.id) === Number(selectedHardwareId)) || null,
     [hardwares, selectedHardwareId],
   )
+
+
+  useEffect(() => {
+    if (!transferredPreview || transferredPreviewApplied || loading || !categories.length) return
+    setTransferredPreviewApplied(true)
+    applySmartImportPreview(transferredPreview, false)
+  }, [transferredPreview, transferredPreviewApplied, loading, categories.length])
   const selectedLinkedProductId = hardwareProductId(selectedHardware)
   const linkedCount = useMemo(() => hardwares.filter((hardware) => hardwareProductId(hardware)).length, [hardwares])
 

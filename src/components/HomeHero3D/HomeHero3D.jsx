@@ -6,7 +6,6 @@ const ORBIT_URL = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/contro
 const GLTF_URL = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'
 
 const R2_PUBLIC_BASE_URL = 'https://pub-f75dfbdc12814aea925f2615df4d32a5.r2.dev/'
-const HOME_MODEL_STORAGE_KEY = 'criabyte:home-modelo3d:v1'
 
 function resolveModelUrl(value) {
   const raw = String(value ?? '').trim()
@@ -25,22 +24,31 @@ function hardwareItems(payload) {
   return []
 }
 
-function modelFromHardware(hardware) {
+function modelFromHardware(hardware, { homeOnly = false } = {}) {
   const directUrl = hardware?.modelo3dUrl
     || hardware?.modelo3DUrl
     || hardware?.model3dUrl
     || hardware?.urlModelo3d
     || hardware?.urlModelo3D
     || (typeof hardware?.modelo3D === 'string' ? hardware.modelo3D : '')
-  if (directUrl) return resolveModelUrl(directUrl)
 
   const explicit = [hardware?.modelo3DAtivo, hardware?.modelo3D]
     .filter((item) => item && typeof item === 'object')
   const models = [
     ...explicit,
     ...(Array.isArray(hardware?.modelos3D) ? hardware.modelos3D : []),
+    ...(Array.isArray(hardware?.modelos) ? hardware.modelos : []),
   ]
-  const model = models.find((item) => item?.ativo !== false && item?.aprovado !== false)
+
+  const eligible = models.filter((item) => item?.ativo !== false && item?.aprovado !== false)
+  const home = eligible.find((item) => item?.mostrarNoHome === true)
+  if (home) {
+    return resolveModelUrl(home?.arquivoUrl || home?.urlArquivo || home?.cdnUrl || home?.cloudflareUrl || home?.url)
+  }
+  if (homeOnly) return ''
+
+  if (directUrl) return resolveModelUrl(directUrl)
+  const model = eligible[0]
     || models.find((item) => item?.ativo !== false)
     || models[0]
   return resolveModelUrl(
@@ -53,17 +61,9 @@ function modelFromHardware(hardware) {
 }
 
 async function getHeroGpuModelUrl() {
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(HOME_MODEL_STORAGE_KEY) || 'null')
-    const savedUrl = resolveModelUrl(saved?.arquivoUrl)
-    if (savedUrl) return savedUrl
-  } catch {
-    // Sem seleção local: continua com a escolha automática da GPU pública.
-  }
-
   let payload
   try {
-    payload = await apiRequest('/api/hardwares?categoria=PLACA_VIDEO&pagina=1&limite=100')
+    payload = await apiRequest('/api/hardwares?categoria=PLACA_VIDEO')
   } catch {
     payload = await apiRequest('/api/hardwares')
   }
@@ -73,14 +73,17 @@ async function getHeroGpuModelUrl() {
     return category === 'PLACA_VIDEO' && hardware?.ativo !== false && hardware?.publicado !== false
   })
 
+  // 1) Campo global do banco: se a listagem pública já trouxer modelos, respeita
+  // mostrarNoHome antes de qualquer escolha automática.
   for (const gpu of gpus) {
-    const url = modelFromHardware(gpu)
+    const url = modelFromHardware(gpu, { homeOnly: true })
     if (url) return url
   }
 
-  // O endpoint público específico é a fonte mais confiável quando /api/hardwares
-  // não inclui modelos3D na listagem geral. Consulta só GPUs e para no primeiro GLB.
-  for (const gpu of gpus.slice(0, 12)) {
+  // 2) Algumas versões da API entregam os modelos só no endpoint específico.
+  // Varre as GPUs procurando primeiro o modelo explicitamente marcado para a Home.
+  const fetchedModels = new Map()
+  for (const gpu of gpus.slice(0, 20)) {
     if (!gpu?.id) continue
     try {
       const modelPayload = await apiRequest(`/api/hardwares/${encodeURIComponent(gpu.id)}/modelos-3d`)
@@ -91,14 +94,29 @@ async function getHeroGpuModelUrl() {
           : Array.isArray(modelPayload)
             ? modelPayload
             : []
-      const url = modelFromHardware({ modelos3D: models })
+      fetchedModels.set(String(gpu.id), models)
+      const url = modelFromHardware({ modelos3D: models }, { homeOnly: true })
       if (url) return url
     } catch {
-      // Tenta a próxima GPU pública.
+      // Backend antigo ou GPU sem endpoint público de modelos: continua.
     }
   }
 
-  // Fallback para versões da API que entregam o modelo somente no detalhe.
+  // 3) Compatibilidade com o backend antigo: se mostrarNoHome ainda não existir,
+  // mantém uma seleção automática de um GLB ativo/aprovado.
+  for (const gpu of gpus) {
+    const url = modelFromHardware(gpu)
+    if (url) return url
+  }
+
+  for (const gpu of gpus.slice(0, 20)) {
+    const models = fetchedModels.get(String(gpu.id))
+    if (!models) continue
+    const url = modelFromHardware({ modelos3D: models })
+    if (url) return url
+  }
+
+  // 4) Último fallback para APIs que só incluem o modelo no detalhe do Hardware.
   for (const gpu of gpus.slice(0, 12)) {
     if (!gpu?.id) continue
     try {

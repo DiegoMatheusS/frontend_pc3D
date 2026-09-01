@@ -623,3 +623,9 @@
 .header-notifications__list a strong { font-size: 12px; }
 .header-notifications__list a span { color: var(--color-text-soft); font-size: 11px; line-height: 1.4; }
 .header-notifications__empty { margin: 0; padding: 16px 8px 10px; color: var(--color-text-soft); font-size: 12px; }
+
+/* v35 — estados de notificações de sugestão de oferta */
+.header-notifications__list a.notification-tone-success strong { color:#15803d; }
+.header-notifications__list a.notification-tone-danger strong { color:#b91c1c; }
+.header-notifications__list a.notification-tone-like strong { color:#be123c; }
+.header-notifications__list a.notification-tone-rating strong { color:#a16207; }

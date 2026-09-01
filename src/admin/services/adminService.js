@@ -449,6 +449,12 @@ export const adminService = {
     },
   },
 
+  chatbot: {
+    analyzeRegistration: (body) => oneRequest('/api/admin/chatbot/analisar-cadastro', 'POST', body),
+    confirmRegistration: (body) => oneRequest('/api/admin/chatbot/confirmar-cadastro', 'POST', body),
+    cancelRegistration: (body) => oneRequest('/api/admin/chatbot/cancelar-cadastro', 'POST', body),
+  },
+
   ai: {
     chat: (body) => oneRequest('/api/admin/ia/chat', 'POST', body),
     importLink: async (url, categoriaEsperada) => normalizeAiImportResult(await oneRequest('/api/admin/ia/importar-link', 'POST', { url, ...(categoriaEsperada ? { categoriaEsperada } : {}) })),
