@@ -65,6 +65,12 @@ export async function apiRequest(path, options = {}) {
         : options.body,
     })
   } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new ApiError('Solicitação cancelada.', {
+        data: { codigo: 'REQUEST_ABORTED' },
+        url,
+      })
+    }
     throw new ApiError('Não foi possível conectar ao backend.', {
       data: error,
       url,

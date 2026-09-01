@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
 import { adminService } from '../services/adminService'
@@ -304,6 +304,8 @@ export default function AdminProductForm() {
   const [dirty, setDirty] = useState(false)
   const [importUrl, setImportUrl] = useState(() => transferredPreview?.urlOrigem || searchParams.get('url') || '')
   const [importing, setImporting] = useState(false)
+  const [importElapsed, setImportElapsed] = useState(0)
+  const importAbortRef = useRef(null)
   const [importPreview, setImportPreview] = useState(transferredPreview)
   const [aiBusy, setAiBusy] = useState('')
   const [aiAnalysis, setAiAnalysis] = useState('')
@@ -312,6 +314,22 @@ export default function AdminProductForm() {
   const [originSuggestionSearch, setOriginSuggestionSearch] = useState('')
   const [originSuggestions, setOriginSuggestions] = useState([])
   const [originSuggestionsLoading, setOriginSuggestionsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!importing) {
+      setImportElapsed(0)
+      return undefined
+    }
+    const startedAt = Date.now()
+    const timer = window.setInterval(() => {
+      setImportElapsed(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [importing])
+
+  useEffect(() => () => {
+    importAbortRef.current?.abort()
+  }, [])
 
   const selectedCategory = useMemo(
     () => categories.find((category) => Number(category.id) === Number(form.categoriaId)),
@@ -640,11 +658,21 @@ export default function AdminProductForm() {
   }
 
   async function importData() {
-    if (!canImportLink || !cleanText(importUrl)) return
+    if (!canImportLink || !cleanText(importUrl) || importing) return
+
+    importAbortRef.current?.abort()
+    const controller = new AbortController()
+    importAbortRef.current = controller
     setImporting(true)
+    setImportElapsed(0)
     setImportPreview(null)
+
     try {
-      const result = await adminService.ai.importLink(cleanText(importUrl))
+      const result = await adminService.ai.importLink(cleanText(importUrl), undefined, {
+        signal: controller.signal,
+        timeoutMs: 90000,
+      })
+      if (controller.signal.aborted) return
       setImportPreview(result)
       if (editing && dirty) {
         toast.show('A prévia da IA está pronta. Como existem alterações manuais no formulário, revise e clique em aplicar para não sobrescrever seus ajustes.', 'alerta')
@@ -652,10 +680,21 @@ export default function AdminProductForm() {
       }
       await applySmartImportPreview(result, false)
     } catch (err) {
-      toast.show(err?.message || 'Não foi possível analisar o link com a IA.', 'erro')
+      if (err?.code === 'REQUEST_ABORTED') {
+        toast.show('Análise cancelada. Você pode tentar novamente quando quiser.', 'alerta')
+      } else if (err?.code === 'IA_TIMEOUT') {
+        toast.show('A IA demorou mais de 90 segundos para responder. A tela foi liberada para tentar novamente. Se isso continuar no Magazine ou Mercado Livre, o backend/Projeto IA está demorando ou bloqueado.', 'erro')
+      } else {
+        toast.show(err?.message || 'Não foi possível analisar o link com a IA.', 'erro')
+      }
     } finally {
+      if (importAbortRef.current === controller) importAbortRef.current = null
       setImporting(false)
     }
+  }
+
+  function cancelImportData() {
+    importAbortRef.current?.abort()
   }
 
   async function applySmartImportPreview(preview = importPreview, notify = true) {
@@ -1122,7 +1161,13 @@ export default function AdminProductForm() {
           </div>
           <div className="admin-form-grid">
             <div className="admin-field full"><label>URL do produto</label><input className="admin-input" type="url" value={importUrl} onChange={(event) => setImportUrl(event.target.value)} placeholder="https://fabricante-ou-loja.com/produto" /></div>
-            <div className="admin-field full"><button className="btn btn-primario" type="button" disabled={importing || !cleanText(importUrl)} onClick={importData}>{importing ? 'Analisando com IA...' : 'Analisar e preencher Produto'}</button></div>
+            <div className="admin-field full admin-import-actions">
+              <button className="btn btn-primario" type="button" disabled={importing || !cleanText(importUrl)} onClick={importData}>
+                {importing ? `Analisando com IA... ${importElapsed}s` : 'Analisar e preencher Produto'}
+              </button>
+              {importing && <button className="btn btn-secundario" type="button" onClick={cancelImportData}>Cancelar análise</button>}
+              {importing && <small className="admin-help">A análise será encerrada automaticamente se passar de 90 segundos sem resposta.</small>}
+            </div>
           </div>
           {importPreview && <div className="admin-import-preview">
             <div className="admin-import-preview-head"><div><span className="admin-import-preview-status">{importPreview.status || 'PRÉVIA'}</span><h3>Prévia para revisão</h3></div><strong>{importPreview.destinoSugerido === 'HARDWARE' ? 'Hardware' : 'Produto'}</strong></div>

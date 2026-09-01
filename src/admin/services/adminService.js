@@ -258,13 +258,50 @@ export const adminService = {
 
   ai: {
     chat: (body) => oneRequest('/api/admin/ia/chat', 'POST', body),
-    importLink: async (url, categoriaEsperada) => normalizeAiResponse(await oneRequest('/api/admin/ia/importar-link', 'POST', { url, ...(categoriaEsperada ? { categoria: categoriaEsperada } : {}) })),
+    importLink: async (url, categoriaEsperada, options = {}) => normalizeAiResponse(await oneRequestWithTimeout(
+      '/api/admin/ia/importar-link',
+      'POST',
+      { url, ...(categoriaEsperada ? { categoria: categoriaEsperada } : {}) },
+      { ...options, timeoutMs: options.timeoutMs ?? 90000 },
+    )),
     analyzeProduct: (produtoId) => oneRequest('/api/admin/ia/analisar-produto', 'POST', { produtoId: Number(produtoId) }),
     generateProductDescription: (produtoId) => oneRequest('/api/admin/ia/gerar-descricao', 'POST', { produtoId: Number(produtoId) }),
     normalizeProduct: (conteudoBruto, urlOrigem) => oneRequest('/api/admin/ia/normalizar-produto', 'POST', { conteudoBruto, ...(urlOrigem ? { urlOrigem } : {}) }),
   },
 }
 
-async function oneRequest(path, method, body) {
-  return unwrapOne(await apiRequest(path, { method, body }))
+async function oneRequest(path, method, body, options = {}) {
+  return unwrapOne(await apiRequest(path, { ...options, method, body }))
+}
+
+async function oneRequestWithTimeout(path, method, body, { signal, timeoutMs = 90000 } = {}) {
+  const controller = new AbortController()
+  let timedOut = false
+
+  const abortFromExternal = () => controller.abort(signal?.reason)
+  if (signal) {
+    if (signal.aborted) abortFromExternal()
+    else signal.addEventListener('abort', abortFromExternal, { once: true })
+  }
+
+  const timer = window.setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+
+  try {
+    return await oneRequest(path, method, body, { signal: controller.signal })
+  } catch (error) {
+    if (controller.signal.aborted) {
+      const wrapped = new Error(timedOut
+        ? `A análise demorou mais de ${Math.round(timeoutMs / 1000)} segundos. Tente novamente.`
+        : 'Análise cancelada.')
+      wrapped.code = timedOut ? 'IA_TIMEOUT' : 'REQUEST_ABORTED'
+      throw wrapped
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timer)
+    if (signal) signal.removeEventListener('abort', abortFromExternal)
+  }
 }
