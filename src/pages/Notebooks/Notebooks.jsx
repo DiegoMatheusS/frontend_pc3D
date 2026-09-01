@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import NotebookCard from '../../components/NotebookCard/NotebookCard'
 import CatalogState from '../../components/CatalogState/CatalogState'
 import { getNotebooks } from '../../services/notebooksService'
@@ -13,26 +14,14 @@ const validNumberOptions = (values) => [...new Set(values.map(Number).filter((va
 
 const fields = [
   ['Processador', 'cpu'],
-  ['Núcleos', 'cpuCores', 'higher'],
-  ['Threads', 'cpuThreads', 'higher'],
-  ['TDP CPU', 'cpuTdpWatts', 'lower', ' W'],
   ['GPU', 'gpu'],
-  ['VRAM', 'vramGb', 'higher', ' GB'],
-  ['TGP GPU', 'gpuTgpWatts', 'lower', ' W'],
-  ['RAM instalada', 'ramGb', 'higher', ' GB'],
-  ['RAM máxima', 'maxRamGb', 'higher', ' GB'],
-  ['Tipo de RAM', 'ramType'],
-  ['Armazenamento', 'storageGb', 'higher', ' GB'],
-  ['Slots M.2', 'm2Slots', 'higher'],
+  ['Modelo da RAM', 'ramModel'],
+  ['Memória RAM', 'ramGb', 'higher', ' GB'],
+  ['Tipo da RAM', 'ramType'],
+  ['Armazenamento', 'storageLabel'],
   ['Tela', 'screenInches', null, '”'],
   ['Resolução', 'resolution'],
-  ['Taxa de atualização', 'refreshRateHz', 'higher', ' Hz'],
-  ['Painel', 'panel'],
-  ['Brilho', 'brightnessNits', 'higher', ' nits'],
-  ['Bateria', 'batteryWh', 'higher', ' Wh'],
   ['Peso', 'weightKg', 'lower', ' kg'],
-  ['Upgrade RAM', 'upgradeRam'],
-  ['Upgrade armazenamento', 'upgradeStorage'],
 ]
 
 const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -40,7 +29,7 @@ const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL
 function winnerIndex(values, better) {
   if (!better || values.length !== 2) return -1
   const numeric = values.map(Number)
-  if (numeric.some((value) => !Number.isFinite(value)) || numeric[0] === numeric[1]) return -1
+  if (numeric.some((value) => !Number.isFinite(value) || value <= 0) || numeric[0] === numeric[1]) return -1
   if (better === 'lower') return numeric[0] < numeric[1] ? 0 : 1
   return numeric[0] > numeric[1] ? 0 : 1
 }
@@ -169,23 +158,75 @@ export default function Notebooks() {
         </div>
       </section>
 
-      {compare.length > 0 && <div className="notebooks-compare-bar"><div className="page-container"><div><strong>Comparar notebooks</strong><span>{compare.map((item) => item.name).join(' × ')}</span></div><div><button className="button button--secondary" onClick={() => setCompare([])}>Limpar</button><button className="button button--primary" disabled={compare.length !== 2} onClick={() => setComparisonOpen(true)}>Comparar {compare.length}/2</button></div></div></div>}
-
-      {comparisonOpen && compare.length === 2 && <div className="notebooks-dialog" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setComparisonOpen(false) }}>
-        <section className="notebooks-comparison" ref={comparisonDialogRef} role="dialog" aria-modal="true" aria-labelledby="notebook-comparison-title">
-          <header><div><span className="eyebrow">Comparação</span><h2 id="notebook-comparison-title">Notebook lado a lado</h2></div><button onClick={() => setComparisonOpen(false)} aria-label="Fechar comparação">×</button></header>
-          <div className="notebooks-comparison__table">
-            <div className="notebooks-comparison__row notebooks-comparison__row--head"><strong>Especificação</strong>{compare.map((item) => <strong key={item.id}>{item.name}</strong>)}</div>
-            {fields.map(([label, key, better, suffix = '']) => {
-              const values = compare.map((item) => item.specs?.[key])
-              const winner = winnerIndex(values, better)
-              return <div className="notebooks-comparison__row" key={key}><span>{label}</span>{values.map((value, index) => <span className={winner === index ? 'is-better' : ''} key={`${key}-${compare[index].id}`}>{value === 0 && (key === 'vramGb' || key === 'gpuTgpWatts') ? 'Integrada' : `${value ?? '—'}${typeof value === 'number' && value !== 0 ? suffix : ''}`}</span>)}</div>
-            })}
-            <div className="notebooks-comparison__row"><span>Preço atual</span>{compare.map((item, index) => { const winner = winnerIndex(compare.map((n) => n.price), 'lower'); return <span className={winner === index ? 'is-better' : ''} key={item.id}>{money.format(item.price)}</span> })}</div>
+      {typeof document !== 'undefined' && compare.length > 0 && createPortal(
+        <aside className="notebooks-compare-dock" style={{ position: 'fixed', zIndex: 1200, left: '50%', right: 'auto', bottom: 'max(14px, env(safe-area-inset-bottom))', width: 'min(920px, calc(100vw - 32px))', transform: 'translateX(-50%)' }} aria-label="Notebooks selecionados para comparação">
+          <div className="notebooks-compare-dock__heading">
+            <div>
+              <strong>Comparar notebooks</strong>
+              <span>{compare.length}/2 selecionado{compare.length === 1 ? '' : 's'}</span>
+            </div>
+            <button className="notebooks-compare-dock__clear" type="button" onClick={() => { setCompare([]); setComparisonOpen(false) }}>Limpar</button>
           </div>
-          <p className="notebooks-comparison__note">O verde indica apenas vantagem objetiva no campo. Menor consumo, peso e preço; maior capacidade, desempenho numérico ou autonomia estimada. Campos sem critério universal ficam neutros.</p>
-        </section>
-      </div>}
+
+          <div className="notebooks-compare-dock__slots">
+            {[0, 1].map((slot) => {
+              const item = compare[slot]
+              return item ? (
+                <div className="notebooks-compare-dock__item" key={String(item.id)}>
+                  <div className="notebooks-compare-dock__thumb">
+                    {item.image ? <img src={item.image} alt="" /> : <span>NB</span>}
+                  </div>
+                  <div className="notebooks-compare-dock__item-copy">
+                    <small>{item.brand || 'Notebook'}</small>
+                    <strong>{item.name}</strong>
+                  </div>
+                  <button type="button" className="notebooks-compare-dock__remove" aria-label={`Remover ${item.name} da comparação`} onClick={() => toggleCompare(item)}>×</button>
+                </div>
+              ) : (
+                <div className="notebooks-compare-dock__item notebooks-compare-dock__item--empty" key={`empty-${slot}`}>
+                  <span className="notebooks-compare-dock__plus">+</span>
+                  <div className="notebooks-compare-dock__item-copy">
+                    <small>Segundo notebook</small>
+                    <strong>Selecione outro notebook</strong>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <button
+            className="button button--primary notebooks-compare-dock__compare"
+            type="button"
+            disabled={compare.length !== 2}
+            onClick={() => setComparisonOpen(true)}
+          >
+            {compare.length === 2 ? 'Comparar agora' : 'Selecione 2 notebooks'}
+          </button>
+        </aside>,
+        document.body,
+      )}
+
+      {typeof document !== 'undefined' && comparisonOpen && compare.length === 2 && createPortal(
+        <div className="notebooks-dialog" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setComparisonOpen(false) }}>
+          <section className="notebooks-comparison" ref={comparisonDialogRef} role="dialog" aria-modal="true" aria-labelledby="notebook-comparison-title">
+            <header><div><span className="eyebrow">Comparação</span><h2 id="notebook-comparison-title">Notebook lado a lado</h2></div><button onClick={() => setComparisonOpen(false)} aria-label="Fechar comparação">×</button></header>
+            <div className="notebooks-comparison__table">
+              <div className="notebooks-comparison__row notebooks-comparison__row--head"><strong>Especificação</strong>{compare.map((item) => <strong key={item.id}>{item.name}</strong>)}</div>
+              {fields.map(([label, key, better, suffix = '']) => {
+                const values = compare.map((item) => item.specs?.[key])
+                const winner = winnerIndex(values, better)
+                return <div className="notebooks-comparison__row" key={key}><span>{label}</span>{values.map((value, index) => {
+                  const hasValue = value !== null && value !== undefined && value !== '' && !(typeof value === 'number' && value <= 0)
+                  return <span className={winner === index ? 'is-better' : ''} key={`${key}-${compare[index].id}`}>{hasValue ? `${value}${typeof value === 'number' ? suffix : ''}` : '-'}</span>
+                })}</div>
+              })}
+              <div className="notebooks-comparison__row"><span>Preço</span>{compare.map((item, index) => { const winner = winnerIndex(compare.map((n) => n.price), 'lower'); return <span className={winner === index ? 'is-better' : ''} key={item.id}>{Number(item.price) > 0 ? money.format(item.price) : '-'}</span> })}</div>
+            </div>
+            <p className="notebooks-comparison__note">Campos sem informação cadastrada aparecem como “-”. O destaque verde é usado apenas quando existe uma vantagem objetiva, como mais memória, menor peso ou menor preço.</p>
+          </section>
+        </div>,
+        document.body,
+      )}
     </main>
   )
 }

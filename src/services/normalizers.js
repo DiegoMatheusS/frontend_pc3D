@@ -420,6 +420,8 @@ function normalizeNotebookSpecs(rawSpecs = {}) {
   const resolution = text(spec.resolution ?? spec.resolucaoTela ?? spec.resolucao, '') || (width && height ? `${width}x${height}` : '')
   const upgradeRamRaw = spec.upgradeRam ?? spec.ramExpansivel
   const upgradeStorageRaw = spec.upgradeArmazenamento ?? spec.upgradeStorage ?? spec.armazenamentoExpansivel
+  const storageGb = number(spec.storageGb ?? spec.armazenamentoGb ?? spec.capacidadeArmazenamentoGb, 0)
+  const storageType = text(spec.storageType ?? spec.tipoArmazenamento, '')
   const yesNo = (value) => typeof value === 'boolean' ? (value ? 'Sim' : 'Não') : text(value, '—')
   return {
     ...spec,
@@ -429,15 +431,17 @@ function normalizeNotebookSpecs(rawSpecs = {}) {
     cpuCores: number(spec.cpuCores ?? spec.nucleosProcessador ?? spec.nucleos, 0),
     cpuThreads: number(spec.cpuThreads ?? spec.threadsProcessador ?? spec.threads, 0),
     cpuTdpWatts: number(spec.cpuTdpWatts ?? spec.tdpProcessador ?? spec.tdpCpu ?? spec.tdpWatts, 0),
-    gpu: text(spec.gpu ?? spec.placaVideo ?? spec.placaDeVideo ?? spec.gpuNome, 'Vídeo integrado'),
+    gpu: text(spec.gpu ?? spec.placaVideo ?? spec.placaDeVideo ?? spec.gpuNome, ''),
     dedicatedGpu: Boolean(spec.dedicatedGpu ?? spec.gpuDedicada ?? spec.placaVideoDedicada),
     vramGb: number(spec.vramGb ?? spec.memoriaVideoGb ?? spec.vram, 0),
     gpuTgpWatts: number(spec.gpuTgpWatts ?? spec.tgpGpu ?? spec.tgp ?? spec.tgpWatts, 0),
     ramGb: number(spec.ramGb ?? spec.memoriaRamGb ?? spec.memoriaInstaladaGb ?? spec.ramInstaladaGb, 0),
+    ramModel: text(spec.ramModel ?? spec.modeloRam ?? spec.modeloMemoriaRam ?? spec.memoriaRamModelo ?? spec.memoriaModelo, ''),
     ramType: text(spec.ramType ?? spec.tipoMemoria ?? spec.tipoRam, ''),
     maxRamGb: number(spec.maxRamGb ?? spec.memoriaMaximaGb ?? spec.ramMaximaGb, 0),
-    storageGb: number(spec.storageGb ?? spec.armazenamentoGb ?? spec.capacidadeArmazenamentoGb, 0),
-    storageType: text(spec.storageType ?? spec.tipoArmazenamento, ''),
+    storageGb,
+    storageType,
+    storageLabel: [storageGb > 0 ? `${storageGb} GB` : '', storageType].filter(Boolean).join(' '),
     m2Slots: number(spec.m2Slots ?? spec.slotsM2 ?? spec.slotsM2Total, 0),
     screenInches: number(spec.screenInches ?? spec.telaPolegadas ?? spec.polegadas ?? spec.tamanhoTelaPolegadas, 0),
     resolution,

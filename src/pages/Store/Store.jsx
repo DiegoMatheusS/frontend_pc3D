@@ -64,9 +64,9 @@ const comparisonByCategory = {
     ['Painel', 'panel'], ['Tempo de resposta', 'responseTimeMs', 'lower', ' ms'], ['HDR', 'hdr'], ['DisplayPort', 'displayPort'], ['HDMI', 'hdmi'], ['VESA', 'vesa'],
   ],
   notebook: [
-    ['CPU', 'cpu'], ['GPU', 'gpu'], ['RAM', 'ramGb', 'higher', ' GB'], ['Armazenamento', 'storageGb', 'higher', ' GB'],
-    ['Tela', 'screenInches', null, '”'], ['Resolução', 'resolution'], ['Hz', 'refreshRateHz', 'higher', ' Hz'],
-    ['Peso', 'weightKg', 'lower', ' kg'], ['Upgrade RAM', 'upgradeRam'], ['Upgrade armazenamento', 'upgradeStorage'],
+    ['Processador', 'cpu'], ['GPU', 'gpu'], ['Modelo da RAM', 'ramModel'], ['Memória RAM', 'ramGb', 'higher', ' GB'],
+    ['Tipo da RAM', 'ramType'], ['Armazenamento', 'storageLabel'], ['Tela', 'screenInches', null, '”'],
+    ['Resolução', 'resolution'], ['Peso', 'weightKg', 'lower', ' kg'],
   ],
   cadeira: [['Material', 'material'], ['Peso máximo', 'maxWeightKg', 'higher', ' kg'], ['Braço', 'armrest'], ['Reclinação', 'reclining'], ['Apoio lombar', 'lumbarSupport'], ['Apoio de cabeça', 'headrest']],
   mousepad: [['Largura', 'widthMm', 'higher', ' mm'], ['Altura', 'heightMm', 'higher', ' mm'], ['Espessura', 'thicknessMm', 'higher', ' mm'], ['Superfície', 'surface'], ['Base', 'base'], ['RGB', 'rgb']],
@@ -74,14 +74,14 @@ const comparisonByCategory = {
 
 function winnerIndex(values, better) {
   if (!better || values.length !== 2) return -1
-  if (values.some((value) => !Number.isFinite(Number(value)))) return -1
+  if (values.some((value) => !Number.isFinite(Number(value)) || Number(value) <= 0)) return -1
   if (Number(values[0]) === Number(values[1])) return -1
   if (better === 'lower') return Number(values[0]) < Number(values[1]) ? 0 : 1
   return Number(values[0]) > Number(values[1]) ? 0 : 1
 }
 
 function formatSpecValue(value, suffix = '') {
-  if (value === null || value === undefined || value === '') return '—'
+  if (value === null || value === undefined || value === '' || (typeof value === 'number' && value <= 0)) return '-'
   if (Array.isArray(value)) return `${value.join(', ')}${suffix}`
   if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
   if (typeof value === 'object') {
@@ -111,6 +111,33 @@ function genericComparisonFields(items) {
     })
     .slice(0, 18)
     .map((key) => [humanizeSpecKey(key), key])
+}
+
+function isNotebookProduct(item) {
+  if (!item) return false
+  const categoryKey = normalize(item.categoryKey)
+  const category = normalize(item.category)
+  const group = normalize(item.group)
+  return categoryKey === 'notebook'
+    || category.includes('notebook')
+    || group === 'notebooks'
+    || item.notebookId !== null && item.notebookId !== undefined
+}
+
+function comparisonCategoryKey(item) {
+  if (isNotebookProduct(item)) return 'notebook'
+  return item?.categoryKey || ''
+}
+
+function findNotebookForProduct(notebooks, product) {
+  if (!Array.isArray(notebooks) || !product) return null
+  const notebookId = product.notebookId !== null && product.notebookId !== undefined ? String(product.notebookId) : ''
+  const productId = product.id !== null && product.id !== undefined ? String(product.id) : ''
+  const productName = normalize(product.name)
+  return notebooks.find((notebook) => notebookId && String(notebook.id) === notebookId)
+    || notebooks.find((notebook) => productId && notebook.productId !== null && notebook.productId !== undefined && String(notebook.productId) === productId)
+    || notebooks.find((notebook) => productName && normalize(notebook.name) === productName)
+    || null
 }
 
 export default function Store({ defaultGroup = 'todos' }) {
@@ -171,6 +198,7 @@ export default function Store({ defaultGroup = 'todos' }) {
           image: product.image || notebook.image || null,
           hoverImage: product.hoverImage || notebook.hoverImage || null,
           description: product.description || notebook.description || '',
+          specs: { ...(product.specs || {}), ...(notebook.specs || {}) },
         }
       })
       const safeProducts = enrichedProducts.filter((product) => {
@@ -348,7 +376,7 @@ export default function Store({ defaultGroup = 'todos' }) {
       }
 
       const sameCategory = !current.length
-        || current[0].categoryKey === product.categoryKey
+        || comparisonCategoryKey(current[0]) === comparisonCategoryKey(product)
         || normalize(current[0].category) === normalize(product.category)
       if (!sameCategory) {
         setCompareMessage(`Para uma comparação técnica correta, escolha outro produto da categoria ${current[0].category}.`)
@@ -366,24 +394,53 @@ export default function Store({ defaultGroup = 'todos' }) {
     setComparisonLoading(true)
     setCompareMessage('')
     try {
+      const comparingNotebooks = compare.every(isNotebookProduct)
+      const notebookCatalog = comparingNotebooks
+        ? await getNotebooks().catch(() => [])
+        : []
+
       const detailed = await Promise.all(compare.map(async (product) => {
+        let detail = null
         try {
-          const detail = await getProductById(product.slug || product.id)
-          if (!detail) return product
-          return {
-            ...product,
-            ...detail,
-            category: detail.categoryKey && detail.categoryKey !== 'produto' ? detail.category : product.category,
-            categoryKey: detail.categoryKey && detail.categoryKey !== 'produto' ? detail.categoryKey : product.categoryKey,
-            specs: Object.keys(detail.specs || {}).length ? detail.specs : product.specs,
-            offers: detail.offers?.length ? detail.offers : product.offers,
-          }
+          detail = await getProductById(product.slug || product.id)
         } catch {
-          return product
+          detail = null
+        }
+
+        const merged = detail ? {
+          ...product,
+          ...detail,
+          category: detail.categoryKey && detail.categoryKey !== 'produto' ? detail.category : product.category,
+          categoryKey: detail.categoryKey && detail.categoryKey !== 'produto' ? detail.categoryKey : product.categoryKey,
+          specs: Object.keys(detail.specs || {}).length ? { ...(product.specs || {}), ...(detail.specs || {}) } : (product.specs || {}),
+          offers: detail.offers?.length ? detail.offers : product.offers,
+        } : product
+
+        if (!isNotebookProduct(product) && !isNotebookProduct(merged)) return merged
+
+        const notebook = findNotebookForProduct(notebookCatalog, product)
+          || findNotebookForProduct(notebookCatalog, merged)
+
+        return {
+          ...merged,
+          category: 'Notebook',
+          categoryKey: 'notebook',
+          group: 'notebooks',
+          notebookId: merged.notebookId ?? notebook?.id ?? null,
+          image: merged.image || notebook?.image || null,
+          hoverImage: merged.hoverImage || notebook?.hoverImage || null,
+          description: merged.description || notebook?.description || '',
+          specs: {
+            ...(detail?.specs || {}),
+            ...(product.specs || {}),
+            ...(notebook?.specs || {}),
+          },
+          price: Number(merged.price) > 0 ? merged.price : notebook?.price ?? merged.price,
+          offers: merged.offers?.length ? merged.offers : (notebook?.offers || []),
         }
       }))
 
-      const sameCategory = detailed[0].categoryKey === detailed[1].categoryKey
+      const sameCategory = comparisonCategoryKey(detailed[0]) === comparisonCategoryKey(detailed[1])
         || normalize(detailed[0].category) === normalize(detailed[1].category)
       if (!sameCategory) {
         setCompareMessage('Os dois produtos precisam pertencer à mesma categoria para comparar a ficha técnica.')
@@ -431,11 +488,15 @@ export default function Store({ defaultGroup = 'todos' }) {
       : `Explore ${String(activeGroupLabel || 'produtos').toLowerCase()} com especificações, comparação e ofertas disponíveis.`
 
   const activeComparison = comparisonItems.length === 2 ? comparisonItems : compare
-  const categoryFields = activeComparison.length === 2 ? (comparisonByCategory[activeComparison[0].categoryKey] || []) : []
-  const availableCategoryFields = categoryFields.filter(([, key]) => activeComparison.some((item) => {
-    const value = item.specs?.[key]
-    return value !== undefined && value !== null && value !== ''
-  }))
+  const activeComparisonCategoryKey = activeComparison.length === 2 ? comparisonCategoryKey(activeComparison[0]) : ''
+  const comparingNotebooks = activeComparisonCategoryKey === 'notebook'
+  const categoryFields = activeComparison.length === 2 ? (comparisonByCategory[activeComparisonCategoryKey] || []) : []
+  const availableCategoryFields = comparingNotebooks
+    ? categoryFields
+    : categoryFields.filter(([, key]) => activeComparison.some((item) => {
+      const value = item.specs?.[key]
+      return value !== undefined && value !== null && value !== ''
+    }))
   const fields = activeComparison.length === 2
     ? (availableCategoryFields.length ? availableCategoryFields : genericComparisonFields(activeComparison))
     : []
@@ -545,7 +606,7 @@ export default function Store({ defaultGroup = 'todos' }) {
         <aside className="store-compare-dock" aria-label="Hardwares selecionados para comparação">
           <div className="store-compare-dock__heading">
             <div>
-              <strong>Comparar hardwares</strong>
+              <strong>{isNotebookProduct(compare[0]) ? 'Comparar notebooks' : 'Comparar hardwares'}</strong>
               <span>{compare.length}/2 selecionado{compare.length === 1 ? '' : 's'}</span>
             </div>
             <button className="store-compare-dock__clear" type="button" onClick={() => { setCompare([]); setComparisonItems([]); setComparisonOpen(false); setCompareMessage('') }}>Limpar</button>
@@ -585,7 +646,7 @@ export default function Store({ defaultGroup = 'todos' }) {
             disabled={compare.length !== 2 || comparisonLoading}
             onClick={openComparison}
           >
-            {comparisonLoading ? 'Carregando comparação…' : compare.length === 2 ? 'Abrir comparação' : 'Selecione 2 hardwares'}
+            {comparisonLoading ? 'Carregando comparação…' : compare.length === 2 ? 'Abrir comparação' : isNotebookProduct(compare[0]) ? 'Selecione 2 notebooks' : 'Selecione 2 hardwares'}
           </button>
         </aside>,
         document.body,
@@ -595,7 +656,7 @@ export default function Store({ defaultGroup = 'todos' }) {
         <div className="store-dialog-backdrop" role="presentation" onMouseDown={() => setComparisonOpen(false)}>
           <section className="store-comparison" ref={comparisonDialogRef} role="dialog" aria-modal="true" aria-labelledby="store-comparison-title" onMouseDown={(event) => event.stopPropagation()}>
             <header className="store-comparison__header">
-              <div><span className="eyebrow">{activeComparison[0].category}</span><h2 id="store-comparison-title">Comparação de produtos</h2></div>
+              <div><span className="eyebrow">{activeComparison[0].category}</span><h2 id="store-comparison-title">{comparingNotebooks ? 'Comparação de notebooks' : 'Comparação de produtos'}</h2></div>
               <button type="button" aria-label="Fechar" onClick={() => setComparisonOpen(false)}>×</button>
             </header>
             <div className="store-comparison__scroll">
@@ -618,9 +679,9 @@ export default function Store({ defaultGroup = 'todos' }) {
                     return <span className={winner === index ? 'is-better' : ''} key={`price-${item.id}`}>{formatPrice(item.price)}</span>
                   })}
                 </div>
-                <div className="store-comparison__row"><span>Ofertas ativas</span>{activeComparison.map((item) => <span key={`offers-${item.id}`}>{item.offers?.length || 0}</span>)}</div>
+                {!comparingNotebooks && <div className="store-comparison__row"><span>Ofertas ativas</span>{activeComparison.map((item) => <span key={`offers-${item.id}`}>{item.offers?.length || 0}</span>)}</div>}
               </div>
-              <p className="store-comparison__note">O verde aparece apenas quando existe uma vantagem objetiva definida para aquele campo. Potência da fonte e outros atributos dependentes do contexto permanecem neutros.</p>
+              <p className="store-comparison__note">{comparingNotebooks ? 'Campos sem informação cadastrada aparecem como “-”. O destaque verde é usado apenas quando existe uma vantagem objetiva, como mais memória, menor peso ou menor preço.' : 'O verde aparece apenas quando existe uma vantagem objetiva definida para aquele campo. Potência da fonte e outros atributos dependentes do contexto permanecem neutros.'}</p>
             </div>
           </section>
         </div>,
