@@ -50,6 +50,32 @@ function formatUpdated(value) {
   }).format(date)
 }
 
+function normalizeCheckStatus(value) {
+  const status = String(value || '').trim().toUpperCase()
+  if (status === 'ATUALIZADA') return 'ATUALIZADO'
+  if (status === 'FALHOU' || status === 'FALHA') return 'ERRO'
+  return status || 'VERIFICADA'
+}
+
+function checkValues(result = {}) {
+  return {
+    status: normalizeCheckStatus(result.status),
+    saved: result.precoAnteriorBanco ?? result.precoSalvo ?? result.precoAnterior ?? null,
+    found: result.precoEncontrado ?? result.precoAtual ?? result.novoPreco ?? null,
+    previousFound: result.precoAnteriorEncontrado ?? result.precoAnteriorColetado ?? null,
+    variation: result.variacaoPercentual ?? result.variacao ?? null,
+    source: result.fontePreco ?? result.origemPreco ?? result.fonte ?? '',
+    verifiedAt: result.verificadoEm ?? result.dataUltimaVerificacao ?? result.atualizadoEm ?? null,
+    url: result.urlFinal ?? result.urlConsultada ?? result.urlOriginal ?? '',
+  }
+}
+
+function formatVariation(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '—'
+  return `${number > 0 ? '+' : ''}${number.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
+}
+
 export default function AffiliateOffers() {
   const [offers, setOffers] = useState([])
   const [lastUpdated, setLastUpdated] = useState(null)
@@ -160,7 +186,7 @@ export default function AffiliateOffers() {
           <div>
             <span className="eyebrow">Ferramenta interna</span>
             <h1>Busca de Ofertas</h1>
-            <p>Produtos com Oferta ativa e link afiliado cadastrado aparecem aqui automaticamente.</p>
+            <p>Produtos com Oferta ativa aparecem aqui. A verificação de preço usa a URL disponível na Oferta e o backend decide se o valor é seguro para atualizar.</p>
           </div>
           <div className="affiliate-offers-source" aria-label="Fonte dos dados">
             <span>Fonte</span>
@@ -198,7 +224,7 @@ export default function AffiliateOffers() {
               <>
                 <strong>Verificação concluída</strong>
                 <span>
-                  {priceCheckResult.verificadas ?? 0} verificadas · {priceCheckResult.atualizadas ?? 0} atualizadas · {priceCheckResult.semAlteracao ?? 0} sem alteração · {priceCheckResult.indisponiveis ?? 0} indisponíveis · {priceCheckResult.falharam ?? 0} falharam
+                  {priceCheckResult.verificadas ?? 0} verificadas · {priceCheckResult.atualizadas ?? 0} atualizadas · {priceCheckResult.semAlteracao ?? 0} sem alteração · {priceCheckResult.revisar ?? priceCheckResult.revisaoNecessaria ?? 0} revisar · {priceCheckResult.bloqueadas ?? priceCheckResult.bloqueados ?? 0} bloqueadas · {priceCheckResult.erros ?? priceCheckResult.falharam ?? 0} erros
                 </span>
                 {Number(priceCheckResult.restantesElegiveis) > 0 && <small>{priceCheckResult.restantesElegiveis} oferta(s) ainda aguardam outro lote de verificação.</small>}
               </>
@@ -212,6 +238,28 @@ export default function AffiliateOffers() {
           </div>
         )}
 
+        {Array.isArray(priceCheckResult?.resultados) && priceCheckResult.resultados.length > 0 && (
+          <div className="affiliate-offers-check-table-wrap">
+            <table className="affiliate-offers-check-table">
+              <thead><tr><th>Produto</th><th>Preço banco</th><th>Encontrado</th><th>Preço anterior</th><th>Variação</th><th>Fonte</th><th>Status</th><th>Última verificação</th><th>Diagnóstico</th></tr></thead>
+              <tbody>{priceCheckResult.resultados.map((result) => {
+                const values = checkValues(result)
+                return <tr key={`${result.ofertaId}-${values.status}`} className={`is-${values.status.toLowerCase()}`}>
+                  <td><strong>{result.produtoNome || result.produto || `Oferta #${result.ofertaId}`}</strong><small>Oferta #{result.ofertaId}</small></td>
+                  <td>{values.saved == null ? '—' : formatMoney(values.saved)}</td>
+                  <td>{values.found == null ? '—' : <strong>{formatMoney(values.found)}</strong>}</td>
+                  <td>{values.previousFound == null ? '—' : formatMoney(values.previousFound)}</td>
+                  <td>{formatVariation(values.variation)}</td>
+                  <td>{values.source || '—'}</td>
+                  <td><span className={`affiliate-offers-check-status is-${values.status.toLowerCase()}`}>{values.status.replaceAll('_', ' ')}</span></td>
+                  <td>{formatUpdated(values.verifiedAt)}</td>
+                  <td><div className="affiliate-offers-check-detail"><span>{result.motivo || result.detalhe || result.mensagem || (values.status === 'ATUALIZADO' ? 'Preço confirmado e salvo.' : values.status === 'SEM_ALTERACAO' ? 'Sem alteração.' : '—')}</span>{result.produtoIaUtilizada === true && <small>Projeto IA utilizada</small>}{values.url && <a href={values.url} target="_blank" rel="noopener noreferrer">Abrir link ↗</a>}</div></td>
+                </tr>
+              })}</tbody>
+            </table>
+          </div>
+        )}
+
         {error && <div className="affiliate-offers-alert" role="alert"><strong>Não foi possível concluir a operação.</strong><span>{error}</span></div>}
 
         {loading ? (
@@ -219,7 +267,7 @@ export default function AffiliateOffers() {
         ) : filteredOffers.length === 0 ? (
           <div className="affiliate-offers-state">
             <strong>Nenhuma oferta afiliada encontrada.</strong>
-            <span>Cadastre uma Oferta ativa com URL afiliada no Produto para ela aparecer aqui.</span>
+            <span>Cadastre uma Oferta ativa no Produto para ela aparecer aqui. Para verificar preço, a Oferta precisa ter URL original ou URL afiliada.</span>
           </div>
         ) : (
           <div className="affiliate-offers-table-wrap">
@@ -240,7 +288,7 @@ export default function AffiliateOffers() {
           </div>
         )}
 
-        <p className="affiliate-offers-note">Esta página não consulta API externa. Ela mostra somente Ofertas do próprio CriaByte que possuem URL afiliada.</p>
+        <p className="affiliate-offers-note">Esta página não faz scraping no navegador. A verificação é solicitada ao backend do CriaByte, que usa a URL original e, quando necessário, a URL afiliada como fallback.</p>
       </div>
     </section>
   )
