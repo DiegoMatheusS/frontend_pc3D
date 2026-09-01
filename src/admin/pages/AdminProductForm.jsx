@@ -15,6 +15,7 @@ const EMPTY = {
 
 const EMPTY_OFFER = {
   parceiroId: '', preco: '', precoAnterior: '', urlOriginal: '', urlAfiliada: '',
+  _originalPartnerId: '',
 }
 
 const HARDWARE_CATEGORY_ALIASES = {
@@ -74,9 +75,11 @@ function normalizeProductForm(item = {}) {
 }
 
 function normalizeOfferForm(item = {}) {
+  const parceiroId = item.parceiroId || item.parceiro?.id || ''
   return {
     ...EMPTY_OFFER,
-    parceiroId: item.parceiroId || item.parceiro?.id || '',
+    parceiroId,
+    _originalPartnerId: parceiroId,
     preco: item.preco ?? '',
     precoAnterior: item.precoAnterior ?? '',
     urlOriginal: String(item.urlOriginal ?? ''),
@@ -204,6 +207,7 @@ function offersForProduct(offers = [], productId) {
   if (!productId) return []
   return offers
     .filter((offer) => Number(offer?.produtoId || offer?.produto?.id) === Number(productId))
+    .filter((offer) => String(offer?.status || 'ATIVA').toUpperCase() !== 'DESCONTINUADA')
     .sort((a, b) => Number(a?.id || 0) - Number(b?.id || 0))
 }
 
@@ -492,10 +496,13 @@ export default function AdminProductForm() {
         setAllOffers((current) => current.filter((item) => Number(item?.id) !== Number(row.id)))
         setOfferRows((current) => {
           const next = current.filter((_, rowIndex) => rowIndex !== index)
-          return next.length ? next : [{ ...EMPTY_OFFER }]
+          if (!next.length) {
+            setIncludeOffer(false)
+            return [{ ...EMPTY_OFFER }]
+          }
+          return next
         })
-        setDirty(false)
-        toast.show('Oferta excluída.')
+        toast.show('Oferta excluída e descontinuada no cadastro.')
       } catch (err) {
         toast.show(err?.message || 'Não foi possível excluir a Oferta.', 'erro')
       }
@@ -725,21 +732,44 @@ export default function AdminProductForm() {
     }
 
     const offer = preview?.ofertaSugerida
-    if (offer && cleanText(offer.urlOriginal)) {
+    if (offer && (cleanText(offer.urlOriginal) || cleanText(importUrl))) {
       setIncludeOffer(true)
       setOfferRows((current) => {
+        const importedUrl = cleanText(offer.urlOriginal) || cleanText(importUrl)
+        const importedPartnerId = offer.parceiroId ? String(offer.parceiroId) : ''
         const nextOffer = {
           ...EMPTY_OFFER,
-          parceiroId: offer.parceiroId ? String(offer.parceiroId) : '',
+          parceiroId: importedPartnerId,
           preco: offer.preco ?? '',
           precoAnterior: offer.precoAnterior ?? '',
-          urlOriginal: cleanText(offer.urlOriginal),
-          urlAfiliada: '',
+          urlOriginal: importedUrl,
+          urlAfiliada: cleanText(offer.urlAfiliada || ''),
         }
+
+        // Se a mesma oferta já estiver cadastrada, atualiza os dados comerciais
+        // retornados pela IA (principalmente preço/preço anterior) sem duplicá-la.
+        const sameOfferIndex = current.findIndex((row) => cleanText(row.urlOriginal) === importedUrl)
+        if (sameOfferIndex >= 0) {
+          return current.map((row, index) => index === sameOfferIndex ? {
+            ...row,
+            parceiroId: importedPartnerId || row.parceiroId,
+            preco: offer.preco ?? row.preco,
+            precoAnterior: offer.precoAnterior ?? row.precoAnterior,
+            urlOriginal: importedUrl,
+            urlAfiliada: cleanText(offer.urlAfiliada || '') || row.urlAfiliada,
+          } : row)
+        }
+
         const firstEditable = current.findIndex((row) => !row.id && !cleanText(row.urlOriginal) && !cleanText(row.preco))
-        if (firstEditable >= 0) return current.map((row, index) => index === firstEditable ? { ...row, ...nextOffer } : row)
-        const alreadyThere = current.some((row) => cleanText(row.urlOriginal) === nextOffer.urlOriginal)
-        return alreadyThere ? current : [...current, nextOffer]
+        if (firstEditable >= 0) {
+          return current.map((row, index) => index === firstEditable ? {
+            ...row,
+            ...nextOffer,
+            parceiroId: importedPartnerId || row.parceiroId,
+          } : row)
+        }
+
+        return [...current, nextOffer]
       })
     }
 
@@ -797,6 +827,7 @@ export default function AdminProductForm() {
       return {
         id: row.id || null,
         status: row.status || 'ATIVA',
+        originalPartnerId: Number(row._originalPartnerId) || null,
         payload: {
           parceiroId,
           preco,
@@ -809,13 +840,35 @@ export default function AdminProductForm() {
   }
 
   async function saveOffersForProduct(productId, entries, skipNewIndex = -1) {
+    const resolvedProductId = Number(productId)
+    if (!Number.isInteger(resolvedProductId) || resolvedProductId < 1) {
+      throw new Error('Não foi possível identificar o Produto para salvar as ofertas.')
+    }
+
     for (let index = 0; index < entries.length; index += 1) {
       const entry = entries[index]
       if (index === skipNewIndex && !entry.id) continue
 
       if (entry.id) {
+        const partnerChanged = entry.originalPartnerId
+          && Number(entry.originalPartnerId) !== Number(entry.payload.parceiroId)
+
+        if (partnerChanged) {
+          // O backend atual não aceita parceiroId no PATCH da Oferta.
+          // Para trocar a loja sem perder preço/link, cria a substituta primeiro
+          // e só depois descontinua a antiga.
+          await adminService.offers.create({
+            produtoId: resolvedProductId,
+            ...entry.payload,
+          })
+          await adminService.offers.remove(entry.id)
+          continue
+        }
+
+        // parceiroId pertence à Oferta, mas o DTO de atualização atual não o aceita.
+        // Não enviá-lo evita que preço/URLs falhem com
+        // "A propriedade parceiroId não deve existir".
         await adminService.offers.update(entry.id, {
-          parceiroId: entry.payload.parceiroId,
           preco: entry.payload.preco,
           precoAnterior: entry.payload.precoAnterior ?? null,
           urlOriginal: entry.payload.urlOriginal,
@@ -825,10 +878,27 @@ export default function AdminProductForm() {
           await adminService.offers.setStatus(entry.id, 'ATIVA')
         }
       } else {
-        await adminService.offers.create({ produtoId: Number(productId), ...entry.payload })
+        await adminService.offers.create({ produtoId: resolvedProductId, ...entry.payload })
       }
     }
   }
+
+
+  async function removeAllOffersForProduct() {
+    const existingIds = offerRows
+      .map((row) => Number(row?.id))
+      .filter((offerId) => Number.isInteger(offerId) && offerId > 0)
+
+    for (const offerId of existingIds) {
+      await adminService.offers.remove(offerId)
+    }
+
+    if (existingIds.length) {
+      setAllOffers((current) => current.filter((item) => !existingIds.includes(Number(item?.id))))
+      setOfferRows([{ ...EMPTY_OFFER }])
+    }
+  }
+
 
   async function createWithOptionalInitialOffer(create, productBody, ofertaInicial) {
     if (!ofertaInicial) return { saved: await create(productBody), offerCreatedInProduct: false }
@@ -945,6 +1015,10 @@ export default function AdminProductForm() {
           offerEntries,
           offerCreatedInProduct ? firstNewOfferIndex : -1,
         )
+      } else if (!includeOffer && offerRows.some((row) => row.id)) {
+        // Desmarcar "Incluir ofertas" precisa persistir no backend; caso contrário
+        // as ofertas antigas voltam no próximo carregamento da tela.
+        await removeAllOffersForProduct()
       }
 
       setDirty(false)
