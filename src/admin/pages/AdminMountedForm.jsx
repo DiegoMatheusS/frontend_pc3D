@@ -7,6 +7,7 @@ import { useAdminToast } from '../components/AdminToast'
 import AdminMultiOfferEditor from '../components/AdminMultiOfferEditor'
 import { emptyOfferRow, normalizeOfferRow } from '../components/AdminMultiOfferEditor.utils'
 import { consumeAiImportPreview } from '../utils/aiImportTransfer'
+import { getAiOffer, getAiPayload } from '../utils/aiImportContract'
 
 const EMPTY = {
   nome: '', marca: '', modelo: '', descricao: '', imagemUrl: '', imagemHoverUrl: '', categoria: '', finalidade: '', resolucaoRecomendada: '',
@@ -244,15 +245,13 @@ export default function AdminMountedForm() {
   }
 
   function applyImportPreview(preview = importPreview, notify = true) {
-    const payload = preview?.cadastroSugerido?.payload || preview?.acaoFrontend?.payloadInicial || {}
-    const normalized = preview?.normalizacao?.camposNormalizados || {}
-    const source = Object.keys(payload).length ? payload : normalized
+    const source = getAiPayload(preview)
     if (!Object.keys(source).length) {
       toast.show('A IA não retornou campos para preencher. Faça o cadastro manualmente.', 'alerta')
       return
     }
 
-    const image = source.imagemUrl || normalized.imagemUrl || preview?.coleta?.meta?.['og:image'] || preview?.coleta?.meta?.imagem || ''
+    const image = source.imagemUrl ?? preview?.coleta?.meta?.['og:image'] ?? preview?.coleta?.meta?.imagem ?? ''
     const components = validAiComponents(source.componentes)
     const configuration = source.configuracao3D && typeof source.configuracao3D === 'object' && !Array.isArray(source.configuracao3D)
       ? source.configuracao3D
@@ -261,21 +260,21 @@ export default function AdminMountedForm() {
 
     setForm((current) => ({
       ...current,
-      nome: source.nome || current.nome,
-      marca: source.marca || current.marca,
-      modelo: source.modelo || current.modelo,
-      descricao: source.descricao || current.descricao,
-      imagemUrl: image || current.imagemUrl,
-      imagemHoverUrl: source.imagemHoverUrl || current.imagemHoverUrl,
-      categoria: source.categoria || current.categoria,
-      finalidade: source.finalidade || current.finalidade,
-      resolucaoRecomendada: source.resolucaoRecomendada || source.resolucao || current.resolucaoRecomendada,
+      nome: source.nome ?? current.nome,
+      marca: source.marca ?? current.marca,
+      modelo: source.modelo ?? current.modelo,
+      descricao: source.descricao ?? current.descricao,
+      imagemUrl: image ?? current.imagemUrl,
+      imagemHoverUrl: source.imagemHoverUrl ?? current.imagemHoverUrl,
+      categoria: source.categoria ?? current.categoria,
+      finalidade: source.finalidade ?? current.finalidade,
+      resolucaoRecomendada: source.resolucaoRecomendada ?? source.resolucao ?? current.resolucaoRecomendada,
       componentes: components ? JSON.stringify(components, null, 2) : current.componentes,
       configuracao3D: configuration ? JSON.stringify(configuration, null, 2) : current.configuracao3D,
     }))
     setImageError(false)
 
-    const suggestedOffer = preview?.ofertaSugerida || {}
+    const suggestedOffer = getAiOffer(preview) || {}
     const originalUrl = cleanText(suggestedOffer.urlOriginal || importUrl || preview?.urlFinal || preview?.urlOrigem)
     if (originalUrl && !offerRows.some((row) => !row._removed && cleanText(row.urlOriginal))) {
       const storeName = cleanText(preview?.coleta?.meta?.siteName || preview?.coleta?.meta?.['og:site_name'])

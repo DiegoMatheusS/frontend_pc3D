@@ -7,6 +7,7 @@ import { useAdminToast } from '../components/AdminToast'
 import { AdminTechnicalFields, normalizeSpec, productSchemaFor, readSpec } from '../components/AdminTechnicalFields'
 import { getSpecializedProductTarget } from '../utils/productRouting'
 import { consumeAiImportPreview, storeAiImportPreview } from '../utils/aiImportTransfer'
+import { getAiConflicts, getAiDiagnostics, getAiOffer, getAiPayload, getAiReadiness, getAiReconciliation } from '../utils/aiImportContract'
 
 const EMPTY = {
   categoriaId: '', nome: '', marca: '', modelo: '', descricao: '', mpn: '', gtin: '',
@@ -144,23 +145,38 @@ function technicalFromPreview(schema, source = {}) {
 
 
 function aiPreviewSource(preview = {}) {
-  return {
-    ...(preview?.normalizacao?.camposNormalizados && typeof preview.normalizacao.camposNormalizados === 'object'
-      ? preview.normalizacao.camposNormalizados
-      : {}),
-    ...(preview?.resultadoProdutoIa?.payloadParcialBackend && typeof preview.resultadoProdutoIa.payloadParcialBackend === 'object'
-      ? preview.resultadoProdutoIa.payloadParcialBackend
-      : {}),
-    ...(preview?.confirmacaoSugerida?.body && typeof preview.confirmacaoSugerida.body === 'object'
-      ? preview.confirmacaoSugerida.body
-      : {}),
-    ...(preview?.cadastroSugerido?.payload && typeof preview.cadastroSugerido.payload === 'object'
-      ? preview.cadastroSugerido.payload
-      : {}),
-    ...(preview?.acaoFrontend?.payloadInicial && typeof preview.acaoFrontend.payloadInicial === 'object'
-      ? preview.acaoFrontend.payloadInicial
-      : {}),
-  }
+  return getAiPayload(preview)
+}
+
+function aiConflictLabels(preview = {}) {
+  return getAiConflicts(preview).map((item) => {
+    if (typeof item === 'string') return item
+    const field = item?.campo || 'campo técnico'
+    const banco = item?.valorBanco ?? item?.atual
+    const ia = item?.valorIa ?? item?.novo
+    if (banco !== undefined || ia !== undefined) return `${field}: banco ${String(banco ?? 'vazio')} · IA ${String(ia ?? 'vazio')}`
+    return `Conflito em ${field}`
+  })
+}
+
+function AiImportContractInfo({ preview }) {
+  if (!preview) return null
+  const reconciliation = getAiReconciliation(preview)
+  const readiness = getAiReadiness(preview)
+  const diagnostics = getAiDiagnostics(preview)
+  const fillable = Array.isArray(reconciliation?.camposPreenchiveis) ? reconciliation.camposPreenchiveis : []
+  const version = cleanText(diagnostics?.service?.versao)
+  const source = cleanText(diagnostics?.source?.fonte || diagnostics?.source || preview?.resultadoProdutoIa?.fonte)
+  return <>
+    {(reconciliation?.produtoExistente || reconciliation?.ofertaExistente) && <div className="admin-import-preview-list warn"><strong>Já existe no CriaByte</strong><ul>
+      {reconciliation?.produtoExistente && <li>Este produto já existe no CriaByte.</li>}
+      {reconciliation?.ofertaExistente && <li>Já existe uma oferta correspondente.</li>}
+    </ul></div>}
+    <PreviewList title="Campos que a IA pode completar" items={fillable} />
+    <PreviewList title="Conflitos para revisão" items={aiConflictLabels(preview)} tone="warn" />
+    {readiness.ready === false && <p className="admin-inline-warning">Alguns campos ainda precisam de revisão antes do cadastro.</p>}
+    {(version || source) && <small className="admin-help">{version ? `Projeto IA ${version}` : 'Projeto IA'}{source ? ` · Fonte: ${source}` : ''}</small>}
+  </>
 }
 
 function findExistingHardwareFromAi(hardwareItems = [], preview = {}) {
@@ -630,6 +646,10 @@ export default function AdminProductForm() {
     try {
       const result = await adminService.ai.importLink(cleanText(importUrl))
       setImportPreview(result)
+      if (editing && dirty) {
+        toast.show('A prévia da IA está pronta. Como existem alterações manuais no formulário, revise e clique em aplicar para não sobrescrever seus ajustes.', 'alerta')
+        return
+      }
       await applySmartImportPreview(result, false)
     } catch (err) {
       toast.show(err?.message || 'Não foi possível analisar o link com a IA.', 'erro')
@@ -688,9 +708,7 @@ export default function AdminProductForm() {
   }
 
   function applyImportPreview(preview = importPreview, notify = true, { skipSpecialRouting = false, preserveHardware = false } = {}) {
-    const normalized = preview?.normalizacao?.camposNormalizados || {}
-    const payload = preview?.cadastroSugerido?.payload || preview?.acaoFrontend?.payloadInicial || {}
-    const source = { ...normalized, ...payload }
+    const source = getAiPayload(preview)
     if (!Object.keys(source).length) {
       toast.show('Não existem dados normalizados para aplicar. Faça o cadastro manualmente.', 'alerta')
       return
@@ -716,7 +734,7 @@ export default function AdminProductForm() {
       : findCategoryFromPreview(categories, source.categoria || preview?.categoriaDetectada || preview?.categoriaSugerida)
     const nextCategoryId = category?.id || source.categoriaId || form.categoriaId
     const importedSchema = productSchemaFor(category || selectedCategory)
-    const image = source.imagemUrl || preview?.coleta?.meta?.imagem || preview?.coleta?.meta?.ogImage || ''
+    const image = source.imagemUrl ?? preview?.coleta?.meta?.imagem ?? preview?.coleta?.meta?.ogImage ?? ''
     if (!preserveHardware) setSelectedHardwareId('')
     setForm((current) => ({
       ...current,
@@ -740,7 +758,7 @@ export default function AdminProductForm() {
       setTechnical((current) => ({ ...current, ...technicalFromPreview(importedSchema, structured) }))
     }
 
-    const offer = preview?.ofertaSugerida
+    const offer = getAiOffer(preview)
     if (offer && (cleanText(offer.urlOriginal) || cleanText(importUrl))) {
       setIncludeOffer(true)
       setOfferRows((current) => {
@@ -1115,6 +1133,7 @@ export default function AdminProductForm() {
             </div>
             <PreviewList title="Revisar" items={importPreview.normalizacao?.alertas} tone="warn" />
             <PreviewList title="Não encontrado" items={importPreview.normalizacao?.ausentes} tone="missing" />
+            <AiImportContractInfo preview={importPreview} />
             <div className="admin-import-preview-actions">
               <button className="btn btn-secundario" type="button" onClick={() => { setImportPreview(null); setImportUrl('') }}>Descartar prévia</button>
               <button className="btn btn-primario" type="button" onClick={() => applySmartImportPreview()}>{importPreview.destinoSugerido === 'HARDWARE' ? (selectedHardwareId ? 'Aplicar ao Produto com Hardware existente' : 'Verificar Hardware e continuar') : 'Aplicar prévia ao Produto'}</button>

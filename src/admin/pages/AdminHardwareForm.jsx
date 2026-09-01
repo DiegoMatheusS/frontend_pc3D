@@ -5,8 +5,9 @@ import { adminService } from '../services/adminService'
 import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 import { AdminTechnicalFields, hardwareSchemaFor, normalizeSpec, readSpec } from '../components/AdminTechnicalFields'
+import { getAiConflicts, getAiDiagnostics, getAiOffer, getAiPayload, getAiReadiness, getAiReconciliation } from '../utils/aiImportContract'
 
-const CATEGORIES = ['PROCESSADOR','COOLER','PLACA_MAE','MEMORIA_RAM','PLACA_VIDEO','ARMAZENAMENTO','FONTE','GABINETE','VENTOINHA','MONITOR','MOUSE','TECLADO','FONE','MICROFONE']
+const CATEGORIES = ['PROCESSADOR','COOLER','PLACA_MAE','MEMORIA_RAM','PLACA_VIDEO','ARMAZENAMENTO','FONTE','GABINETE','VENTOINHA','MONITOR','MOUSE','TECLADO','FONE','HEADSET','MICROFONE']
 const EMPTY = { nome:'', categoria:'PROCESSADOR', marca:'', modelo:'', descricao:'', mpn:'', gtin:'', imagemUrl:'', imagemHoverUrl:'', especificacoes:'{}', publicado:false, ativo:true }
 
 function cleanText(value) {
@@ -101,7 +102,7 @@ function consumeTransferredPreview(expectedDestination) {
 
 function hardwareInitialFromPreview(preview) {
   if (!preview) return EMPTY
-  const source = preview?.normalizacao?.camposNormalizados || {}
+  const source = getAiPayload(preview)
   const categoria = normalizeHardwareCategory(source.categoria)
   const schema = hardwareSchemaFor(categoria)
   const imagem = source.imagemUrl || preview?.coleta?.meta?.imagem || preview?.coleta?.meta?.ogImage || ''
@@ -121,6 +122,36 @@ function PreviewList({ title, items = [], tone = '' }) {
   return <div className={`admin-import-preview-list ${tone}`}><strong>{title}</strong><ul>{clean.map((item, index) => <li key={`${title}-${index}`}>{String(item)}</li>)}</ul></div>
 }
 
+function aiConflictLabels(preview = {}) {
+  return getAiConflicts(preview).map((item) => {
+    if (typeof item === 'string') return item
+    const field = item?.campo || 'campo técnico'
+    const banco = item?.valorBanco ?? item?.atual
+    const ia = item?.valorIa ?? item?.novo
+    if (banco !== undefined || ia !== undefined) return `${field}: banco ${String(banco ?? 'vazio')} · IA ${String(ia ?? 'vazio')}`
+    return `Conflito em ${field}`
+  })
+}
+
+function AiImportContractInfo({ preview }) {
+  if (!preview) return null
+  const reconciliation = getAiReconciliation(preview)
+  const readiness = getAiReadiness(preview)
+  const diagnostics = getAiDiagnostics(preview)
+  const fillable = Array.isArray(reconciliation?.camposPreenchiveis) ? reconciliation.camposPreenchiveis : []
+  const offer = getAiOffer(preview)
+  const version = cleanText(diagnostics?.service?.versao)
+  const price = Number(offer?.preco)
+  return <>
+    {reconciliation?.produtoExistente && <p className="admin-inline-warning">Este produto já existe no CriaByte. O cadastro de Hardware deve ser revisado para evitar duplicidade.</p>}
+    <PreviewList title="Campos que a IA pode completar" items={fillable} />
+    <PreviewList title="Conflitos para revisão" items={aiConflictLabels(preview)} tone="warn" />
+    {readiness.ready === false && <p className="admin-inline-warning">Alguns campos ainda precisam de revisão antes do cadastro.</p>}
+    {Number.isFinite(price) && <p className="admin-import-preview-copy"><strong>Preço encontrado:</strong> {price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}. Esse valor é apenas informativo e não será salvo no Hardware.</p>}
+    {version && <small className="admin-help">Coletado pelo Projeto IA {version}.</small>}
+  </>
+}
+
 export default function AdminHardwareForm() {
   const { id } = useParams()
   const editing = id && id !== 'novo'
@@ -131,7 +162,7 @@ export default function AdminHardwareForm() {
   const [transferredPreview] = useState(() => editing ? null : consumeTransferredPreview('HARDWARE'))
   const [form, setForm] = useState(() => hardwareInitialFromPreview(transferredPreview))
   const [technical, setTechnical] = useState(() => {
-    const source = transferredPreview?.normalizacao?.camposNormalizados || {}
+    const source = getAiPayload(transferredPreview)
     const category = normalizeHardwareCategory(source.categoria)
     return technicalFromPreview(hardwareSchemaFor(category), source)
   })
@@ -192,7 +223,7 @@ export default function AdminHardwareForm() {
   }
 
   function applyImportPreview(preview = importPreview, notify = true) {
-    const source = preview?.normalizacao?.camposNormalizados || {}
+    const source = getAiPayload(preview)
     if (!Object.keys(source).length) {
       toast.show('Não existem dados normalizados para aplicar. Faça o cadastro manualmente.', 'alerta')
       return
@@ -215,13 +246,13 @@ export default function AdminHardwareForm() {
     setForm((current) => ({
       ...current,
       categoria: importedCategory,
-      nome: source.nome || current.nome,
-      marca: source.marca || current.marca,
-      modelo: source.modelo || current.modelo,
-      descricao: source.descricao || current.descricao,
-      mpn: source.mpn || current.mpn,
+      nome: source.nome ?? current.nome,
+      marca: source.marca ?? current.marca,
+      modelo: source.modelo ?? current.modelo,
+      descricao: source.descricao ?? current.descricao,
+      mpn: source.mpn ?? current.mpn,
       gtin: normalizeGtin(source.gtin || source.ean || current.gtin),
-      imagemUrl: imagem || current.imagemUrl,
+      imagemUrl: imagem ?? current.imagemUrl,
       especificacoes: JSON.stringify({ ...(source.evidencias ? { evidencias: source.evidencias } : {}), ...extras }, null, 2),
     }))
     if (importedSchema) setTechnical((current) => ({ ...current, ...technicalFromPreview(importedSchema, source) }))
@@ -234,13 +265,17 @@ export default function AdminHardwareForm() {
     setImporting(true)
     setImportPreview(null)
     try {
-      const result = await adminService.ai.importLink(importUrl.trim())
+      const result = await adminService.ai.importLink(importUrl.trim(), form.categoria)
       setImportPreview(result)
       if (result?.iaDisponivel === false) {
         toast.show(result?.avisoIa || 'Página coletada, mas a IA não conseguiu normalizar os dados.', 'alerta')
       } else if (result?.destinoSugerido === 'HARDWARE') {
-        applyImportPreview(result, false)
-        toast.show('Dados encontrados no fabricante/loja foram preenchidos. Revise antes de salvar.')
+        if (editing && dirty) {
+          toast.show('A prévia da IA está pronta. Como existem alterações manuais no formulário, revise e clique em aplicar para não sobrescrever seus ajustes.', 'alerta')
+        } else {
+          applyImportPreview(result, false)
+          toast.show('Dados encontrados no fabricante/loja foram preenchidos. Revise antes de salvar.')
+        }
       } else {
         toast.show('A página parece ser um Produto. Use a ação abaixo para continuar no cadastro correto.', 'alerta')
       }
@@ -356,6 +391,7 @@ export default function AdminHardwareForm() {
             <div className="admin-import-preview-fields">{Object.entries(importPreview.normalizacao?.camposNormalizados || {}).filter(([key, value]) => !['evidencias'].includes(key) && value !== null && value !== '' && typeof value !== 'object').slice(0, 12).map(([key, value]) => <div key={key}><span>{key}</span><strong>{String(value)}</strong></div>)}</div>
             <PreviewList title="Revisar" items={importPreview.normalizacao?.alertas} tone="warn" />
             <PreviewList title="Não encontrado" items={importPreview.normalizacao?.ausentes} tone="missing" />
+            <AiImportContractInfo preview={importPreview} />
             <div className="admin-import-preview-actions"><button className="btn btn-secundario" type="button" onClick={() => { setImportPreview(null); setImportUrl('') }}>Descartar prévia</button><button className="btn btn-primario" type="button" onClick={() => applyImportPreview()}>{importPreview.destinoSugerido === 'PRODUTO' ? 'Continuar no cadastro de Produto' : 'Aplicar prévia ao formulário'}</button></div>
             <small className="admin-help">Revise os campos marcados antes de confirmar o cadastro.</small>
           </div>}

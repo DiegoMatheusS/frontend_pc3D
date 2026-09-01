@@ -7,6 +7,7 @@ import { useAdminToast } from '../components/AdminToast'
 import AdminMultiOfferEditor from '../components/AdminMultiOfferEditor'
 import { emptyOfferRow, normalizeOfferRow } from '../components/AdminMultiOfferEditor.utils'
 import { consumeAiImportPreview } from '../utils/aiImportTransfer'
+import { getAiOffer, getAiPayload } from '../utils/aiImportContract'
 
 const EMPTY = {
   nome: '', marca: '', modelo: '', descricao: '', mpn: '', gtin: '', imagemUrl: '', imagemHoverUrl: '',
@@ -69,8 +70,7 @@ function normalizedNotebookForm(item = {}) {
 }
 
 function previewFields(preview) {
-  const payload = preview?.cadastroSugerido?.payload || preview?.acaoFrontend?.payloadInicial || {}
-  const source = Object.keys(payload).length ? payload : (preview?.normalizacao?.camposNormalizados || {})
+  const source = getAiPayload(preview)
   const flat = {
     nome: source.nome,
     marca: source.marca,
@@ -192,35 +192,33 @@ export default function AdminNotebookForm() {
   }
 
   function applyImportPreview(preview = importPreview, notify = true) {
-    const payload = preview?.cadastroSugerido?.payload || preview?.acaoFrontend?.payloadInicial || {}
-    const normalized = preview?.normalizacao?.camposNormalizados || {}
-    const source = Object.keys(payload).length ? payload : normalized
+    const source = getAiPayload(preview)
     if (!Object.keys(source).length) {
       toast.show('A IA não retornou campos para preencher. Faça o cadastro manualmente.', 'alerta')
       return
     }
 
-    const image = source.imagemUrl || normalized.imagemUrl || preview?.coleta?.meta?.['og:image'] || preview?.coleta?.meta?.imagem || ''
+    const image = source.imagemUrl ?? preview?.coleta?.meta?.['og:image'] ?? preview?.coleta?.meta?.imagem ?? ''
     const aiSpec = notebookSpecFromAi(source)
 
     setForm((current) => {
       const currentSpec = parseNotebookSpec(current.especificacao)
       return {
         ...current,
-        nome: source.nome || current.nome,
-        marca: source.marca || current.marca,
-        modelo: source.modelo || current.modelo,
-        descricao: source.descricao || current.descricao,
-        mpn: source.mpn || current.mpn,
-        gtin: source.gtin || source.ean || current.gtin,
-        imagemUrl: image || current.imagemUrl,
-        imagemHoverUrl: source.imagemHoverUrl || current.imagemHoverUrl,
+        nome: source.nome ?? current.nome,
+        marca: source.marca ?? current.marca,
+        modelo: source.modelo ?? current.modelo,
+        descricao: source.descricao ?? current.descricao,
+        mpn: source.mpn ?? current.mpn,
+        gtin: source.gtin ?? source.ean ?? current.gtin,
+        imagemUrl: image ?? current.imagemUrl,
+        imagemHoverUrl: source.imagemHoverUrl ?? current.imagemHoverUrl,
         especificacao: JSON.stringify({ ...currentSpec, ...aiSpec }, null, 2),
       }
     })
     setImageError(false)
 
-    const suggestedOffer = preview?.ofertaSugerida || {}
+    const suggestedOffer = getAiOffer(preview) || {}
     const url = cleanText(suggestedOffer.urlOriginal || importUrl || preview?.urlFinal || preview?.urlOrigem)
     if (url && !offerRows.some((row) => !row._removed && cleanText(row.urlOriginal))) {
       const siteName = cleanText(preview?.coleta?.meta?.siteName || preview?.coleta?.meta?.['og:site_name'])

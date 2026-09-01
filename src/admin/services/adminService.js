@@ -1,4 +1,5 @@
 import { apiRequest } from '../../services/httpClient'
+import { normalizeAiResponse } from '../utils/aiImportContract'
 
 function unwrapList(data) {
   if (Array.isArray(data)) return data
@@ -22,6 +23,18 @@ function unwrapList(data) {
 
 function unwrapOne(data) {
   if (!data || typeof data !== 'object') return data
+  // Respostas de fluxo/IA precisam permanecer inteiras mesmo que tenham chaves
+  // chamadas `produto`, `hardware` ou `oferta`.
+  if (
+    data.status !== undefined
+    || data.tokenConfirmacao !== undefined
+    || data.cadastroSugerido !== undefined
+    || data.resultadoProdutoIa !== undefined
+    || data.reconciliacao !== undefined
+    || data.confirmacaoSugerida !== undefined
+    || data.analise !== undefined
+    || data.acoesPrevistas !== undefined
+  ) return data
   // Respostas especializadas (Notebook/Build) possuem `produto` como relação.
   // Se o objeto já tem id próprio, ele é a entidade e não deve ser reduzido a data.produto.
   if (data.id !== undefined && data.id !== null) return data
@@ -29,218 +42,6 @@ function unwrapOne(data) {
 }
 
 
-function inferAiDestination(data = {}, payload = {}) {
-  const explicit = String(data?.destinoSugerido || data?.resultadoProdutoIa?.tipoCadastro || '').toUpperCase()
-  if (['HARDWARE', 'PRODUTO', 'NOTEBOOK', 'PC_MONTADO'].includes(explicit)) return explicit
-  if (explicit === 'BUILD' || explicit === 'PC_MONTADO_HARDWARE') return 'PC_MONTADO'
-
-  const route = String(data?.confirmacaoSugerida?.rota || '').toLowerCase()
-  if (route.includes('/hardwares')) return 'HARDWARE'
-  if (route.includes('/notebooks')) return 'NOTEBOOK'
-  if (route.includes('/builds') || route.includes('/montados')) return 'PC_MONTADO'
-  if (route.includes('/produtos')) return 'PRODUTO'
-
-  const hardwareSpecKeys = [
-    'especificacaoProcessador', 'especificacaoCooler', 'especificacaoPlacaMae', 'especificacaoMemoriaRam',
-    'especificacaoPlacaVideo', 'especificacaoArmazenamento', 'especificacaoFonte', 'especificacaoGabinete',
-    'especificacaoVentoinha',
-  ]
-  if (hardwareSpecKeys.some((key) => payload?.[key] && typeof payload[key] === 'object')) return 'HARDWARE'
-  return 'PRODUTO'
-}
-
-function firstAiValue(...values) {
-  return values.find((value) => value !== undefined && value !== null && value !== '')
-}
-
-function nestedHardwareSpecs(payload = {}) {
-  const keys = [
-    'especificacaoProcessador', 'especificacaoCooler', 'especificacaoPlacaMae', 'especificacaoMemoriaRam',
-    'especificacaoPlacaVideo', 'especificacaoArmazenamento', 'especificacaoFonte', 'especificacaoGabinete',
-    'especificacaoVentoinha',
-  ]
-  return keys.reduce((result, key) => {
-    const value = payload?.[key]
-    return value && typeof value === 'object' && !Array.isArray(value) ? { ...result, ...value } : result
-  }, {})
-}
-
-function inferGpuChipsetFromText(...values) {
-  const text = values.map((value) => String(value ?? '').trim()).filter(Boolean).join(' ')
-  if (!text) return undefined
-
-  const patterns = [
-    /\b(?:AMD\s+Radeon\s+|Radeon\s+)?(RX\s+\d{3,4}(?:\s+(?:XTX|XT|GRE))?)\b/i,
-    /\b(?:NVIDIA\s+GeForce\s+|GeForce\s+)?(RTX\s+\d{3,4}(?:\s+(?:Ti\s+SUPER|SUPER|Ti))?)\b/i,
-    /\b(?:NVIDIA\s+GeForce\s+|GeForce\s+)?(GTX\s+\d{3,4}(?:\s+(?:SUPER|Ti))?)\b/i,
-    /\b(?:Intel\s+)?(Arc\s+[AB]\d{3,4})\b/i,
-  ]
-
-  for (const pattern of patterns) {
-    const match = text.match(pattern)
-    if (match?.[1]) return match[1].replace(/\s+/g, ' ').trim().toUpperCase().replace('TI', 'Ti')
-  }
-  return undefined
-}
-
-function normalizeAiTechnicalAliases(fields = {}, categoria = '') {
-  const next = { ...fields }
-  const category = String(categoria || next.categoria || '').toUpperCase()
-
-  if (category === 'PLACA_VIDEO') {
-    const gpu = firstAiValue(
-      next.gpu, next.gpuNome, next.nomeGpu, next.processadorGrafico, next.graphicsProcessor,
-    )
-    const chipsetExplicit = firstAiValue(
-      next.chipset, next.tipoChipset, next.gpuChipset, next.chipsetGpu,
-    )
-    const chipset = chipsetExplicit ?? inferGpuChipsetFromText(next.modelo, next.nome, gpu)
-    const consumo = firstAiValue(
-      next.consumoWatts, next.tgpWatts, next.tgp, next.tbpWatts, next.tbp,
-      next.boardPowerWatts, next.boardPower, next.totalBoardPowerWatts,
-      next.totalBoardPower, next.powerConsumptionWatts,
-    )
-
-    if (gpu !== undefined) next.gpu = gpu
-    if (chipset !== undefined) next.chipset = chipset
-    if (consumo !== undefined) next.consumoWatts = consumo
-  }
-
-  return next
-}
-
-function compactAiDescription(fields = {}, categoria = '') {
-  const category = String(categoria || fields?.categoria || '').toUpperCase()
-  const raw = String(fields?.descricao ?? '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/\b(?:compre\s+j[aá]|comprar\s+agora|aproveite\s+agora|garanta\s+j[aá])\b[^.!?]*[.!?]?/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  if (category === 'PLACA_VIDEO') {
-    const marca = String(fields?.marca ?? '').trim()
-    const modelo = String(fields?.modelo ?? '').trim()
-    const chipset = String(fields?.chipset ?? '').trim()
-    const memoria = Number(fields?.memoriaVideoGb)
-    const tipoMemoria = String(fields?.tipoMemoriaVideo ?? '').trim()
-    const arquitetura = String(fields?.arquitetura ?? '').trim()
-    const barramento = Number(fields?.barramentoBits)
-    const pcie = Number(fields?.geracaoPcie)
-    const hdmi = Number(fields?.hdmi)
-    const displayPort = Number(fields?.displayPort)
-
-    const identidade = [marca, modelo].filter(Boolean).join(' ').trim() || chipset || 'selecionada'
-    const detalhes = []
-    if (Number.isFinite(memoria) && memoria > 0) detalhes.push(`${memoria} GB${tipoMemoria ? ` ${tipoMemoria}` : ''}`)
-    else if (tipoMemoria) detalhes.push(tipoMemoria)
-    if (arquitetura) detalhes.push(`arquitetura ${arquitetura}`)
-    if (Number.isFinite(barramento) && barramento > 0) detalhes.push(`barramento de ${barramento} bits`)
-    if (Number.isFinite(pcie) && pcie > 0) detalhes.push(`interface PCIe ${pcie}.0`)
-
-    const first = `Placa de vídeo ${identidade}${detalhes.length ? ` com ${detalhes.join(', ')}` : ''}.`
-    const conexoes = []
-    if (Number.isFinite(hdmi) && hdmi > 0) conexoes.push(`${hdmi}x HDMI`)
-    if (Number.isFinite(displayPort) && displayPort > 0) conexoes.push(`${displayPort}x DisplayPort`)
-    const secondParts = []
-    if (chipset && !modelo.toUpperCase().includes(chipset.toUpperCase())) secondParts.push(`chipset ${chipset}`)
-    if (conexoes.length) secondParts.push(`saídas ${conexoes.join(' e ')}`)
-    const second = secondParts.length ? `Conta com ${secondParts.join(' e ')}.` : ''
-    return `${first}${second ? ` ${second}` : ''}`.trim()
-  }
-
-  if (!raw) return ''
-  const sentences = raw.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [raw]
-  let short = sentences.slice(0, 3).join(' ').replace(/\s+/g, ' ').trim()
-  if (short.length > 520) short = `${short.slice(0, 517).replace(/[,;:\s]+$/g, '')}...`
-  return short
-}
-
-function normalizeAiImportResult(data) {
-  if (!data || typeof data !== 'object') return data
-
-  const payload = data?.cadastroSugerido?.payload
-    || data?.resultadoProdutoIa?.payloadParcialBackend
-    || data?.confirmacaoSugerida?.body
-    || data?.acaoFrontend?.payloadInicial
-    || data?.normalizacao?.camposNormalizados
-    || {}
-
-  const foundSpecs = data?.resultadoProdutoIa?.especificacoesEncontradas
-  const existingNormalized = data?.normalizacao?.camposNormalizados
-
-  const categoriaDetectada = data?.categoriaDetectada
-    || data?.categoriaSugerida
-    || data?.resultadoProdutoIa?.categoriaDetectada
-    || payload?.categoria
-    || null
-
-  const camposNormalizadosBase = normalizeAiTechnicalAliases({
-    ...(foundSpecs && typeof foundSpecs === 'object' ? foundSpecs : {}),
-    ...nestedHardwareSpecs(payload),
-    ...(existingNormalized && typeof existingNormalized === 'object' ? existingNormalized : {}),
-    ...(payload && typeof payload === 'object' ? payload : {}),
-  }, categoriaDetectada)
-  const descricaoCompacta = compactAiDescription(camposNormalizadosBase, categoriaDetectada)
-  const camposNormalizados = {
-    ...camposNormalizadosBase,
-    ...(descricaoCompacta ? { descricao: descricaoCompacta } : {}),
-  }
-  const payloadNormalizado = payload && typeof payload === 'object'
-    ? { ...payload, ...camposNormalizados, ...(descricaoCompacta ? { descricao: descricaoCompacta } : {}) }
-    : payload
-
-  const oferta = data?.ofertaSugerida
-    || data?.ofertaColetada
-    || data?.resultadoProdutoIa?.ofertaColetada
-    || null
-
-  const ausentes = data?.normalizacao?.ausentes
-    || data?.cadastroSugerido?.camposObrigatoriosAusentes
-    || data?.resultadoProdutoIa?.camposObrigatoriosAusentes
-    || []
-
-  const destinoSugerido = inferAiDestination(data, payload)
-
-  return {
-    ...data,
-    ...(data?.cadastroSugerido && typeof data.cadastroSugerido === 'object' ? {
-      cadastroSugerido: { ...data.cadastroSugerido, payload: payloadNormalizado },
-    } : {}),
-    ...(data?.resultadoProdutoIa && typeof data.resultadoProdutoIa === 'object' ? {
-      resultadoProdutoIa: {
-        ...data.resultadoProdutoIa,
-        ...(data.resultadoProdutoIa.payloadParcialBackend && typeof data.resultadoProdutoIa.payloadParcialBackend === 'object'
-          ? { payloadParcialBackend: { ...data.resultadoProdutoIa.payloadParcialBackend, ...camposNormalizados } }
-          : {}),
-      },
-    } : {}),
-    ...(data?.confirmacaoSugerida && typeof data.confirmacaoSugerida === 'object' ? {
-      confirmacaoSugerida: {
-        ...data.confirmacaoSugerida,
-        ...(data.confirmacaoSugerida.body && typeof data.confirmacaoSugerida.body === 'object'
-          ? { body: { ...data.confirmacaoSugerida.body, ...camposNormalizados } }
-          : {}),
-      },
-    } : {}),
-    destinoSugerido,
-    categoriaDetectada,
-    categoriaSugerida: data?.categoriaSugerida || categoriaDetectada,
-    iaDisponivel: data?.iaDisponivel !== false && !data?.resultadoProdutoIa?.erro,
-    normalizacao: {
-      ...(data?.normalizacao || {}),
-      camposNormalizados,
-      ausentes: Array.isArray(ausentes) ? ausentes : [],
-      alertas: Array.isArray(data?.normalizacao?.alertas) ? data.normalizacao.alertas : [],
-      textoExplicativo: data?.normalizacao?.textoExplicativo
-        || 'Dados estruturados retornados pelo Produto IA. Revise os campos antes de salvar.',
-    },
-    ofertaSugerida: oferta ? {
-      ...oferta,
-      urlOriginal: oferta.urlOriginal || oferta.urlProduto || data?.urlOrigem || '',
-    } : null,
-  }
-}
 
 async function list(path) {
   return unwrapList(await apiRequest(path))
@@ -457,7 +258,7 @@ export const adminService = {
 
   ai: {
     chat: (body) => oneRequest('/api/admin/ia/chat', 'POST', body),
-    importLink: async (url, categoriaEsperada) => normalizeAiImportResult(await oneRequest('/api/admin/ia/importar-link', 'POST', { url, ...(categoriaEsperada ? { categoriaEsperada } : {}) })),
+    importLink: async (url, categoriaEsperada) => normalizeAiResponse(await oneRequest('/api/admin/ia/importar-link', 'POST', { url, ...(categoriaEsperada ? { categoria: categoriaEsperada } : {}) })),
     analyzeProduct: (produtoId) => oneRequest('/api/admin/ia/analisar-produto', 'POST', { produtoId: Number(produtoId) }),
     generateProductDescription: (produtoId) => oneRequest('/api/admin/ia/gerar-descricao', 'POST', { produtoId: Number(produtoId) }),
     normalizeProduct: (conteudoBruto, urlOrigem) => oneRequest('/api/admin/ia/normalizar-produto', 'POST', { conteudoBruto, ...(urlOrigem ? { urlOrigem } : {}) }),

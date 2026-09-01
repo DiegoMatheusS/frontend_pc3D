@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
 import { adminService } from '../services/adminService'
 import { storeAiImportPreview } from '../utils/aiImportTransfer'
+import { getAiConflicts, getAiMissingFields, getAiOffer, getAiPayload, getAiReadiness, getAiReconciliation } from '../utils/aiImportContract'
 
 const ACTION_PRODUCT = 'CADASTRAR_PRODUTO'
 const ACTION_HARDWARE = 'CADASTRAR_HARDWARE'
@@ -36,27 +37,11 @@ function unsupportedChatbotRoute(error) {
 }
 
 function previewSource(preview = {}) {
-  return {
-    ...(preview?.normalizacao?.camposNormalizados && typeof preview.normalizacao.camposNormalizados === 'object'
-      ? preview.normalizacao.camposNormalizados
-      : {}),
-    ...(preview?.resultadoProdutoIa?.payloadParcialBackend && typeof preview.resultadoProdutoIa.payloadParcialBackend === 'object'
-      ? preview.resultadoProdutoIa.payloadParcialBackend
-      : {}),
-    ...(preview?.cadastroSugerido?.payload && typeof preview.cadastroSugerido.payload === 'object'
-      ? preview.cadastroSugerido.payload
-      : {}),
-    ...(preview?.confirmacaoSugerida?.body && typeof preview.confirmacaoSugerida.body === 'object'
-      ? preview.confirmacaoSugerida.body
-      : {}),
-  }
+  return getAiPayload(preview)
 }
 
 function previewOffer(preview = {}) {
-  return preview?.ofertaSugerida
-    || preview?.ofertaColetada
-    || preview?.resultadoProdutoIa?.ofertaColetada
-    || null
+  return getAiOffer(preview)
 }
 
 function normalizeAutomaticPreview(data = {}) {
@@ -64,9 +49,13 @@ function normalizeAutomaticPreview(data = {}) {
   const hardware = analysis?.hardware || data?.hardware || {}
   const product = analysis?.produto || data?.produto || {}
   const offer = analysis?.oferta || data?.oferta || {}
-  const hardwareData = hardware?.dadosDetectados || hardware?.dados || hardware?.data || {}
-  const productData = product?.dadosDetectados || product?.dados || product?.data || {}
-  const offerData = offer?.dadosDetectados || offer?.dados || offer?.data || {}
+  const source = getAiPayload(data)
+  const structuredOffer = getAiOffer(data) || {}
+  const hardwareData = { ...source, ...(hardware?.dadosDetectados || hardware?.dados || hardware?.data || {}) }
+  const productData = { ...source, ...(product?.dadosDetectados || product?.dados || product?.data || {}) }
+  const offerData = { ...structuredOffer, ...(offer?.dadosDetectados || offer?.dados || offer?.data || {}) }
+  const missing = getAiMissingFields(data)
+  const conflicts = getAiConflicts(data)
 
   return {
     name: clean(productData?.nome || hardwareData?.nome || data?.nome),
@@ -79,18 +68,24 @@ function normalizeAutomaticPreview(data = {}) {
     partner: clean(offerData?.parceiroNome || offer?.parceiroNome || offerData?.parceiro?.nome || offer?.parceiro?.nome),
     hardwareExisting: hardware?.existente,
     hardwareId: hardware?.id,
-    productExisting: product?.existente,
-    productId: product?.id,
-    offerExisting: offer?.existente,
-    offerId: offer?.id,
+    productExisting: product?.existente ?? Boolean(getAiReconciliation(data)?.produtoExistente),
+    productId: product?.id ?? getAiReconciliation(data)?.produtoExistente?.id,
+    offerExisting: offer?.existente ?? Boolean(getAiReconciliation(data)?.ofertaExistente),
+    offerId: offer?.id ?? getAiReconciliation(data)?.ofertaExistente?.id,
     actions: Array.isArray(data?.acoesPrevistas) ? data.acoesPrevistas : [],
-    warnings: [...(Array.isArray(data?.avisos) ? data.avisos : []), ...(Array.isArray(data?.conflitos) ? data.conflitos.map((item) => typeof item === 'string' ? item : `Conflito em ${item?.campo || 'campo técnico'}`) : [])],
+    warnings: [
+      ...(Array.isArray(data?.avisos) ? data.avisos : []),
+      ...missing.map((field) => `Campo para revisão: ${field}`),
+      ...conflicts.map((item) => typeof item === 'string' ? item : `Conflito em ${item?.campo || 'campo técnico'}`),
+    ],
+    technical: source,
   }
 }
 
 function normalizeFallbackPreview(preview = {}) {
   const source = previewSource(preview)
   const offer = previewOffer(preview) || {}
+  const reconciliation = getAiReconciliation(preview)
   return {
     name: clean(source.nome),
     brand: clean(source.marca),
@@ -100,17 +95,19 @@ function normalizeFallbackPreview(preview = {}) {
     price: offer?.preco,
     previousPrice: offer?.precoAnterior,
     partner: clean(offer?.parceiroNome || offer?.parceiro?.nome),
-    hardwareExisting: preview?.reconciliacao?.hardwareExistente ? true : undefined,
-    hardwareId: preview?.reconciliacao?.hardwareExistente?.id,
-    productExisting: preview?.reconciliacao?.produtoExistente ? true : undefined,
-    productId: preview?.reconciliacao?.produtoExistente?.id,
-    offerExisting: preview?.reconciliacao?.ofertaExistente ? true : undefined,
-    offerId: preview?.reconciliacao?.ofertaExistente?.id,
+    hardwareExisting: reconciliation?.hardwareExistente ? true : undefined,
+    hardwareId: reconciliation?.hardwareExistente?.id,
+    productExisting: reconciliation?.produtoExistente ? true : undefined,
+    productId: reconciliation?.produtoExistente?.id,
+    offerExisting: reconciliation?.ofertaExistente ? true : undefined,
+    offerId: reconciliation?.ofertaExistente?.id,
     actions: [],
     warnings: [
       ...(Array.isArray(preview?.normalizacao?.alertas) ? preview.normalizacao.alertas : []),
-      ...(Array.isArray(preview?.normalizacao?.ausentes) && preview.normalizacao.ausentes.length ? [`Campos não encontrados: ${preview.normalizacao.ausentes.join(', ')}`] : []),
+      ...getAiMissingFields(preview).map((field) => `Campo para revisão: ${field}`),
+      ...getAiConflicts(preview).map((item) => typeof item === 'string' ? item : `Conflito em ${item?.campo || 'campo técnico'}`),
     ],
+    technical: source,
   }
 }
 
@@ -125,6 +122,11 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
   const summary = flow.backendReady ? normalizeAutomaticPreview(flow.preview) : normalizeFallbackPreview(flow.preview)
   const price = formatPrice(summary.price)
   const previousPrice = formatPrice(summary.previousPrice)
+  const readiness = getAiReadiness(flow.preview)
+  const identityKeys = new Set(['nome','marca','modelo','descricao','mpn','gtin','ean','imagemUrl','categoria','metadados'])
+  const technicalEntries = Object.entries(summary.technical || {})
+    .filter(([key, value]) => !identityKeys.has(key) && value !== null && value !== '' && typeof value !== 'object')
+    .slice(0, 6)
 
   return (
     <section className="admin-ia-registration-card" aria-label="Prévia do cadastro por IA">
@@ -141,10 +143,12 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
         <div><span>Hardware</span><strong>{entityStatus(summary.hardwareExisting, summary.hardwareId, 'Será criado se necessário')}</strong></div>
         {flow.action === ACTION_PRODUCT && <div><span>Produto</span><strong>{entityStatus(summary.productExisting, summary.productId, 'Será criado')}</strong></div>}
         {flow.action === ACTION_PRODUCT && <div><span>Oferta</span><strong>{entityStatus(summary.offerExisting, summary.offerId, 'Será criada/atualizada')}</strong></div>}
-        {flow.action === ACTION_PRODUCT && price && <div><span>Preço</span><strong>{price}</strong>{previousPrice && previousPrice !== price ? <small>Antes: {previousPrice}</small> : null}</div>}
+        {price && <div><span>{flow.action === ACTION_PRODUCT ? 'Preço' : 'Preço encontrado'}</span><strong>{price}</strong>{previousPrice && previousPrice !== price ? <small>Antes: {previousPrice}</small> : null}</div>}
         {flow.action === ACTION_PRODUCT && summary.partner && <div><span>Parceiro</span><strong>{summary.partner}</strong></div>}
       </div>
 
+      {technicalEntries.length > 0 && <div className="admin-ia-registration-plan"><span>Principais dados técnicos</span><strong>{technicalEntries.map(([key, value]) => `${key}: ${String(value)}`).join(' · ')}</strong></div>}
+      {flow.action === ACTION_HARDWARE && price && <p className="admin-ia-registration-note">O preço foi encontrado no anúncio apenas para conferência e não será salvo no Hardware.</p>}
       {summary.actions.length > 0 && <div className="admin-ia-registration-plan"><span>Plano do backend</span><strong>{summary.actions.map((item) => String(item).replaceAll('_', ' ')).join(' → ')}</strong></div>}
       {summary.warnings.length > 0 && <div className="admin-ia-registration-warning"><strong>Revisar</strong>{summary.warnings.slice(0, 4).map((item, index) => <span key={index}>{String(item)}</span>)}</div>}
 
@@ -152,8 +156,9 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
 
       <div className="admin-ia-registration-actions">
         <button type="button" className="btn btn-secundario btn-pequeno" onClick={onCancel} disabled={sending}>Cancelar</button>
+        {flow.backendReady && <button type="button" className="btn btn-secundario btn-pequeno" onClick={onOpenForm} disabled={sending}>Corrigir dados</button>}
         {flow.backendReady
-          ? <button type="button" className="btn btn-primario btn-pequeno" onClick={onConfirm} disabled={sending || !flow.preview?.tokenConfirmacao}>{sending ? 'Confirmando...' : 'Confirmar cadastro'}</button>
+          ? <button type="button" className="btn btn-primario btn-pequeno" onClick={onConfirm} disabled={sending || !flow.preview?.tokenConfirmacao || readiness.ready === false || readiness.enabled === false}>{sending ? 'Confirmando...' : 'Confirmar cadastro'}</button>
           : <button type="button" className="btn btn-primario btn-pequeno" onClick={onOpenForm} disabled={sending}>Abrir cadastro</button>}
       </div>
     </section>
@@ -211,7 +216,8 @@ export default function AdminAssistant({ open, onClose }) {
   }
 
   async function confirmRegistration() {
-    if (!flow?.backendReady || !flow?.preview?.tokenConfirmacao || sending) return
+    const readiness = getAiReadiness(flow?.preview || {})
+    if (!flow?.backendReady || !flow?.preview?.tokenConfirmacao || sending || readiness.ready === false || readiness.enabled === false) return
     setSending(true)
     try {
       const result = await adminService.chatbot.confirmRegistration({ tokenConfirmacao: flow.preview.tokenConfirmacao, confirmar: true })
@@ -235,11 +241,29 @@ export default function AdminAssistant({ open, onClose }) {
   function openFallbackForm() {
     if (!flow?.preview) return
     const url = clean(flow.url)
+    const currentPayload = getAiPayload(flow.preview)
+    const analysis = flow.preview?.analise || flow.preview?.analysis || {}
+    const hardwareData = analysis?.hardware?.dadosDetectados || analysis?.hardware?.dados || analysis?.hardware?.data || {}
+    const productData = analysis?.produto?.dadosDetectados || analysis?.produto?.dados || analysis?.produto?.data || {}
+    const offerData = analysis?.oferta?.dadosDetectados || analysis?.oferta?.dados || analysis?.oferta?.data || {}
+    const category = analysis?.categoria || hardwareData?.categoria || productData?.categoria
+    const transferable = Object.keys(currentPayload).length
+      ? flow.preview
+      : {
+          ...flow.preview,
+          categoriaSugerida: category,
+          cadastroSugerido: {
+            ...(flow.preview?.cadastroSugerido || {}),
+            payload: { ...hardwareData, ...productData, ...(category ? { categoria: category } : {}) },
+          },
+          ofertaColetada: Object.keys(offerData).length ? offerData : flow.preview?.ofertaColetada,
+        }
+
     if (flow.action === ACTION_HARDWARE) {
-      storeAiImportPreview({ ...flow.preview, destinoSugerido: 'HARDWARE', urlOrigem: flow.preview?.urlOrigem || url })
+      storeAiImportPreview({ ...transferable, destinoSugerido: 'HARDWARE', urlOrigem: transferable?.urlOrigem || url })
       navigate('/admin/hardwares/novo?origem=chatbot')
     } else {
-      storeAiImportPreview({ ...flow.preview, urlOrigem: flow.preview?.urlOrigem || url })
+      storeAiImportPreview({ ...transferable, destinoSugerido: 'PRODUTO', urlOrigem: transferable?.urlOrigem || url })
       navigate(`/admin/produtos/novo?origem=chatbot${url ? `&url=${encodeURIComponent(url)}` : ''}`)
     }
     onClose?.()
