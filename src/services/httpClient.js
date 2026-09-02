@@ -1,4 +1,9 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const CONFIGURED_API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '')
+
+// Em desenvolvimento, URL vazia mantém o proxy /api do Vite.
+// Em produção, o CriaByte sempre usa o backend oficial mesmo quando
+// VITE_API_BASE_URL não foi configurada no build do frontend.
+const API_BASE_URL = CONFIGURED_API_BASE_URL || (import.meta.env.PROD ? 'https://api.criabyte.com.br' : '')
 
 export class ApiError extends Error {
   constructor(message, { status = 0, data = null, url = '' } = {}) {
