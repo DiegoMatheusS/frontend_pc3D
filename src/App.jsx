@@ -34,6 +34,7 @@ const AdminDashboard = lazy(() => import('./admin/pages/AdminDashboard'))
 const AdminProducts = lazy(() => import('./admin/pages/AdminProducts'))
 const AdminProductForm = lazy(() => import('./admin/pages/AdminProductForm'))
 const AdminHardwares = lazy(() => import('./admin/pages/AdminHardwares'))
+const AdminHardwareDiscovery = lazy(() => import('./admin/pages/AdminHardwareDiscovery'))
 const AdminHardwareForm = lazy(() => import('./admin/pages/AdminHardwareForm'))
 const AdminOffers = lazy(() => import('./admin/pages/AdminOffers'))
 const AdminOfferSuggestions = lazy(() => import('./admin/pages/AdminOfferSuggestions'))
@@ -138,6 +139,7 @@ export default function App() {
         <Route path="produtos" element={<Lazy><AdminProducts /></Lazy>} />
         <Route path="produtos/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminProductForm /></AdminAccess></Lazy>} />
         <Route path="hardwares" element={<Lazy><AdminHardwares /></Lazy>} />
+        <Route path="hardwares/descobrir" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminHardwareDiscovery /></AdminAccess></Lazy>} />
         <Route path="hardwares/novo" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminHardwareForm /></AdminAccess></Lazy>} />
         <Route path="hardwares/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminHardwareForm /></AdminAccess></Lazy>} />
         <Route path="ofertas" element={<Lazy><AdminOffers /></Lazy>} />

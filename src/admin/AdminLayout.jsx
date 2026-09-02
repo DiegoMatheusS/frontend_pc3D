@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { key: 'dashboard', to: '/admin', icon: '▦', label: 'Dashboard', group: 'Geral', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'produtos', to: '/admin/produtos', icon: '▣', label: 'Produtos', group: 'Catálogo', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'hardwares', to: '/admin/hardwares', icon: 'CPU', label: 'Hardwares', group: 'Catálogo', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
+  { key: 'descobrir-hardwares', to: '/admin/hardwares/descobrir', icon: 'IA', label: 'Descobrir Hardwares', group: 'Catálogo', roles: ['ADMIN'] },
   { key: 'notebooks', to: '/admin/notebooks', icon: 'NB', label: 'Notebooks', group: 'Catálogo', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'montados', to: '/admin/montados', icon: 'PC', label: 'PCs Montados', group: 'Catálogo', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'ofertas', to: '/admin/ofertas', icon: 'R$', label: 'Ofertas afiliadas', group: 'Comercial', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
 const ROUTE_META = [
   [/^\/admin\/produtos\/(novo|\d+)/, ['Produto', 'Cadastro e edição do catálogo comercial']],
   [/^\/admin\/produtos/, ['Produtos', 'Catálogo comercial e periféricos']],
+  [/^\/admin\/hardwares\/descobrir/, ['Descobrir Hardwares com IA', 'Novos modelos técnicos encontrados e ainda não cadastrados']],
   [/^\/admin\/hardwares\/(novo|\d+)/, ['Hardware', 'Ficha técnica e compatibilidade']],
   [/^\/admin\/hardwares/, ['Hardwares', 'Peças usadas no montador e no catálogo técnico']],
   [/^\/admin\/sugestoes-ofertas\/\d+/, ['Analisar sugestão', 'Revisar oferta enviada por usuário']],
