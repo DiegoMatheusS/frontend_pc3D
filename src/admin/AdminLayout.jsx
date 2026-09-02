@@ -11,7 +11,7 @@ const NAV_ITEMS = [
   { key: 'dashboard', to: '/admin', icon: '▦', label: 'Dashboard', group: 'Geral', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'produtos', to: '/admin/produtos', icon: '▣', label: 'Produtos', group: 'Catálogo', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'hardwares', to: '/admin/hardwares', icon: 'CPU', label: 'Hardwares', group: 'Catálogo', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
-  { key: 'descobrir-hardwares', to: '/admin/hardwares/descobrir', icon: 'IA', label: 'Descobrir Hardwares', group: 'Catálogo', roles: ['ADMIN'] },
+  { key: 'descobrir-hardwares', to: '/admin/hardwares/descobrir', icon: 'IA', label: 'Descobrir Hardwares', group: 'Catálogo', roles: ['ADMIN', 'EDITOR'] },
   { key: 'notebooks', to: '/admin/notebooks', icon: 'NB', label: 'Notebooks', group: 'Catálogo', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'montados', to: '/admin/montados', icon: 'PC', label: 'PCs Montados', group: 'Catálogo', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },
   { key: 'ofertas', to: '/admin/ofertas', icon: 'R$', label: 'Ofertas afiliadas', group: 'Comercial', roles: ['ADMIN', 'EDITOR', 'REVISOR'] },

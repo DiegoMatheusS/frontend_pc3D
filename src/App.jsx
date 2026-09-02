@@ -139,7 +139,7 @@ export default function App() {
         <Route path="produtos" element={<Lazy><AdminProducts /></Lazy>} />
         <Route path="produtos/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminProductForm /></AdminAccess></Lazy>} />
         <Route path="hardwares" element={<Lazy><AdminHardwares /></Lazy>} />
-        <Route path="hardwares/descobrir" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminHardwareDiscovery /></AdminAccess></Lazy>} />
+        <Route path="hardwares/descobrir" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminHardwareDiscovery /></AdminAccess></Lazy>} />
         <Route path="hardwares/novo" element={<Lazy><AdminAccess roles={['ADMIN']}><AdminHardwareForm /></AdminAccess></Lazy>} />
         <Route path="hardwares/:id" element={<Lazy><AdminAccess roles={['ADMIN', 'EDITOR']}><AdminHardwareForm /></AdminAccess></Lazy>} />
         <Route path="ofertas" element={<Lazy><AdminOffers /></Lazy>} />

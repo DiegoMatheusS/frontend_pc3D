@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { AdminPageHeader } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 import { hardwareSchemaFor } from '../components/AdminTechnicalFields'
-import { getAiPayload } from '../utils/aiImportContract'
 import { adminService } from '../services/adminService'
 
 const CATEGORIES = [
@@ -71,7 +70,10 @@ function listStrings(value) {
 }
 
 function candidatePayload(item) {
-  const payload = item?.payload || item?.payloadHardware || item?.hardware || item?.cadastroSugerido?.payload || {}
+  // Contrato final da Etapa 2: `payload` é o objeto oficial que o backend
+  // devolve na descoberta e espera receber novamente no cadastro.
+  // Aliases antigos ficam apenas como fallback visual para não quebrar uma resposta em cache.
+  const payload = item?.payload || item?.payloadHardware || item?.hardware || {}
   return payload && typeof payload === 'object' ? payload : {}
 }
 
@@ -105,11 +107,11 @@ function candidateStatus(item) {
 
 function candidateIdentity(item, payload) {
   return {
-    nome: payload?.nome || item?.nome || item?.identidade?.nome || 'Hardware sem nome',
-    marca: payload?.marca || item?.identidade?.marca || item?.marca || '',
-    modelo: payload?.modelo || item?.identidade?.modelo || item?.modelo || '',
-    mpn: payload?.mpn || item?.identidade?.mpn || item?.mpn || '',
-    gtin: payload?.gtin || item?.identidade?.gtin || item?.gtin || '',
+    nome: payload?.nome || item?.nome || 'Hardware sem nome',
+    marca: payload?.marca || item?.marca || '',
+    modelo: payload?.modelo || item?.modelo || '',
+    mpn: payload?.mpn || item?.mpn || '',
+    gtin: payload?.gtin || payload?.ean || item?.gtin || item?.ean || '',
   }
 }
 
@@ -154,52 +156,6 @@ function techDataFor(item) {
   return { categoria, schema, spec, rows }
 }
 
-function sanitizePayload(payload) {
-  const original = payload && typeof payload === 'object' ? payload : {}
-  const copy = typeof structuredClone === 'function'
-    ? structuredClone(original)
-    : JSON.parse(JSON.stringify(original))
-
-  // Reaproveita a mesma normalização já usada pela importação por URL (ex.: LGA 1151 -> LGA1151),
-  // mas mantém somente o bloco oficial da ficha técnica para não enviar aliases como campos de topo.
-  const categoria = String(copy?.categoria || '').toUpperCase()
-  const schema = hardwareSchemaFor(categoria)
-  if (schema) {
-    const normalized = getAiPayload({ cadastroSugerido: { payload: copy } })
-    if (normalized?.[schema.key] && typeof normalized[schema.key] === 'object') copy[schema.key] = normalized[schema.key]
-  }
-
-  function clean(node) {
-    if (!node || typeof node !== 'object') return
-    if (Array.isArray(node)) {
-      node.forEach(clean)
-      return
-    }
-    delete node.dataLancamento
-    delete node.dataDeLancamento
-    delete node.releaseDate
-    delete node.preco
-    delete node.precoAnterior
-    delete node.oferta
-    Object.values(node).forEach(clean)
-  }
-  clean(copy)
-  return copy
-}
-
-function sourceName(item) {
-  if (typeof item === 'string') return item
-  return item?.nome || item?.name || item?.fonte || item?.provider || item?.id || ''
-}
-
-function sourceListFromResponse(payload) {
-  const raw = payload?.fontes || payload?.itens || payload?.sources || payload?.dados || payload
-  if (!raw) return []
-  if (Array.isArray(raw)) return [...new Set(raw.map(sourceName).filter(Boolean))]
-  if (typeof raw === 'object') return [...new Set(Object.entries(raw).filter(([, value]) => value !== false && value !== null).map(([key, value]) => sourceName(value) || key).filter(Boolean))]
-  return []
-}
-
 function SpecValue({ row }) {
   if (Array.isArray(row.raw) && row.raw.some((item) => item && typeof item === 'object')) {
     return <div className="admin-discovery-repeater-list">{row.raw.map((item, index) => <div key={`${row.key}-${index}`} className="admin-discovery-repeater-item"><strong>{row.label} {index + 1}</strong><dl>{Object.entries(item || {}).filter(([, value]) => hasValue(value)).map(([key, value]) => <div key={key}><dt>{humanize(key)}</dt><dd>{text(value)}</dd></div>)}</dl></div>)}</div>
@@ -207,7 +163,7 @@ function SpecValue({ row }) {
   return <span>{row.value}</span>
 }
 
-function HardwareCard({ item, index, selected, busy, onToggle, onOpen, onAdd }) {
+function HardwareCard({ item, index, selected, busy, itemError, onToggle, onOpen, onAdd }) {
   const payload = candidatePayload(item)
   const identity = candidateIdentity(item, payload)
   const { categoria, rows } = techDataFor(item)
@@ -216,6 +172,7 @@ function HardwareCard({ item, index, selected, busy, onToggle, onOpen, onAdd }) 
   const sources = listStrings(item?.fontes)
   const missing = listStrings(item?.camposObrigatoriosAusentes?.length ? item.camposObrigatoriosAusentes : item?.camposAusentes)
   const conflicts = Array.isArray(item?.conflitos) ? item.conflitos : []
+  const warnings = listStrings(item?.avisos)
   const key = candidateId(item, index)
 
   return (
@@ -251,10 +208,13 @@ function HardwareCard({ item, index, selected, busy, onToggle, onOpen, onAdd }) 
         <div className="admin-discovery-quality-track" aria-hidden="true"><span style={{ width: `${quality ?? 0}%` }} /></div>
       </div>
 
-      {(missing.length > 0 || conflicts.length > 0) && <div className="admin-discovery-alerts">
+      {(warnings.length > 0 || missing.length > 0 || conflicts.length > 0) && <div className="admin-discovery-alerts">
+        {warnings.length > 0 && <span>{warnings.length} aviso(s)</span>}
         {missing.length > 0 && <span>{missing.length} campo(s) ainda ausente(s)</span>}
         {conflicts.length > 0 && <span>{conflicts.length} conflito(s) para revisar</span>}
       </div>}
+
+      {itemError && <div className="admin-discovery-item-error" role="alert">{itemError}</div>}
 
       <div className="admin-discovery-sources">
         <small>Fontes</small>
@@ -263,13 +223,13 @@ function HardwareCard({ item, index, selected, busy, onToggle, onOpen, onAdd }) 
 
       <div className="admin-discovery-card-actions">
         <button type="button" className="btn btn-secundario btn-pequeno" onClick={() => onOpen(item)} disabled={busy}>Ver ficha completa</button>
-        <button type="button" className="btn btn-primario btn-pequeno" onClick={() => onAdd(item, index)} disabled={busy}>{busy ? 'Adicionando...' : 'Adicionar'}</button>
+        <button type="button" className="btn btn-primario btn-pequeno" onClick={() => onAdd(item, index)} disabled={busy}>{busy ? 'Cadastrando...' : 'Cadastrar'}</button>
       </div>
     </article>
   )
 }
 
-function HardwareDetailModal({ item, onClose, onAdd, onDetail, busy, detailing }) {
+function HardwareDetailModal({ item, onClose, onAdd, busy }) {
   const payload = candidatePayload(item)
   const identity = candidateIdentity(item, payload)
   const { categoria, rows } = techDataFor(item)
@@ -330,8 +290,7 @@ function HardwareDetailModal({ item, onClose, onAdd, onDetail, busy, detailing }
 
       <footer className="admin-discovery-modal-actions">
         <button type="button" className="btn btn-secundario" onClick={onClose}>Fechar</button>
-        <button type="button" className="btn btn-secundario" onClick={() => onDetail(item)} disabled={detailing || busy}>{detailing ? 'Atualizando ficha...' : 'Detalhar novamente com IA'}</button>
-        <button type="button" className="btn btn-primario" onClick={() => onAdd(item)} disabled={busy || detailing}>{busy ? 'Adicionando...' : 'Adicionar Hardware'}</button>
+        <button type="button" className="btn btn-primario" onClick={() => onAdd(item)} disabled={busy}>{busy ? 'Cadastrando...' : 'Cadastrar Hardware'}</button>
       </footer>
     </section>
   </div>
@@ -341,7 +300,6 @@ export default function AdminHardwareDiscovery() {
   const toast = useAdminToast()
   const [categoria, setCategoria] = useState('PROCESSADOR')
   const [marca, setMarca] = useState('')
-  const [consulta, setConsulta] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [pagina, setPagina] = useState(1)
   const [limite, setLimite] = useState(50)
@@ -352,17 +310,8 @@ export default function AdminHardwareDiscovery() {
   const [addingIds, setAddingIds] = useState(new Set())
   const [batchBusy, setBatchBusy] = useState(false)
   const [detailItem, setDetailItem] = useState(null)
-  const [detailing, setDetailing] = useState(false)
-  const [sources, setSources] = useState([])
-  const [sessionAdded, setSessionAdded] = useState(0)
-
-  useEffect(() => {
-    let active = true
-    adminService.hardwares.discoverySources()
-      .then((payload) => { if (active) setSources(sourceListFromResponse(payload)) })
-      .catch(() => { /* Fontes são informativas e não bloqueiam a página. */ })
-    return () => { active = false }
-  }, [])
+  const [batchErrors, setBatchErrors] = useState({})
+  const [batchSummary, setBatchSummary] = useState(null)
 
   const items = useMemo(() => Array.isArray(result?.itens) ? result.itens : [], [result])
   const filteredItems = useMemo(() => items.filter((item) => !statusFilter || candidateStatus(item) === statusFilter), [items, statusFilter])
@@ -373,16 +322,14 @@ export default function AdminHardwareDiscovery() {
     setLoading(true)
     setError('')
     setSelected(new Set())
+    setBatchErrors({})
+    setBatchSummary(null)
     try {
       const payload = await adminService.hardwares.discover({
         categoria,
         ...(marca.trim() ? { marca: marca.trim() } : {}),
-        ...(consulta.trim() ? { consulta: consulta.trim() } : {}),
         pagina: targetPage,
         limite: Number(limite),
-        detalhar: true,
-        enriquecer: true,
-        noBrowser: false,
       })
       setResult(payload || { itens: [] })
       setPagina(Number(payload?.pagina) || targetPage)
@@ -430,15 +377,30 @@ export default function AdminHardwareDiscovery() {
     const key = candidateId(item, index)
     setAddingIds((current) => new Set(current).add(key))
     try {
-      const response = await adminService.hardwares.createDiscovered({ idTemporario: item?.idTemporario || key, payload: sanitizePayload(candidatePayload(item)) })
-      const status = String(response?.status || response?.resultado || response?.situacao || '').toUpperCase()
-      if (status === 'JA_EXISTE') toast.show('Este Hardware já estava cadastrado e foi removido da lista.', 'info')
-      else toast.show('Hardware cadastrado com sucesso.')
-      removeCandidates([key])
-      if (status !== 'JA_EXISTE') setSessionAdded((value) => value + 1)
+      const response = await adminService.hardwares.createDiscovered({
+        idTemporario: item?.idTemporario || key,
+        payload: candidatePayload(item),
+      })
+      const status = String(response?.status || response?.resultado || '').toUpperCase()
+      if (status === 'JA_EXISTE') {
+        toast.show('Este Hardware já havia sido cadastrado e foi removido da lista.', 'info')
+        removeCandidates([key])
+      } else if (status === 'CRIADO') {
+        toast.show('Hardware cadastrado com sucesso.')
+        removeCandidates([key])
+      } else {
+        throw new Error(response?.mensagem || response?.message || 'O backend retornou um status de cadastro inesperado.')
+      }
+      setBatchErrors((current) => {
+        const next = { ...current }
+        delete next[key]
+        return next
+      })
       if (detailItem && candidateId(detailItem) === key) setDetailItem(null)
     } catch (err) {
-      toast.show(err?.message || 'Não foi possível cadastrar o Hardware.', 'erro')
+      const message = err?.message || 'Não foi possível cadastrar o Hardware.'
+      setBatchErrors((current) => ({ ...current, [key]: message }))
+      toast.show(message, 'erro')
     } finally {
       setAddingIds((current) => {
         const next = new Set(current)
@@ -455,55 +417,52 @@ export default function AdminHardwareDiscovery() {
     try {
       const sent = selectedItems.map((item, index) => ({
         idTemporario: item?.idTemporario || candidateId(item, index),
-        payload: sanitizePayload(candidatePayload(item)),
+        payload: candidatePayload(item),
       }))
       const response = await adminService.hardwares.createDiscoveredBatch(sent)
-      const results = Array.isArray(response?.resultados) ? response.resultados : Array.isArray(response?.results) ? response.results : []
-      let successfulKeys = []
-      if (results.length) {
-        const successfulIds = new Set(results.filter((entry) => ['CRIADO', 'JA_EXISTE'].includes(String(entry?.status || entry?.resultado || '').toUpperCase())).map((entry) => String(entry?.idTemporario || entry?.id || '')))
-        successfulKeys = selectedItems.map((item, index) => ({ item, key: candidateId(item, items.indexOf(item) >= 0 ? items.indexOf(item) : index) })).filter(({ item, key }) => successfulIds.has(String(item?.idTemporario || key))).map(({ key }) => key)
-      } else if (Number(response?.erros || 0) === 0) {
-        successfulKeys = selectedItems.map((item, index) => candidateId(item, items.indexOf(item) >= 0 ? items.indexOf(item) : index))
-      }
+      const results = Array.isArray(response?.resultados) ? response.resultados : []
+      const selectedByTemporaryId = new Map(selectedItems.map((item, index) => {
+        const key = candidateId(item, items.indexOf(item) >= 0 ? items.indexOf(item) : index)
+        return [String(item?.idTemporario || key), key]
+      }))
+      const successfulKeys = []
+      const itemErrors = {}
+
+      results.forEach((entry) => {
+        const temporaryId = String(entry?.idTemporario || '')
+        const key = selectedByTemporaryId.get(temporaryId)
+        if (!key) return
+        const status = String(entry?.status || entry?.resultado || '').toUpperCase()
+        if (status === 'CRIADO' || status === 'JA_EXISTE') {
+          successfulKeys.push(key)
+          return
+        }
+        if (status === 'ERRO') {
+          itemErrors[key] = entry?.mensagem || entry?.message || (entry?.erro ? text(entry.erro) : '') || 'Erro ao cadastrar este Hardware.'
+        }
+      })
+
       removeCandidates(successfulKeys)
-      const created = Number(response?.criados)
-      if (Number.isFinite(created)) setSessionAdded((value) => value + created)
-      const message = `Lote concluído: ${Number(response?.criados || 0)} criado(s), ${Number(response?.jaExistiam || 0)} já existente(s), ${Number(response?.erros || 0)} erro(s).`
-      toast.show(message, Number(response?.erros || 0) ? 'info' : undefined)
+      setBatchErrors((current) => {
+        const next = { ...current }
+        successfulKeys.forEach((key) => delete next[key])
+        Object.assign(next, itemErrors)
+        return next
+      })
+
+      const summary = {
+        totalSolicitado: Number(response?.totalSolicitado ?? selectedItems.length),
+        criados: Number(response?.criados || 0),
+        jaExistiam: Number(response?.jaExistiam || 0),
+        erros: Number(response?.erros || 0),
+      }
+      setBatchSummary(summary)
+      const message = `Lote concluído: ${summary.criados} criado(s), ${summary.jaExistiam} já existente(s), ${summary.erros} erro(s).`
+      toast.show(message, summary.erros ? 'info' : undefined)
     } catch (err) {
       toast.show(err?.message || 'Não foi possível cadastrar o lote.', 'erro')
     } finally {
       setBatchBusy(false)
-    }
-  }
-
-  async function detailAgain(item) {
-    const payload = candidatePayload(item)
-    const identity = candidateIdentity(item, payload)
-    setDetailing(true)
-    try {
-      const response = await adminService.hardwares.discoverDetail({
-        categoria: payload?.categoria || item?.categoria || categoria,
-        nome: identity.nome,
-        ...(item?.urlFontePrincipal ? { url: item.urlFontePrincipal } : {}),
-        ...(item?.fontePrincipal ? { fonte: typeof item.fontePrincipal === 'string' ? item.fontePrincipal : sourceName(item.fontePrincipal) } : {}),
-        ...(identity.marca ? { marca: identity.marca } : {}),
-        enriquecer: true,
-        noBrowser: false,
-      })
-      const detailed = response?.item || response?.candidato || response
-      if (detailed && typeof detailed === 'object') {
-        const oldKey = candidateId(item)
-        const merged = { ...item, ...detailed, idTemporario: detailed.idTemporario || item.idTemporario }
-        setResult((current) => current ? { ...current, itens: (current.itens || []).map((entry) => candidateId(entry) === oldKey ? merged : entry) } : current)
-        setDetailItem(merged)
-        toast.show('Ficha atualizada com os dados disponíveis.')
-      }
-    } catch (err) {
-      toast.show(err?.message || 'Não foi possível detalhar novamente.', 'erro')
-    } finally {
-      setDetailing(false)
     }
   }
 
@@ -518,14 +477,14 @@ export default function AdminHardwareDiscovery() {
 
     <section className="admin-discovery-search-card">
       <div className="admin-discovery-search-grid">
-        <label className="admin-toolbar-field"><span>Categoria *</span><select className="admin-select" value={categoria} onChange={(event) => { setCategoria(event.target.value); setResult(null); setSelected(new Set()) }}>{CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="admin-toolbar-field"><span>Categoria *</span><select className="admin-select" value={categoria} onChange={(event) => { setCategoria(event.target.value); setPagina(1); setResult(null); setSelected(new Set()); setBatchErrors({}); setBatchSummary(null) }}>{CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className="admin-toolbar-field"><span>Marca</span><input className="admin-input" value={marca} onChange={(event) => setMarca(event.target.value)} placeholder="Ex.: Intel, AMD, ASUS" /></label>
-        <label className="admin-toolbar-field admin-discovery-query"><span>Busca</span><input className="admin-input" type="search" value={consulta} onChange={(event) => setConsulta(event.target.value)} placeholder="Ex.: Core i5, Ryzen 7, RTX 5070" onKeyDown={(event) => { if (event.key === 'Enter' && !loading) search(1) }} /></label>
-        <label className="admin-toolbar-field"><span>Resultados por busca</span><select className="admin-select" value={limite} onChange={(event) => setLimite(Number(event.target.value))}><option value="20">20</option><option value="30">30</option><option value="50">50</option></select></label>
+        <label className="admin-toolbar-field"><span>Limite</span><select className="admin-select" value={limite} onChange={(event) => setLimite(Number(event.target.value))}><option value="20">20</option><option value="30">30</option><option value="50">50</option></select></label>
+        <label className="admin-toolbar-field"><span>Página</span><input className="admin-input" type="number" min="1" step="1" value={pagina} onChange={(event) => setPagina(Math.max(1, Number(event.target.value) || 1))} /></label>
       </div>
       <div className="admin-discovery-search-actions">
-        <div className="admin-discovery-source-note">{sources.length ? <>Fontes disponíveis: <strong>{sources.slice(0, 5).join(', ')}</strong>{sources.length > 5 ? ` e mais ${sources.length - 5}` : ''}</> : <>A busca usa as fontes técnicas configuradas no Projeto IA.</>}</div>
-        <button className="btn btn-primario" type="button" onClick={() => search(1)} disabled={loading}>{loading ? 'Buscando com IA...' : 'Buscar novos Hardwares'}</button>
+        <div className="admin-discovery-source-note">O navegador chama somente o backend do CriaByte. A consulta às fontes técnicas e a deduplicação são feitas no servidor.</div>
+        <button className="btn btn-primario" type="button" onClick={() => search(pagina)} disabled={loading}>{loading ? 'Buscando com IA...' : 'Descobrir Hardwares'}</button>
       </div>
     </section>
 
@@ -535,26 +494,29 @@ export default function AdminHardwareDiscovery() {
 
     {result && !loading && <>
       <section className="admin-discovery-stats" aria-label="Resumo da descoberta">
-        <article><span>Descobertos pela IA</span><strong>{totalFound}</strong></article>
+        <article><span>Encontrados</span><strong>{totalFound}</strong></article>
         <article><span>Já cadastrados</span><strong>{alreadyRegistered}</strong><small>não exibidos</small></article>
+        <article><span>Duplicados na busca</span><strong>{duplicateCount}</strong></article>
+        <article><span>Descartados inválidos</span><strong>{discardedCount}</strong></article>
         <article className="is-new"><span>Novos</span><strong>{newCount}</strong><small>exibidos abaixo</small></article>
-        <article><span>Adicionados nesta sessão</span><strong>{sessionAdded}</strong></article>
       </section>
 
       {(duplicateCount > 0 || discardedCount > 0) && <div className="admin-discovery-diagnostics">{duplicateCount > 0 && <span>{duplicateCount} duplicata(s) removida(s) da própria busca.</span>}{discardedCount > 0 && <span>{discardedCount} resultado(s) inválido(s) descartado(s).</span>}</div>}
+
+      {batchSummary && <section className={`admin-discovery-batch-summary ${batchSummary.erros ? 'has-errors' : ''}`} aria-label="Resumo do cadastro em lote"><strong>Último lote</strong><span>Solicitados: {batchSummary.totalSolicitado}</span><span>Criados: {batchSummary.criados}</span><span>Já existiam: {batchSummary.jaExistiam}</span><span>Erros: {batchSummary.erros}</span></section>}
 
       <section className="admin-discovery-list-toolbar">
         <div className="admin-discovery-list-filters">
           <label className="admin-discovery-check-all"><input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} disabled={!filteredItems.length || batchBusy} /> <span>Selecionar exibidos</span></label>
           <label><span>Status da ficha</span><select className="admin-select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         </div>
-        <div className="admin-discovery-batch-actions"><span>{selected.size} selecionado(s)</span><button type="button" className="btn btn-primario" disabled={!selectedItems.length || batchBusy} onClick={addBatch}>{batchBusy ? 'Adicionando...' : `Adicionar selecionados${selectedItems.length ? ` (${selectedItems.length})` : ''}`}</button></div>
+        <div className="admin-discovery-batch-actions"><span>{selected.size} selecionado(s)</span><button type="button" className="btn btn-primario" disabled={!selectedItems.length || batchBusy} onClick={addBatch}>{batchBusy ? 'Cadastrando...' : `Cadastrar selecionados${selectedItems.length ? ` (${selectedItems.length})` : ''}`}</button></div>
       </section>
 
       {filteredItems.length ? <section className="admin-discovery-grid">{filteredItems.map((item) => {
         const originalIndex = items.indexOf(item)
         const key = candidateId(item, originalIndex)
-        return <HardwareCard key={key} item={item} index={originalIndex} selected={selected.has(key)} busy={addingIds.has(key) || batchBusy} onToggle={toggle} onOpen={setDetailItem} onAdd={addOne} />
+        return <HardwareCard key={key} item={item} index={originalIndex} selected={selected.has(key)} busy={addingIds.has(key) || batchBusy} itemError={batchErrors[key] || ''} onToggle={toggle} onOpen={setDetailItem} onAdd={addOne} />
       })}</section> : <section className="admin-discovery-empty"><strong>Nenhum Hardware novo para exibir.</strong><p>{items.length ? 'Nenhum resultado corresponde ao filtro de status atual.' : 'Todos os modelos encontrados já estão cadastrados, foram descartados ou a IA não encontrou candidatos novos.'}</p></section>}
 
       <div className="admin-discovery-pagination">
@@ -566,9 +528,9 @@ export default function AdminHardwareDiscovery() {
 
     {!result && !loading && <section className="admin-discovery-intro">
       <span className="admin-discovery-intro-icon" aria-hidden="true">IA</span>
-      <div><h2>Descubra o que ainda falta no catálogo</h2><p>Escolha uma categoria e faça a busca. A lista mostrará somente candidatos novos, com os dados que serão cadastrados em cada Hardware.</p><ul><li>Nenhum preço ou Oferta é criado nesta página.</li><li>Você pode revisar a ficha completa antes de adicionar.</li><li>O cadastro em lote valida cada Hardware individualmente.</li></ul></div>
+      <div><h2>Descubra o que ainda falta no catálogo</h2><p>Escolha uma categoria, informe a marca se quiser reduzir o escopo e faça a busca. O backend devolve somente candidatos novos.</p><ul><li>Nenhum Produto, Oferta ou preço é criado nesta página.</li><li>Você pode revisar a ficha completa antes de cadastrar.</li><li>O cadastro em lote valida cada Hardware individualmente.</li></ul></div>
     </section>}
 
-    {detailItem && <HardwareDetailModal item={detailItem} onClose={() => setDetailItem(null)} onAdd={addOne} onDetail={detailAgain} busy={addingIds.has(candidateId(detailItem)) || batchBusy} detailing={detailing} />}
+    {detailItem && <HardwareDetailModal item={detailItem} onClose={() => setDetailItem(null)} onAdd={addOne} busy={addingIds.has(candidateId(detailItem)) || batchBusy} />}
   </>
 }
