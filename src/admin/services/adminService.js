@@ -1,6 +1,11 @@
 import { apiRequest } from '../../services/httpClient'
 import { normalizeAiResponse } from '../utils/aiImportContract'
 
+const META_AI_WHATSAPP_PROXY_PATH = String(
+  import.meta.env.VITE_META_AI_WHATSAPP_PROXY_PATH
+  || '/api/admin/hardwares/descobrir/meta-ai-whatsapp/enriquecer',
+).trim()
+
 function unwrapList(data) {
   if (Array.isArray(data)) return data
   const candidates = [
@@ -155,6 +160,7 @@ export const adminService = {
     discover: (body) => oneRequest('/api/admin/hardwares/descobrir', 'POST', body),
     createDiscovered: (body) => oneRequest('/api/admin/hardwares/descobrir/cadastrar', 'POST', body),
     createDiscoveredBatch: (itens) => oneRequest('/api/admin/hardwares/descobrir/cadastrar-lote', 'POST', { itens }),
+    enrichDiscoveredWithMetaAi: (body) => oneRequest(META_AI_WHATSAPP_PROXY_PATH, 'POST', body),
     models: (hardwareId) => list(`/api/admin/hardwares/${hardwareId}/modelos-3d`),
     createModel: (hardwareId, body) => oneRequest(`/api/admin/hardwares/${hardwareId}/modelos-3d`, 'POST', body),
     updateModel: (modelId, body) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}`, 'PATCH', body),

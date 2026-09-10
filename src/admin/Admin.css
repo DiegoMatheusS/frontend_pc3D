@@ -1575,6 +1575,16 @@
   border-top: 1px solid var(--admin-border);
 }
 .admin-discovery-card-actions .btn { min-width: 0; width: 100%; }
+.admin-discovery-card-actions.has-meta-ai { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-discovery-meta-ai-btn {
+  border: 1px solid color-mix(in srgb, var(--admin-success) 36%, var(--admin-border));
+  background: color-mix(in srgb, var(--admin-success) 10%, var(--admin-surface));
+  color: var(--admin-success);
+}
+.admin-discovery-meta-ai-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--admin-success) 58%, var(--admin-border));
+  background: color-mix(in srgb, var(--admin-success) 16%, var(--admin-surface));
+}
 .admin-discovery-empty,
 .admin-discovery-intro {
   display: flex;
@@ -1681,6 +1691,78 @@
 .admin-discovery-repeater-item dd { font-size: 8px; text-align: right; }
 .admin-discovery-modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; padding: 13px 18px; border-top: 1px solid var(--admin-border); background: var(--admin-surface-soft); }
 
+
+.admin-meta-ai-modal { width: min(820px, 100%); }
+.admin-meta-ai-modal-head small { color: var(--admin-success); }
+.admin-meta-ai-modal-body { display: grid; gap: 18px; }
+.admin-meta-ai-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.admin-meta-ai-summary > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  background: var(--admin-surface-soft);
+}
+.admin-meta-ai-summary span { color: var(--admin-muted); font-size: 8px; font-weight: 850; text-transform: uppercase; }
+.admin-meta-ai-summary strong { font-size: 10px; overflow-wrap: anywhere; }
+.admin-meta-ai-section { display: grid; gap: 9px; }
+.admin-meta-ai-section h3 { margin: 0; font-size: 12px; }
+.admin-meta-ai-section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.admin-meta-ai-inline-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+.admin-meta-ai-prompt {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  background: var(--admin-surface-soft);
+  color: var(--admin-text);
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+.admin-meta-ai-response-label { display: grid; gap: 7px; }
+.admin-meta-ai-response-label > span { color: var(--admin-muted); font-size: 9px; font-weight: 850; text-transform: uppercase; }
+.admin-meta-ai-response { min-height: 190px; resize: vertical; line-height: 1.5; }
+.admin-meta-ai-import-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.admin-meta-ai-import-row small { color: var(--admin-muted); font-size: 9px; line-height: 1.4; }
+.admin-meta-ai-file-button { position: relative; overflow: hidden; cursor: pointer; }
+.admin-meta-ai-file-button input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; pointer-events: none; }
+.admin-meta-ai-feedback {
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--admin-success) 30%, var(--admin-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--admin-success) 8%, var(--admin-surface));
+  color: var(--admin-success);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+.admin-meta-ai-feedback.is-error {
+  border-color: color-mix(in srgb, var(--admin-danger) 32%, var(--admin-border));
+  background: var(--admin-danger-soft);
+  color: var(--admin-danger);
+}
+.admin-meta-ai-security-note {
+  padding: 10px 11px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  background: var(--admin-surface-soft);
+  color: var(--admin-muted);
+  font-size: 9.5px;
+  line-height: 1.5;
+}
+.admin-meta-ai-security-note strong { color: var(--admin-text); }
+
 @media (min-width: 1500px) {
   .admin-discovery-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
@@ -1701,7 +1783,9 @@
   .admin-discovery-list-filters,
   .admin-discovery-batch-actions { justify-content: space-between; }
   .admin-discovery-batch-actions .btn { flex: 1; }
-  .admin-discovery-card-actions { grid-template-columns: 1fr; }
+  .admin-discovery-card-actions,
+  .admin-discovery-card-actions.has-meta-ai { grid-template-columns: 1fr; }
+  .admin-meta-ai-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-discovery-full-spec > div { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); }
   .admin-discovery-modal-backdrop { padding: 8px; }
   .admin-discovery-modal { max-height: 96vh; border-radius: 12px; }
@@ -1718,6 +1802,10 @@
   .admin-discovery-list-filters .admin-select { width: 100%; min-width: 0; }
   .admin-discovery-pagination { display: grid; grid-template-columns: 1fr 1fr; }
   .admin-discovery-pagination > span { grid-column: 1 / -1; grid-row: 1; text-align: center; }
+  .admin-meta-ai-summary { grid-template-columns: 1fr; }
+  .admin-meta-ai-inline-actions { display: grid; grid-template-columns: 1fr; width: 100%; }
+  .admin-meta-ai-inline-actions .btn { width: 100%; }
+  .admin-meta-ai-import-row { align-items: stretch; flex-direction: column; }
 }
 
 /* Contrato final Etapa 2 — erro individual do cadastro em lote */

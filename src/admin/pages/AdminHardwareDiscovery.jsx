@@ -92,7 +92,22 @@ function normalizePercent(value) {
 }
 
 function candidateQuality(item) {
-  return normalizePercent(item?.qualidade ?? item?.coberturaTecnica)
+  return normalizePercent(item?.metaAiWhatsappFallback?.coberturaAtual ?? item?.cobertura ?? item?.coberturaTecnica ?? item?.qualidade)
+}
+
+function metaAiFallbackFor(item) {
+  const fallback = item?.metaAiWhatsappFallback
+  return fallback && typeof fallback === 'object' ? fallback : null
+}
+
+function shouldShowMetaAiButton(item) {
+  const fallback = metaAiFallbackFor(item)
+  const prompt = typeof fallback?.promptSugerido === 'string' ? fallback.promptSugerido.trim() : ''
+  return fallback?.recomendado === true && Boolean(prompt)
+}
+
+function uniqueStrings(...values) {
+  return [...new Set(values.flatMap((value) => listStrings(value)).filter(Boolean))]
 }
 
 function candidateStatus(item) {
@@ -163,7 +178,7 @@ function SpecValue({ row }) {
   return <span>{row.value}</span>
 }
 
-function HardwareCard({ item, index, selected, busy, itemError, onToggle, onOpen, onAdd }) {
+function HardwareCard({ item, index, selected, busy, metaBusy, itemError, onToggle, onOpen, onMetaAi, onAdd }) {
   const payload = candidatePayload(item)
   const identity = candidateIdentity(item, payload)
   const { categoria, rows } = techDataFor(item)
@@ -174,6 +189,8 @@ function HardwareCard({ item, index, selected, busy, itemError, onToggle, onOpen
   const conflicts = Array.isArray(item?.conflitos) ? item.conflitos : []
   const warnings = listStrings(item?.avisos)
   const key = candidateId(item, index)
+  const showMetaAi = shouldShowMetaAiButton(item)
+  const metaApplied = item?.metaAiWhatsappAplicado === true
 
   return (
     <article className={`admin-discovery-card status-${status.toLowerCase().replaceAll('_', '-')}`}>
@@ -221,9 +238,10 @@ function HardwareCard({ item, index, selected, busy, itemError, onToggle, onOpen
         <div>{sources.length ? sources.slice(0, 4).map((source) => <span key={source}>{source}</span>) : <span>Não informada</span>}{sources.length > 4 && <span>+{sources.length - 4}</span>}</div>
       </div>
 
-      <div className="admin-discovery-card-actions">
-        <button type="button" className="btn btn-secundario btn-pequeno" onClick={() => onOpen(item)} disabled={busy}>Ver ficha completa</button>
-        <button type="button" className="btn btn-primario btn-pequeno" onClick={() => onAdd(item, index)} disabled={busy}>{busy ? 'Cadastrando...' : 'Cadastrar'}</button>
+      <div className={`admin-discovery-card-actions ${(showMetaAi || metaApplied) ? 'has-meta-ai' : ''}`}>
+        <button type="button" className="btn btn-secundario btn-pequeno" onClick={() => onOpen(item)} disabled={busy || metaBusy}>Ver ficha completa</button>
+        {(showMetaAi || metaApplied) && <button type="button" className="btn btn-pequeno admin-discovery-meta-ai-btn" onClick={() => onMetaAi(item, index)} disabled={busy || metaBusy || metaApplied}>{metaApplied ? 'Dados complementados' : metaBusy ? 'Analisando resposta...' : 'Completar com Meta AI'}</button>}
+        <button type="button" className="btn btn-primario btn-pequeno" onClick={() => onAdd(item, index)} disabled={busy || metaBusy}>{busy ? 'Cadastrando...' : 'Cadastrar'}</button>
       </div>
     </article>
   )
@@ -296,6 +314,120 @@ function HardwareDetailModal({ item, onClose, onAdd, busy }) {
   </div>
 }
 
+
+function MetaAiWhatsappModal({ item, busy, error, onClose, onApply, onNotify }) {
+  const [responseText, setResponseText] = useState('')
+  const [localMessage, setLocalMessage] = useState('')
+  const [localError, setLocalError] = useState('')
+  const fallback = metaAiFallbackFor(item) || {}
+  const payload = candidatePayload(item)
+  const identity = candidateIdentity(item, payload)
+  const categoria = String(payload?.categoria || item?.categoria || '').toUpperCase()
+  const prompt = typeof fallback?.promptSugerido === 'string' ? fallback.promptSugerido.trim() : ''
+  const coverage = normalizePercent(fallback?.coberturaAtual ?? candidateQuality(item))
+  const missing = uniqueStrings(fallback?.camposAusentes, item?.camposObrigatoriosAusentes, item?.camposAusentes)
+
+  useEffect(() => {
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (event) => { if (event.key === 'Escape' && !busy) onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = previous
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [busy, onClose])
+
+  async function copyPrompt() {
+    setLocalError('')
+    if (!prompt) {
+      setLocalError('A IA não retornou uma pergunta sugerida para este Hardware.')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(prompt)
+      setLocalMessage('Pergunta copiada.')
+      onNotify?.('Pergunta copiada.', 'info')
+    } catch {
+      setLocalError('Não foi possível copiar automaticamente. Selecione a pergunta e copie manualmente.')
+    }
+  }
+
+  function openWhatsapp() {
+    window.open('https://web.whatsapp.com/', '_blank', 'noopener,noreferrer')
+  }
+
+  async function importCapture(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setLocalError('')
+    setLocalMessage('')
+    try {
+      const parsed = JSON.parse(await file.text())
+      const captured = typeof parsed?.response_text === 'string' ? parsed.response_text.trim() : ''
+      if (!captured) throw new Error('O arquivo não contém response_text válido.')
+      setResponseText(captured)
+      setLocalMessage('Resposta importada do arquivo JSON.')
+    } catch (err) {
+      setLocalError(err?.message || 'Não foi possível importar o arquivo JSON.')
+    }
+  }
+
+  function submit() {
+    const resposta = responseText.trim()
+    setLocalError('')
+    setLocalMessage('')
+    if (!resposta) {
+      setLocalError('Cole ou importe a resposta completa do Meta AI antes de aplicar os dados.')
+      return
+    }
+    onApply(resposta)
+  }
+
+  return <div className="admin-discovery-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose() }}>
+    <section className="admin-discovery-modal admin-meta-ai-modal" role="dialog" aria-modal="true" aria-labelledby="meta-ai-whatsapp-title">
+      <header className="admin-discovery-modal-head admin-meta-ai-modal-head">
+        <div><small>Meta AI · WhatsApp</small><h2 id="meta-ai-whatsapp-title">Completar ficha com Meta AI</h2><p>{identity.nome}</p></div>
+        <button type="button" className="admin-discovery-modal-close" onClick={onClose} disabled={busy} aria-label="Fechar">×</button>
+      </header>
+
+      <div className="admin-discovery-modal-body admin-meta-ai-modal-body">
+        <section className="admin-meta-ai-summary">
+          <div><span>Hardware</span><strong>{identity.nome}</strong></div>
+          <div><span>Categoria</span><strong>{categoria.replaceAll('_', ' ') || '—'}</strong></div>
+          <div><span>Cobertura atual</span><strong>{coverage === null ? '—' : `${coverage}%`}</strong></div>
+          <div><span>Limite sugerido</span><strong>{normalizePercent(fallback?.limiarCobertura) ?? 60}%</strong></div>
+        </section>
+
+        <section className="admin-meta-ai-section">
+          <h3>Campos técnicos ainda ausentes</h3>
+          <div className="admin-discovery-chip-list admin-discovery-chip-list--warning">{missing.length ? missing.map((field) => <span key={field}>{humanize(field)}</span>) : <span>Nenhum campo ausente informado</span>}</div>
+        </section>
+
+        <section className="admin-meta-ai-section">
+          <div className="admin-meta-ai-section-title"><h3>Pergunta sugerida</h3><div className="admin-meta-ai-inline-actions"><button type="button" className="btn btn-secundario btn-pequeno" onClick={copyPrompt} disabled={busy || !prompt}>Copiar pergunta</button><button type="button" className="btn btn-secundario btn-pequeno" onClick={openWhatsapp} disabled={busy}>Abrir WhatsApp Web</button></div></div>
+          <pre className="admin-meta-ai-prompt">{prompt || 'A IA não retornou promptSugerido para este candidato.'}</pre>
+        </section>
+
+        <section className="admin-meta-ai-section">
+          <label className="admin-meta-ai-response-label" htmlFor="meta-ai-whatsapp-response"><span>Resposta do Meta AI</span><textarea id="meta-ai-whatsapp-response" className="admin-textarea admin-meta-ai-response" value={responseText} onChange={(event) => setResponseText(event.target.value)} placeholder="Cole aqui a resposta completa recebida no WhatsApp." disabled={busy} /></label>
+          <div className="admin-meta-ai-import-row"><label className="btn btn-secundario btn-pequeno admin-meta-ai-file-button">Importar captura JSON<input type="file" accept=".json,application/json" onChange={importCapture} disabled={busy} /></label><small>Opcional: selecione meta_ai_whatsapp_capture.json. Apenas response_text será usado.</small></div>
+        </section>
+
+        {(localMessage || localError || error) && <div className={`admin-meta-ai-feedback ${(localError || error) ? 'is-error' : 'is-success'}`} role="status">{localError || error || localMessage}</div>}
+
+        <div className="admin-meta-ai-security-note"><strong>Segurança:</strong> o CriaByte não lê a aba do WhatsApp e não envia chave da Produto IA pelo navegador. A resposta é enviada ao backend para interpretação e normalização.</div>
+      </div>
+
+      <footer className="admin-discovery-modal-actions">
+        <button type="button" className="btn btn-secundario" onClick={onClose} disabled={busy}>Cancelar</button>
+        <button type="button" className="btn btn-primario" onClick={submit} disabled={busy || !responseText.trim()}>{busy ? 'Analisando resposta...' : 'Aplicar dados'}</button>
+      </footer>
+    </section>
+  </div>
+}
+
 export default function AdminHardwareDiscovery() {
   const toast = useAdminToast()
   const [categoria, setCategoria] = useState('PROCESSADOR')
@@ -312,6 +444,9 @@ export default function AdminHardwareDiscovery() {
   const [detailItem, setDetailItem] = useState(null)
   const [batchErrors, setBatchErrors] = useState({})
   const [batchSummary, setBatchSummary] = useState(null)
+  const [metaAiItem, setMetaAiItem] = useState(null)
+  const [metaAiBusyIds, setMetaAiBusyIds] = useState(new Set())
+  const [metaAiError, setMetaAiError] = useState('')
 
   const items = useMemo(() => Array.isArray(result?.itens) ? result.itens : [], [result])
   const filteredItems = useMemo(() => items.filter((item) => !statusFilter || candidateStatus(item) === statusFilter), [items, statusFilter])
@@ -324,6 +459,8 @@ export default function AdminHardwareDiscovery() {
     setSelected(new Set())
     setBatchErrors({})
     setBatchSummary(null)
+    setMetaAiItem(null)
+    setMetaAiError('')
     try {
       const payload = await adminService.hardwares.discover({
         categoria,
@@ -371,6 +508,105 @@ export default function AdminHardwareDiscovery() {
       remove.forEach((key) => next.delete(key))
       return next
     })
+  }
+
+
+  function openMetaAi(item) {
+    setMetaAiError('')
+    setMetaAiItem(item)
+  }
+
+  function replaceCandidate(key, updater) {
+    let updatedItem = null
+    setResult((current) => {
+      if (!current) return current
+      const nextItems = (current.itens || []).map((item, index) => {
+        if (candidateId(item, index) !== key) return item
+        updatedItem = updater(item)
+        return updatedItem
+      })
+      return { ...current, itens: nextItems }
+    })
+    setDetailItem((current) => current && candidateId(current) === key && updatedItem ? updatedItem : current)
+    return updatedItem
+  }
+
+  async function applyMetaAiWhatsapp(resposta) {
+    if (!metaAiItem) return
+    const index = items.indexOf(metaAiItem)
+    const key = candidateId(metaAiItem, index)
+    const payload = candidatePayload(metaAiItem)
+    const identity = candidateIdentity(metaAiItem, payload)
+    const categoriaAtual = String(payload?.categoria || metaAiItem?.categoria || categoria || '').toUpperCase()
+
+    setMetaAiError('')
+    setMetaAiBusyIds((current) => new Set(current).add(key))
+    try {
+      const response = await adminService.hardwares.enrichDiscoveredWithMetaAi({
+        categoria: categoriaAtual,
+        nome: identity.nome,
+        payload,
+        resposta,
+        forcar: false,
+      })
+
+      const nextPayload = response?.payload && typeof response.payload === 'object' ? response.payload : payload
+      const filled = uniqueStrings(response?.camposPreenchidos)
+      const coverageAfter = normalizePercent(response?.coberturaDepois)
+      const used = response?.utilizado !== false
+
+      replaceCandidate(key, (current) => {
+        const removeFilled = (values) => listStrings(values).filter((field) => !filled.includes(field))
+        const nextSources = uniqueStrings(current?.fontes, used ? ['META_AI_WHATSAPP'] : [])
+        return {
+          ...current,
+          payload: nextPayload,
+          payloadHardware: nextPayload,
+          ...(coverageAfter !== null ? { coberturaTecnica: coverageAfter, cobertura: coverageAfter } : {}),
+          fontes: nextSources,
+          camposAusentes: removeFilled(current?.camposAusentes),
+          camposObrigatoriosAusentes: removeFilled(current?.camposObrigatoriosAusentes),
+          metaAiWhatsappAplicado: used,
+          metaAiWhatsappFallback: {
+            ...(current?.metaAiWhatsappFallback || {}),
+            recomendado: used ? false : current?.metaAiWhatsappFallback?.recomendado,
+            ...(response?.coberturaDepois !== undefined ? { coberturaAtual: response.coberturaDepois } : {}),
+          },
+          metaAiWhatsappResultado: {
+            utilizado: response?.utilizado,
+            motivo: response?.motivo || '',
+            camposPreenchidos: filled,
+            coberturaAntes: response?.coberturaAntes,
+            coberturaDepois: response?.coberturaDepois,
+          },
+        }
+      })
+
+      if (response?.utilizado === false) {
+        const message = response?.motivo === 'COBERTURA_NORMAL_SUFICIENTE'
+          ? 'A ficha já possui cobertura técnica suficiente.'
+          : (response?.mensagem || response?.message || 'A resposta foi analisada, mas não foi necessário complementar a ficha.')
+        toast.show(message, 'info')
+      } else {
+        const suffix = filled.length ? ` ${filled.length} campo(s) preenchido(s).` : ''
+        toast.show(`Dados do Meta AI aplicados à ficha.${suffix}`)
+      }
+      setMetaAiItem(null)
+    } catch (err) {
+      const detail = typeof err?.data?.detail === 'string' ? err.data.detail
+        : typeof err?.data?.detalhe === 'string' ? err.data.detalhe
+          : typeof err?.details === 'string' ? err.details
+            : ''
+      const message = detail || err?.message || 'Não foi possível completar a ficha com o Meta AI.'
+      setMetaAiError(message)
+      toast.show(message, 'erro')
+    } finally {
+      setMetaAiBusyIds((current) => {
+        const next = new Set(current)
+        next.delete(key)
+        return next
+      })
+    }
   }
 
   async function addOne(item, index = items.indexOf(item)) {
@@ -516,7 +752,7 @@ export default function AdminHardwareDiscovery() {
       {filteredItems.length ? <section className="admin-discovery-grid">{filteredItems.map((item) => {
         const originalIndex = items.indexOf(item)
         const key = candidateId(item, originalIndex)
-        return <HardwareCard key={key} item={item} index={originalIndex} selected={selected.has(key)} busy={addingIds.has(key) || batchBusy} itemError={batchErrors[key] || ''} onToggle={toggle} onOpen={setDetailItem} onAdd={addOne} />
+        return <HardwareCard key={key} item={item} index={originalIndex} selected={selected.has(key)} busy={addingIds.has(key) || batchBusy} metaBusy={metaAiBusyIds.has(key)} itemError={batchErrors[key] || ''} onToggle={toggle} onOpen={setDetailItem} onMetaAi={openMetaAi} onAdd={addOne} />
       })}</section> : <section className="admin-discovery-empty"><strong>Nenhum Hardware novo para exibir.</strong><p>{items.length ? 'Nenhum resultado corresponde ao filtro de status atual.' : 'Todos os modelos encontrados já estão cadastrados, foram descartados ou a IA não encontrou candidatos novos.'}</p></section>}
 
       <div className="admin-discovery-pagination">
@@ -531,6 +767,7 @@ export default function AdminHardwareDiscovery() {
       <div><h2>Descubra o que ainda falta no catálogo</h2><p>Escolha uma categoria, informe a marca se quiser reduzir o escopo e faça a busca. O backend devolve somente candidatos novos.</p><ul><li>Nenhum Produto, Oferta ou preço é criado nesta página.</li><li>Você pode revisar a ficha completa antes de cadastrar.</li><li>O cadastro em lote valida cada Hardware individualmente.</li></ul></div>
     </section>}
 
+    {metaAiItem && <MetaAiWhatsappModal item={metaAiItem} busy={metaAiBusyIds.has(candidateId(metaAiItem, items.indexOf(metaAiItem)))} error={metaAiError} onClose={() => { if (!metaAiBusyIds.has(candidateId(metaAiItem, items.indexOf(metaAiItem)))) { setMetaAiItem(null); setMetaAiError('') } }} onApply={applyMetaAiWhatsapp} onNotify={(message, type) => toast.show(message, type)} />}
     {detailItem && <HardwareDetailModal item={detailItem} onClose={() => setDetailItem(null)} onAdd={addOne} busy={addingIds.has(candidateId(detailItem)) || batchBusy} />}
   </>
 }
