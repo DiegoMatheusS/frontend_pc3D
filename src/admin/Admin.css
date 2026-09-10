@@ -1568,14 +1568,24 @@
 }
 .admin-discovery-card-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
   gap: 7px;
   margin-top: 12px;
   padding-top: 11px;
   border-top: 1px solid var(--admin-border);
 }
 .admin-discovery-card-actions .btn { min-width: 0; width: 100%; }
-.admin-discovery-card-actions.has-meta-ai { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-discovery-card-actions.has-meta-ai,
+.admin-discovery-card-actions.has-ai { grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); }
+.admin-discovery-ai-btn {
+  border: 1px solid color-mix(in srgb, var(--admin-primary) 44%, var(--admin-border));
+  background: color-mix(in srgb, var(--admin-primary) 10%, var(--admin-surface));
+  color: var(--admin-primary);
+}
+.admin-discovery-ai-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--admin-primary) 65%, var(--admin-border));
+  background: color-mix(in srgb, var(--admin-primary) 16%, var(--admin-surface));
+}
 .admin-discovery-meta-ai-btn {
   border: 1px solid color-mix(in srgb, var(--admin-success) 36%, var(--admin-border));
   background: color-mix(in srgb, var(--admin-success) 10%, var(--admin-surface));
@@ -1784,7 +1794,8 @@
   .admin-discovery-batch-actions { justify-content: space-between; }
   .admin-discovery-batch-actions .btn { flex: 1; }
   .admin-discovery-card-actions,
-  .admin-discovery-card-actions.has-meta-ai { grid-template-columns: 1fr; }
+  .admin-discovery-card-actions.has-meta-ai,
+  .admin-discovery-card-actions.has-ai { grid-template-columns: 1fr; }
   .admin-meta-ai-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-discovery-full-spec > div { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); }
   .admin-discovery-modal-backdrop { padding: 8px; }

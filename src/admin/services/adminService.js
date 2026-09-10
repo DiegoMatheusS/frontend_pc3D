@@ -6,6 +6,11 @@ const META_AI_WHATSAPP_PROXY_PATH = String(
   || '/api/admin/hardwares/descobrir/meta-ai-whatsapp/enriquecer',
 ).trim()
 
+const IA_TECNICA_PROXY_PATH = String(
+  import.meta.env.VITE_IA_TECNICA_PROXY_PATH
+  || '/api/admin/hardwares/descobrir/ia-tecnica/enriquecer',
+).trim()
+
 function unwrapList(data) {
   if (Array.isArray(data)) return data
   const candidates = [
@@ -161,6 +166,7 @@ export const adminService = {
     createDiscovered: (body) => oneRequest('/api/admin/hardwares/descobrir/cadastrar', 'POST', body),
     createDiscoveredBatch: (itens) => oneRequest('/api/admin/hardwares/descobrir/cadastrar-lote', 'POST', { itens }),
     enrichDiscoveredWithMetaAi: (body) => oneRequest(META_AI_WHATSAPP_PROXY_PATH, 'POST', body),
+    enrichDiscoveredWithAi: (body) => oneRequest(IA_TECNICA_PROXY_PATH, 'POST', body),
     models: (hardwareId) => list(`/api/admin/hardwares/${hardwareId}/modelos-3d`),
     createModel: (hardwareId, body) => oneRequest(`/api/admin/hardwares/${hardwareId}/modelos-3d`, 'POST', body),
     updateModel: (modelId, body) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}`, 'PATCH', body),

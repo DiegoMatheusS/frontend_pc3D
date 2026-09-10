@@ -106,6 +106,14 @@ function shouldShowMetaAiButton(item) {
   return fallback?.recomendado === true && Boolean(prompt)
 }
 
+function shouldShowAiButton(item) {
+  const quality = candidateQuality(item)
+  const status = candidateStatus(item)
+  const explicit = item?.iaTecnicaFallback?.recomendado ?? item?.iaComplemento?.recomendado
+  if (typeof explicit === 'boolean') return explicit
+  return status !== 'PRONTO' || (quality !== null && quality < 100)
+}
+
 function uniqueStrings(...values) {
   return [...new Set(values.flatMap((value) => listStrings(value)).filter(Boolean))]
 }
@@ -178,7 +186,7 @@ function SpecValue({ row }) {
   return <span>{row.value}</span>
 }
 
-function HardwareCard({ item, index, selected, busy, metaBusy, itemError, onToggle, onOpen, onMetaAi, onAdd }) {
+function HardwareCard({ item, index, selected, busy, metaBusy, aiBusy, itemError, aiError, onToggle, onOpen, onMetaAi, onAi, onAdd }) {
   const payload = candidatePayload(item)
   const identity = candidateIdentity(item, payload)
   const { categoria, rows } = techDataFor(item)
@@ -191,6 +199,9 @@ function HardwareCard({ item, index, selected, busy, metaBusy, itemError, onTogg
   const key = candidateId(item, index)
   const showMetaAi = shouldShowMetaAiButton(item)
   const metaApplied = item?.metaAiWhatsappAplicado === true
+  const showAi = shouldShowAiButton(item)
+  const aiApplied = item?.iaTecnicaAplicada === true
+  const aiCompleted = aiApplied && (candidateStatus(item) === 'PRONTO' || quality === 100)
 
   return (
     <article className={`admin-discovery-card status-${status.toLowerCase().replaceAll('_', '-')}`}>
@@ -232,16 +243,18 @@ function HardwareCard({ item, index, selected, busy, metaBusy, itemError, onTogg
       </div>}
 
       {itemError && <div className="admin-discovery-item-error" role="alert">{itemError}</div>}
+      {aiError && <div className="admin-discovery-item-error" role="alert">{aiError}</div>}
 
       <div className="admin-discovery-sources">
         <small>Fontes</small>
         <div>{sources.length ? sources.slice(0, 4).map((source) => <span key={source}>{source}</span>) : <span>Não informada</span>}{sources.length > 4 && <span>+{sources.length - 4}</span>}</div>
       </div>
 
-      <div className={`admin-discovery-card-actions ${(showMetaAi || metaApplied) ? 'has-meta-ai' : ''}`}>
-        <button type="button" className="btn btn-secundario btn-pequeno" onClick={() => onOpen(item)} disabled={busy || metaBusy}>Ver ficha completa</button>
-        {(showMetaAi || metaApplied) && <button type="button" className="btn btn-pequeno admin-discovery-meta-ai-btn" onClick={() => onMetaAi(item, index)} disabled={busy || metaBusy || metaApplied}>{metaApplied ? 'Dados complementados' : metaBusy ? 'Analisando resposta...' : 'Completar com Meta AI'}</button>}
-        <button type="button" className="btn btn-primario btn-pequeno" onClick={() => onAdd(item, index)} disabled={busy || metaBusy}>{busy ? 'Cadastrando...' : 'Cadastrar'}</button>
+      <div className={`admin-discovery-card-actions ${(showMetaAi || metaApplied) ? 'has-meta-ai' : ''} ${(showAi || aiApplied) ? 'has-ai' : ''}`}>
+        <button type="button" className="btn btn-secundario btn-pequeno" onClick={() => onOpen(item)} disabled={busy || metaBusy || aiBusy}>Ver ficha completa</button>
+        {(showAi || aiApplied) && <button type="button" className="btn btn-pequeno admin-discovery-ai-btn" onClick={() => onAi(item, index)} disabled={busy || metaBusy || aiBusy || aiCompleted}>{aiBusy ? 'Completando com IA...' : aiCompleted ? 'Ficha completada pela IA' : aiApplied ? 'Completar novamente com IA' : 'Completar com IA'}</button>}
+        {(showMetaAi || metaApplied) && <button type="button" className="btn btn-pequeno admin-discovery-meta-ai-btn" onClick={() => onMetaAi(item, index)} disabled={busy || metaBusy || aiBusy || metaApplied}>{metaApplied ? 'Dados complementados' : metaBusy ? 'Analisando resposta...' : 'Completar com Meta AI'}</button>}
+        <button type="button" className="btn btn-primario btn-pequeno" onClick={() => onAdd(item, index)} disabled={busy || metaBusy || aiBusy}>{busy ? 'Cadastrando...' : 'Cadastrar'}</button>
       </div>
     </article>
   )
@@ -447,6 +460,8 @@ export default function AdminHardwareDiscovery() {
   const [metaAiItem, setMetaAiItem] = useState(null)
   const [metaAiBusyIds, setMetaAiBusyIds] = useState(new Set())
   const [metaAiError, setMetaAiError] = useState('')
+  const [iaTecnicaBusyIds, setIaTecnicaBusyIds] = useState(new Set())
+  const [iaTecnicaErrors, setIaTecnicaErrors] = useState({})
 
   const items = useMemo(() => Array.isArray(result?.itens) ? result.itens : [], [result])
   const filteredItems = useMemo(() => items.filter((item) => !statusFilter || candidateStatus(item) === statusFilter), [items, statusFilter])
@@ -461,6 +476,7 @@ export default function AdminHardwareDiscovery() {
     setBatchSummary(null)
     setMetaAiItem(null)
     setMetaAiError('')
+    setIaTecnicaErrors({})
     try {
       const payload = await adminService.hardwares.discover({
         categoria,
@@ -529,6 +545,89 @@ export default function AdminHardwareDiscovery() {
     })
     setDetailItem((current) => current && candidateId(current) === key && updatedItem ? updatedItem : current)
     return updatedItem
+  }
+
+  async function applyAiTecnica(item, index = items.indexOf(item)) {
+    const key = candidateId(item, index)
+    const payload = candidatePayload(item)
+    const identity = candidateIdentity(item, payload)
+    const categoriaAtual = String(payload?.categoria || item?.categoria || categoria || '').toUpperCase()
+
+    setIaTecnicaErrors((current) => {
+      const next = { ...current }
+      delete next[key]
+      return next
+    })
+    setIaTecnicaBusyIds((current) => new Set(current).add(key))
+
+    try {
+      const response = await adminService.hardwares.enrichDiscoveredWithAi({
+        provedor: 'GEMINI',
+        categoria: categoriaAtual,
+        nome: identity.nome,
+        payload,
+        somentePreencheLacunas: true,
+      })
+
+      const nextPayload = response?.payload && typeof response.payload === 'object' ? response.payload : payload
+      const filled = uniqueStrings(response?.camposPreenchidos)
+      const missingAfter = Array.isArray(response?.camposAusentes) ? listStrings(response.camposAusentes) : null
+      const coverageAfter = normalizePercent(response?.coberturaDepois ?? response?.coberturaAtual)
+      const statusAfter = String(response?.statusFicha || '').toUpperCase()
+      const provider = String(response?.provedor || response?.provider || 'GEMINI').trim() || 'GEMINI'
+      const used = response?.utilizado !== false
+
+      replaceCandidate(key, (current) => {
+        const removeFilled = (values) => listStrings(values).filter((field) => !filled.includes(field))
+        const fallbackMissing = removeFilled(current?.camposAusentes)
+        const nextMissing = missingAfter ?? fallbackMissing
+        const nextRequiredMissing = missingAfter ?? removeFilled(current?.camposObrigatoriosAusentes)
+        const nextSources = uniqueStrings(current?.fontes, used ? [provider] : [])
+        const fallbackFromResponse = response?.metaAiWhatsappFallback && typeof response.metaAiWhatsappFallback === 'object'
+          ? response.metaAiWhatsappFallback
+          : null
+
+        return {
+          ...current,
+          payload: nextPayload,
+          payloadHardware: nextPayload,
+          ...(coverageAfter !== null ? { coberturaTecnica: coverageAfter, cobertura: coverageAfter, qualidade: coverageAfter } : {}),
+          ...(STATUS_LABEL[statusAfter] ? { statusFicha: statusAfter } : {}),
+          fontes: nextSources,
+          camposAusentes: nextMissing,
+          camposObrigatoriosAusentes: nextRequiredMissing,
+          iaTecnicaAplicada: used,
+          iaTecnicaResultado: {
+            utilizado: response?.utilizado,
+            provedor: provider,
+            modelo: response?.modelo || '',
+            camposPreenchidos: filled,
+            coberturaAntes: response?.coberturaAntes,
+            coberturaDepois: response?.coberturaDepois,
+            conflitos: Array.isArray(response?.conflitos) ? response.conflitos : [],
+          },
+          ...(fallbackFromResponse ? { metaAiWhatsappFallback: fallbackFromResponse } : {}),
+        }
+      })
+
+      if (response?.utilizado === false) {
+        toast.show(response?.mensagem || response?.message || 'A IA analisou a ficha, mas não encontrou novas lacunas seguras para preencher.', 'info')
+      } else {
+        const coverageText = coverageAfter !== null ? ` Cobertura: ${coverageAfter}%.` : ''
+        const fieldsText = filled.length ? ` ${filled.length} campo(s) preenchido(s).` : ''
+        toast.show(`Ficha complementada com ${provider}.${fieldsText}${coverageText}`)
+      }
+    } catch (err) {
+      const message = err?.message || 'Não foi possível completar a ficha com IA.'
+      setIaTecnicaErrors((current) => ({ ...current, [key]: message }))
+      toast.show(message, 'erro')
+    } finally {
+      setIaTecnicaBusyIds((current) => {
+        const next = new Set(current)
+        next.delete(key)
+        return next
+      })
+    }
   }
 
   async function applyMetaAiWhatsapp(resposta) {
@@ -752,7 +851,7 @@ export default function AdminHardwareDiscovery() {
       {filteredItems.length ? <section className="admin-discovery-grid">{filteredItems.map((item) => {
         const originalIndex = items.indexOf(item)
         const key = candidateId(item, originalIndex)
-        return <HardwareCard key={key} item={item} index={originalIndex} selected={selected.has(key)} busy={addingIds.has(key) || batchBusy} metaBusy={metaAiBusyIds.has(key)} itemError={batchErrors[key] || ''} onToggle={toggle} onOpen={setDetailItem} onMetaAi={openMetaAi} onAdd={addOne} />
+        return <HardwareCard key={key} item={item} index={originalIndex} selected={selected.has(key)} busy={addingIds.has(key) || batchBusy} metaBusy={metaAiBusyIds.has(key)} aiBusy={iaTecnicaBusyIds.has(key)} itemError={batchErrors[key] || ''} aiError={iaTecnicaErrors[key] || ''} onToggle={toggle} onOpen={setDetailItem} onMetaAi={openMetaAi} onAi={applyAiTecnica} onAdd={addOne} />
       })}</section> : <section className="admin-discovery-empty"><strong>Nenhum Hardware novo para exibir.</strong><p>{items.length ? 'Nenhum resultado corresponde ao filtro de status atual.' : 'Todos os modelos encontrados já estão cadastrados, foram descartados ou a IA não encontrou candidatos novos.'}</p></section>}
 
       <div className="admin-discovery-pagination">
