@@ -82,6 +82,7 @@ function candidateId(item, index = 0) {
 }
 
 function normalizePercent(value) {
+  if (value === null || value === undefined || value === '') return null
   let number = Number(value)
   if (!Number.isFinite(number) && value && typeof value === 'object') {
     number = Number(value.percentual ?? value.percent ?? value.valor ?? value.score)
@@ -201,7 +202,7 @@ function HardwareCard({ item, index, selected, busy, metaBusy, aiBusy, itemError
   const metaApplied = item?.metaAiWhatsappAplicado === true
   const showAi = shouldShowAiButton(item)
   const aiApplied = item?.iaTecnicaAplicada === true
-  const aiCompleted = aiApplied && (candidateStatus(item) === 'PRONTO' || quality === 100)
+  const aiCompleted = aiApplied && listStrings(item?.camposAusentes).length === 0 && quality === 100
 
   return (
     <article className={`admin-discovery-card status-${status.toLowerCase().replaceAll('_', '-')}`}>
@@ -533,18 +534,15 @@ export default function AdminHardwareDiscovery() {
   }
 
   function replaceCandidate(key, updater) {
-    let updatedItem = null
     setResult((current) => {
       if (!current) return current
       const nextItems = (current.itens || []).map((item, index) => {
         if (candidateId(item, index) !== key) return item
-        updatedItem = updater(item)
-        return updatedItem
+        return updater(item)
       })
       return { ...current, itens: nextItems }
     })
-    setDetailItem((current) => current && candidateId(current) === key && updatedItem ? updatedItem : current)
-    return updatedItem
+    setDetailItem((current) => current && candidateId(current) === key ? updater(current) : current)
   }
 
   async function applyAiTecnica(item, index = items.indexOf(item)) {
@@ -581,7 +579,9 @@ export default function AdminHardwareDiscovery() {
         const removeFilled = (values) => listStrings(values).filter((field) => !filled.includes(field))
         const fallbackMissing = removeFilled(current?.camposAusentes)
         const nextMissing = missingAfter ?? fallbackMissing
-        const nextRequiredMissing = missingAfter ?? removeFilled(current?.camposObrigatoriosAusentes)
+        const nextRequiredMissing = Array.isArray(response?.camposObrigatoriosAusentes)
+          ? listStrings(response.camposObrigatoriosAusentes)
+          : removeFilled(current?.camposObrigatoriosAusentes)
         const nextSources = uniqueStrings(current?.fontes, used ? [provider] : [])
         const fallbackFromResponse = response?.metaAiWhatsappFallback && typeof response.metaAiWhatsappFallback === 'object'
           ? response.metaAiWhatsappFallback
@@ -596,6 +596,9 @@ export default function AdminHardwareDiscovery() {
           fontes: nextSources,
           camposAusentes: nextMissing,
           camposObrigatoriosAusentes: nextRequiredMissing,
+          conflitos: Array.isArray(response?.conflitos) ? response.conflitos : (current?.conflitos || []),
+          problemasPayload: response?.problemasPayload || [],
+          payloadValidoParaCadastro: response?.payloadValidoParaCadastro,
           iaTecnicaAplicada: used,
           iaTecnicaResultado: {
             utilizado: response?.utilizado,

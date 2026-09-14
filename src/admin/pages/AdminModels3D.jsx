@@ -202,7 +202,7 @@ export default function AdminModels3D() {
 
     const isCurrent = model?.mostrarNoHome === true || String(homeModelId) === String(model.id)
     try {
-      await adminService.hardwares.updateModel(model.id, { mostrarNoHome: !isCurrent })
+      await adminService.hardwares.setHomeModel(model.id, !isCurrent)
       await reloadAllModels()
       toast.show(isCurrent ? 'Modelo removido da Home.' : 'Modelo definido para a Home e salvo no banco.')
     } catch (error) {

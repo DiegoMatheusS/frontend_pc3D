@@ -169,6 +169,7 @@ export const adminService = {
     enrichDiscoveredWithAi: (body) => oneRequest(IA_TECNICA_PROXY_PATH, 'POST', body),
     models: (hardwareId) => list(`/api/admin/hardwares/${hardwareId}/modelos-3d`),
     createModel: (hardwareId, body) => oneRequest(`/api/admin/hardwares/${hardwareId}/modelos-3d`, 'POST', body),
+    setHomeModel: (modelId, mostrarNoHome) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}/mostrar-no-home`, 'PATCH', { mostrarNoHome }),
     updateModel: (modelId, body) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}`, 'PATCH', body),
     removeModel: (modelId) => apiRequest(`/api/admin/hardwares/modelos-3d/${modelId}`, { method: 'DELETE' }),
     approveModel: (modelId) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}/aprovar`, 'PATCH'),
