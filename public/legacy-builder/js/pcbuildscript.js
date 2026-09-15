@@ -1428,9 +1428,9 @@ const DIMENSOES_GABINETE_PADRAO_3D = Object.freeze({
 });
 
 function numeroMmPara3DLayout(valor, fallbackMm, minimo, maximo) {
-  const numero = Number(valor);
-  const mm = Number.isFinite(numero) && numero > 0 ? numero : fallbackMm;
-  return Math.min(maximo, Math.max(minimo, mm * 0.01));
+  const n = Number(valor);
+  if (Number.isFinite(n) && n > 0) return n * 0.01;
+  return Math.min(maximo, Math.max(minimo, fallbackMm * 0.01));
 }
 
 function obterDimensoesMinimasConteudoGabinete3D() {
@@ -1521,37 +1521,11 @@ function obterDimensoesGabineteLayout3D(peca = estadoMontagem.gabinete) {
     padrao = { largura: 2.40, altura: 4.30, profundidade: 4.10 };
   }
 
-  const larguraMm = Number(specs.larguraMm ?? peca.larguraMm);
-  const alturaMm = Number(specs.alturaMm ?? peca.alturaMm);
-  const profundidadeMm = Number(specs.profundidadeMm ?? peca.profundidadeMm);
-  const dimensoesMmValidas =
-    Number.isFinite(larguraMm) && larguraMm >= 140 && larguraMm <= 420 &&
-    Number.isFinite(alturaMm) && alturaMm >= 250 && alturaMm <= 750 &&
-    Number.isFinite(profundidadeMm) && profundidadeMm >= 250 && profundidadeMm <= 750;
-
-  // Só usa dimensões cadastradas quando o conjunto inteiro é plausível. Isso
-  // evita um único campo incorreto deformar o gabinete e jogar as peças para
-  // fora de contexto. Na ausência delas, usa proporções coerentes por formato.
-  if (!dimensoesMmValidas) {
-    const minimoConteudo = obterDimensoesMinimasConteudoGabinete3D();
-    return {
-      largura: Math.max(padrao.largura, minimoConteudo.largura),
-      altura: Math.max(padrao.altura, minimoConteudo.altura),
-      profundidade: Math.max(padrao.profundidade, minimoConteudo.profundidade),
-    };
-  }
-
-  const dimensoesBase = {
-    largura: numeroMmPara3DLayout(larguraMm, padrao.largura * 100, 1.55, 4.2),
-    altura: numeroMmPara3DLayout(alturaMm, padrao.altura * 100, 2.4, 7.2),
-    profundidade: numeroMmPara3DLayout(profundidadeMm, padrao.profundidade * 100, 2.5, 7.6),
-  };
-  const minimoConteudo = obterDimensoesMinimasConteudoGabinete3D();
-
+  // Medidas confirmadas independem do conteúdo: o gabinete não cresce para caber peças.
   return {
-    largura: Math.max(dimensoesBase.largura, minimoConteudo.largura),
-    altura: Math.max(dimensoesBase.altura, minimoConteudo.altura),
-    profundidade: Math.max(dimensoesBase.profundidade, minimoConteudo.profundidade),
+    largura: numeroMmPara3DLayout(specs.larguraMm ?? peca.larguraMm, padrao.largura * 100, 1, 10),
+    altura: numeroMmPara3DLayout(specs.alturaMm ?? peca.alturaMm, padrao.altura * 100, 1, 12),
+    profundidade: numeroMmPara3DLayout(specs.profundidadeMm ?? peca.profundidadeMm, padrao.profundidade * 100, 1, 12),
   };
 }
 
@@ -1565,8 +1539,7 @@ function obterDimensoesPlacaMaeLayout3D() {
   return { altura: 3.05, profundidade: 2.44 };
 }
 
-function obterDimensoesGpuLayout3D() {
-  const peca = estadoMontagem.placavideo;
+function obterDimensoesGpuLayout3D(peca = estadoMontagem.placavideo) {
   const specs = peca?.especificacoes && typeof peca.especificacoes === "object" ? peca.especificacoes : {};
   return {
     altura: numeroMmPara3DLayout(specs.alturaMm ?? peca?.alturaMm, 120, 0.65, 2.2),
@@ -3954,8 +3927,9 @@ function limitar3D(valor, minimo, maximo) {
 }
 
 function mmParaUnidade3D(valor, fallbackMm, minimo, maximo) {
-  const mm = numero3DSeguro(valor, fallbackMm);
-  return limitar3D(mm * ESCALA_MM_3D, minimo, maximo);
+  const n = Number(valor);
+  if (Number.isFinite(n) && n > 0) return n * ESCALA_MM_3D;
+  return limitar3D(fallbackMm * ESCALA_MM_3D, minimo, maximo);
 }
 
 function especificacoesProcedurais(peca = {}) {
@@ -4022,7 +3996,7 @@ function criarVentoinhaProcedural({
   const materialPas = criarMaterialProcedural(corPas, { roughness: 0.45, metalness: 0.15 });
 
   const aro = criarMeshProcedural(
-    new THREE.TorusGeometry(raio * 0.88, raio * 0.09, 8, 32),
+    new THREE.TorusGeometry(raio * 0.88, Math.min(raio * 0.09, espessura * 0.45), 8, 32),
     materialFrame,
     [0, 0, 0],
     [Math.PI / 2, 0, 0],
@@ -4068,62 +4042,42 @@ function inferirQuantidadeFansGpu(peca, comprimento) {
 }
 
 function criarGpuProcedural(peca, basePos) {
-  const specs = especificacoesProcedurais(peca);
-  const comprimento = mmParaUnidade3D(specs.comprimentoMm ?? peca.comprimentoMm, 280, 1.8, 3.8);
-  const altura = mmParaUnidade3D(specs.alturaMm, 120, 0.8, 1.7);
-  const espessura = mmParaUnidade3D(
-    specs.espessuraMm ?? (numero3DSeguro(specs.slotsOcupados, 2.5) * 20),
-    50,
-    0.3,
-    0.9,
-  );
-
+  const { altura, espessura, comprimento } = obterDimensoesGpuLayout3D(peca);
   const grupo = new THREE.Group();
   grupo.position.copy(basePos);
-
-  const shroud = criarMeshProcedural(
-    new THREE.BoxGeometry(espessura, altura, comprimento),
-    criarMaterialProcedural(0x202733, { roughness: 0.48, metalness: 0.32 }),
-  );
-  grupo.add(shroud);
-
-  const pcb = criarMeshProcedural(
-    new THREE.BoxGeometry(0.035, altura * 0.88, comprimento * 0.94),
-    criarMaterialProcedural(0x173a2a, { roughness: 0.72, metalness: 0.08 }),
-    [espessura * 0.42, 0, 0],
-  );
-  grupo.add(pcb);
-
-  const quantidadeFans = inferirQuantidadeFansGpu(peca, comprimento);
-  const raio = limitar3D(
-    Math.min(altura * 0.39, comprimento / (quantidadeFans * 2.25)),
-    0.24,
-    0.55,
-  );
-  const intervalo = comprimento / quantidadeFans;
-
-  for (let indice = 0; indice < quantidadeFans; indice += 1) {
+  const metal = criarMaterialProcedural(0x94a3b8, { roughness: 0.38, metalness: 0.75 });
+  const preto = criarMaterialProcedural(0x202733, { roughness: 0.48, metalness: 0.32 });
+  // X: altura comercial; Y: espessura; Z: comprimento. Traseira em +Z.
+  grupo.add(criarMeshProcedural(new THREE.BoxGeometry(altura * 0.94, 0.025, comprimento * 0.94),
+    criarMaterialProcedural(0x173a2a, { roughness: 0.72 }), [0, espessura * 0.34, 0]));
+  grupo.add(criarMeshProcedural(new THREE.BoxGeometry(altura * 0.96, 0.025, comprimento),
+    preto, [0, espessura / 2 - 0.013, 0]));
+  const aletas = Math.max(12, Math.min(48, Math.round(comprimento / 0.065)));
+  for (let i = 0; i < aletas; i += 1) {
+    grupo.add(criarMeshProcedural(new THREE.BoxGeometry(altura * 0.84, espessura * 0.52, 0.018),
+      metal, [0, 0, -comprimento * 0.44 + i * comprimento * 0.88 / (aletas - 1)]));
+  }
+  [-1, 1].forEach((lado) => grupo.add(criarMeshProcedural(
+    new THREE.BoxGeometry(altura * 0.06, espessura * 0.75, comprimento * 0.94),
+    preto, [lado * altura * 0.47, -espessura * 0.08, 0])));
+  const fans = inferirQuantidadeFansGpu(peca, comprimento);
+  const raio = Math.min(altura * 0.40, comprimento * 0.90 / (fans * 2.15));
+  const espessuraFan = Math.min(0.08, espessura * 0.18);
+  for (let i = 0; i < fans; i += 1) {
     const fan = criarVentoinhaProcedural({
-      raio,
-      espessura: Math.min(0.10, espessura * 0.2),
-      corFrame: 0x0f172a,
-      corPas: 0x475569,
-      velocidade: 0.23,
+      raio, espessura: espessuraFan, corFrame: 0x0f172a, corPas: 0x475569, velocidade: 0.23,
     });
-    // Ventoinhas voltadas para a lateral/vidro, acompanhando a mesma
-    // orientacao usada pelos GLBs de GPU no montador.
-    fan.position.set(-(espessura / 2 + 0.055), 0, -comprimento / 2 + intervalo * (indice + 0.5));
-    fan.rotation.z = Math.PI / 2;
+    fan.position.set(0, -espessura / 2 + espessuraFan / 2,
+      -comprimento * 0.45 + comprimento * 0.90 * (i + 0.5) / fans);
+    fan.rotation.z = Math.PI;
     grupo.add(fan);
   }
-
-  const bracket = criarMeshProcedural(
-    new THREE.BoxGeometry(espessura * 1.02, altura * 1.03, 0.05),
-    criarMaterialProcedural(0x94a3b8, { roughness: 0.35, metalness: 0.75 }),
-    [0, 0, comprimento / 2 + 0.03],
-  );
-  grupo.add(bracket);
-
+  grupo.add(criarMeshProcedural(new THREE.BoxGeometry(altura * 0.92, espessura, 0.025),
+    metal, [0, 0, comprimento / 2 - 0.013]));
+  for (let i = 0; i < 3; i += 1) {
+    grupo.add(criarMeshProcedural(new THREE.BoxGeometry(altura * 0.13, espessura * 0.16, 0.012),
+      preto, [-altura * 0.25 + i * altura * 0.25, 0, comprimento / 2 - 0.006]));
+  }
   registrarDadosProcedurais(grupo, "placavideo", peca);
   return grupo;
 }
@@ -4475,56 +4429,30 @@ function transform3DTemCalibracaoExplicita(transform = {}) {
 }
 
 function normalizarGabineteGlbForaDeEscala(modelo, peca, basePos, transform = {}) {
-  if (!modelo || transform3DTemCalibracaoExplicita(transform)) return;
-
+  if (!modelo) return;
+  const d = obterDimensoesGabineteLayout3D(peca);
+  const alvo = dimensoesReaisCadastradasModelo3D("gabinete", transform, peca)
+    || new THREE.Vector3(d.largura, d.altura, d.profundidade);
+  const calibrado = Array.isArray(transform.rotacao)
+    && transform.rotacao.some((v) => Math.abs(Number(v) || 0) > 0.0001);
+  orientarModelo3DParaPeca(modelo, alvo, !calibrado);
   modelo.updateMatrixWorld(true);
   let caixa = new THREE.Box3().setFromObject(modelo);
   if (caixa.isEmpty()) return;
-
   const tamanho = caixa.getSize(new THREE.Vector3());
-  const dimensoesEsperadas = obterDimensoesGabineteLayout3D(peca);
-  const maiorAtual = Math.max(tamanho.x, tamanho.y, tamanho.z);
-  const maiorEsperada = Math.max(
-    dimensoesEsperadas.largura,
-    dimensoesEsperadas.altura,
-    dimensoesEsperadas.profundidade,
-  );
-
-  if (!Number.isFinite(maiorAtual) || maiorAtual <= 0.001) return;
-  const proporcao = maiorAtual / maiorEsperada;
-
-  // Arquivos GLB podem vir em metros, centímetros ou milímetros. Corrige
-  // automaticamente diferenças claras de unidade e também garante que o case
-  // visual não fique menor que a área útil calculada para as peças atuais.
-  if (proporcao > 1.8 || proporcao < 0.55) {
-    const fator = maiorEsperada / maiorAtual;
-    modelo.scale.multiplyScalar(fator);
-    modelo.updateMatrixWorld(true);
-    caixa = new THREE.Box3().setFromObject(modelo);
-  }
-
-  const tamanhoAjustado = caixa.getSize(new THREE.Vector3());
-  const fatoresParaConter = [
-    dimensoesEsperadas.largura / Math.max(0.001, tamanhoAjustado.x),
-    dimensoesEsperadas.altura / Math.max(0.001, tamanhoAjustado.y),
-    dimensoesEsperadas.profundidade / Math.max(0.001, tamanhoAjustado.z),
-  ];
-  const fatorConter = Math.max(1, ...fatoresParaConter.filter(Number.isFinite));
-  if (fatorConter > 1.02 && fatorConter < 2.5) {
-    modelo.scale.multiplyScalar(fatorConter);
-    modelo.updateMatrixWorld(true);
-    caixa = new THREE.Box3().setFromObject(modelo);
-    modelo.userData.ajusteVisualGabineteAutomatico = true;
-  }
-
-  // Mantém o gabinete no mesmo centro do layout, evitando modelos cuja origem
-  // fica longe da malha aparecerem deslocados/"fora de contexto".
-  const centro = caixa.getCenter(new THREE.Vector3());
-  modelo.position.add(new THREE.Vector3().copy(basePos).sub(centro));
+  const eixo = ["x", "y", "z"].reduce((maior, atual) => alvo[atual] > alvo[maior] ? atual : maior, "x");
+  const fator = alvo[eixo] / tamanho[eixo];
+  if (!Number.isFinite(fator) || fator <= 0) return;
+  // Escala uniforme mantém a geometria original do arquivo.
+  modelo.scale.multiplyScalar(fator);
+  aplicarEscalaCorrecaoCadastrada(modelo, transform);
+  modelo.updateMatrixWorld(true);
+  caixa = new THREE.Box3().setFromObject(modelo);
+  modelo.position.add(new THREE.Vector3().copy(basePos).sub(caixa.getCenter(new THREE.Vector3())));
   modelo.updateMatrixWorld(true);
 }
 
-function dimensoesReaisCadastradasModelo3D(categoria, transform = {}) {
+function dimensoesReaisCadastradasModelo3D(categoria, transform = {}, peca = {}) {
   const dimensoes = transform?.dimensoesReaisMm;
   if (!dimensoes || typeof dimensoes !== "object") return null;
 
@@ -4542,7 +4470,7 @@ function dimensoesReaisCadastradasModelo3D(categoria, transform = {}) {
   // Os eixos do montador não representam sempre Altura/Largura/Profundidade
   // na mesma ordem. Aqui convertemos as medidas cadastradas para o plano físico
   // de cada categoria. Medidas ausentes continuam usando o alvo automático.
-  const automatico = dimensoesFisicasAlvoModelo3D(categoria, {}, 0, true);
+  const automatico = dimensoesFisicasAlvoModelo3D(categoria, peca, 0, true);
   const fallbackX = automatico?.x / ESCALA_MM_3D || 1;
   const fallbackY = automatico?.y / ESCALA_MM_3D || 1;
   const fallbackZ = automatico?.z / ESCALA_MM_3D || 1;
@@ -4556,12 +4484,12 @@ function dimensoesReaisCadastradasModelo3D(categoria, transform = {}) {
   }
   if (categoria === "memoria") {
     return new THREE.Vector3(
-      mm(profundidade, fallbackX),
+      mm(altura, fallbackX),
       mm(largura, fallbackY),
-      mm(altura, fallbackZ),
+      mm(profundidade, fallbackZ),
     );
   }
-  if (categoria === "fonte") {
+  if (categoria === "fonte" || categoria === "gabinete") {
     return new THREE.Vector3(
       mm(largura, fallbackX),
       mm(altura, fallbackY),
@@ -4604,11 +4532,13 @@ function dimensoesFisicasAlvoModelo3D(categoria, peca = {}, indice = 0, ignorarC
   const specs = especificacoesProcedurais(peca);
   const mm = (valor, fallback, minimo = 1) => Math.max(minimo, numero3DSeguro(valor, fallback)) * ESCALA_MM_3D;
 
+  if (categoria === "gabinete") {
+    const d = obterDimensoesGabineteLayout3D(peca);
+    return new THREE.Vector3(d.largura, d.altura, d.profundidade);
+  }
   if (categoria === "placavideo") {
-    const gpu = obterDimensoesGpuLayout3D();
-    // A GPU fica um pouco maior no PC 3D para ocupar melhor o volume visual
-    // do slot. A proporcao continua uniforme, sem deformar o GLB.
-    const escalaVisualGpu = 1.15;
+    const gpu = obterDimensoesGpuLayout3D(peca);
+    const escalaVisualGpu = 1;
     return new THREE.Vector3(
       gpu.altura * escalaVisualGpu,
       gpu.espessura * escalaVisualGpu,
@@ -4637,9 +4567,9 @@ function dimensoesFisicasAlvoModelo3D(categoria, peca = {}, indice = 0, ignorarC
 
   if (categoria === "memoria") {
     return new THREE.Vector3(
-      mm(specs.espessuraMm ?? specs.profundidadeMm, 7),
-      mm(specs.comprimentoMm ?? specs.larguraMm, 135),
-      mm(specs.alturaMm, 40),
+      mm(specs.alturaMm, 35),
+      mm(specs.comprimentoMm ?? specs.larguraMm, 132),
+      mm(specs.espessuraMm ?? specs.profundidadeMm, 7.5),
     );
   }
 
@@ -4905,7 +4835,7 @@ function ajustarCpuParaDimensoesExatasDoSocket(modelo, alvo) {
 
 function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transform = {}) {
   if (!modelo || categoria === "gabinete") return;
-  const alvoCadastrado = dimensoesReaisCadastradasModelo3D(categoria, transform);
+  const alvoCadastrado = dimensoesReaisCadastradasModelo3D(categoria, transform, peca);
   const alvo = alvoCadastrado || dimensoesFisicasAlvoModelo3D(categoria, peca, indice);
   if (!alvo) return;
 
@@ -4915,18 +4845,6 @@ function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transfo
   if (categoria === "placamae") {
     orientarPlacaMaeNoPlanoDoGabinete(modelo, alvo, possuiRotacaoCalibrada);
     ajustarPlacaMaeAoWireframe(modelo, alvo);
-
-    // A placa-mae ja esta no plano correto do gabinete. Aqui aplicamos somente
-    // mais 90 graus no proprio plano, sempre pelo centro do GLB, para acertar
-    // a orientacao visual sem deslocar o encaixe/wireframe.
-    if (!possuiRotacaoCalibrada) {
-      rotacionarModelo3DAoRedorDoCentro(
-        modelo,
-        new THREE.Vector3(1, 0, 0),
-        Math.PI / 2,
-      );
-      modelo.userData.rotacaoPlacaMae90 = true;
-    }
 
     aplicarEscalaCorrecaoCadastrada(modelo, transform);
     modelo.userData.escalaFisicaAutomatica = true;
@@ -4972,24 +4890,6 @@ function normalizarEscalaFisicaModelo3D(modelo, categoria, peca, indice, transfo
 
   modelo.scale.multiplyScalar(fator);
   modelo.updateMatrixWorld(true);
-
-  // GPU: primeiro inverte 180 graus pelo centro para deixar as fans voltadas
-  // para baixo. Depois gira 90 graus no plano horizontal, como uma pizza sendo
-  // girada sobre a mesa. Os dois giros preservam o centro/encaixe da placa.
-  if (categoria === "placavideo" && !possuiRotacaoCalibrada) {
-    rotacionarModelo3DAoRedorDoCentro(
-      modelo,
-      new THREE.Vector3(1, 0, 0),
-      Math.PI,
-    );
-    rotacionarModelo3DAoRedorDoCentro(
-      modelo,
-      new THREE.Vector3(0, 1, 0),
-      Math.PI / 2,
-    );
-    modelo.userData.inversaoGpuFansParaBaixo = true;
-    modelo.userData.rotacaoGpuPizza90 = true;
-  }
 
   aplicarEscalaCorrecaoCadastrada(modelo, transform);
   modelo.userData.escalaFisicaAutomatica = true;
@@ -5236,7 +5136,7 @@ function atualizarPecaNo3D(categoria, estadoDaCategoria) {
         }
 
         if (categoria === "gabinete") {
-          normalizarGabineteGlbForaDeEscala(modelo, peca, basePos, transform);
+          normalizarGabineteGlbForaDeEscala(modelo, peca, finalPos, transform);
         }
 
         modelo.userData = {

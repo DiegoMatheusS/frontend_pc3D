@@ -1,6 +1,16 @@
 import { apiRequest } from '../../services/httpClient'
 import { normalizeAiResponse } from '../utils/aiImportContract'
 
+const META_AI_WHATSAPP_PROXY_PATH = String(
+  import.meta.env.VITE_META_AI_WHATSAPP_PROXY_PATH
+  || '/api/admin/hardwares/descobrir/meta-ai-whatsapp/enriquecer',
+).trim()
+
+const IA_TECNICA_PROXY_PATH = String(
+  import.meta.env.VITE_IA_TECNICA_PROXY_PATH
+  || '/api/admin/hardwares/descobrir/ia-tecnica/enriquecer',
+).trim()
+
 function unwrapList(data) {
   if (Array.isArray(data)) return data
   const candidates = [
@@ -152,8 +162,14 @@ export const adminService = {
     update: (id, body) => oneRequest(`/api/admin/hardwares/${id}`, 'PATCH', body),
     remove: (id) => apiRequest(`/api/admin/hardwares/${id}`, { method: 'DELETE' }),
     import: (urlOriginal) => oneRequest('/api/admin/hardwares/importar', 'POST', { urlOriginal }),
+    discover: (body) => oneRequest('/api/admin/hardwares/descobrir', 'POST', body),
+    createDiscovered: (body) => oneRequest('/api/admin/hardwares/descobrir/cadastrar', 'POST', body),
+    createDiscoveredBatch: (itens) => oneRequest('/api/admin/hardwares/descobrir/cadastrar-lote', 'POST', { itens }),
+    enrichDiscoveredWithMetaAi: (body) => oneRequestWithTimeout(META_AI_WHATSAPP_PROXY_PATH, 'POST', body, { timeoutMs: 150000 }),
+    enrichDiscoveredWithAi: (body) => oneRequestWithTimeout(IA_TECNICA_PROXY_PATH, 'POST', body, { timeoutMs: 150000 }),
     models: (hardwareId) => list(`/api/admin/hardwares/${hardwareId}/modelos-3d`),
     createModel: (hardwareId, body) => oneRequest(`/api/admin/hardwares/${hardwareId}/modelos-3d`, 'POST', body),
+    setHomeModel: (modelId, mostrarNoHome) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}/mostrar-no-home`, 'PATCH', { mostrarNoHome }),
     updateModel: (modelId, body) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}`, 'PATCH', body),
     removeModel: (modelId) => apiRequest(`/api/admin/hardwares/modelos-3d/${modelId}`, { method: 'DELETE' }),
     approveModel: (modelId) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}/aprovar`, 'PATCH'),
@@ -199,9 +215,9 @@ export const adminService = {
     updatePartner: (id, body) => oneRequest(`/api/admin/ofertas/parceiros/${id}`, 'PATCH', body),
     removePartner: (id) => apiRequest(`/api/admin/ofertas/parceiros/${id}`, { method: 'DELETE' }),
     priceCheckStatus: () => apiRequest('/api/admin/ofertas/verificacao-precos/status'),
-    verifyPrices: (limite = 50) => apiRequest('/api/admin/ofertas/verificar-precos', {
+    verifyPrices: (limite = 50, excluirIds = []) => apiRequest('/api/admin/ofertas/verificar-precos', {
       method: 'POST',
-      body: { limite: Number(limite) || 50 },
+      body: { limite: Number(limite) || 50, ...(excluirIds.length ? { excluirIds } : {}) },
     }),
     verifyPrice: (id) => apiRequest(`/api/admin/ofertas/${id}/verificar-preco`, { method: 'POST' }),
   },

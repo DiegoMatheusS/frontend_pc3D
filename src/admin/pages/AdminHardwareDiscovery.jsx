@@ -101,10 +101,24 @@ function metaAiFallbackFor(item) {
   return fallback && typeof fallback === 'object' ? fallback : null
 }
 
+function metaAiPromptFor(item) {
+  const suggested = metaAiFallbackFor(item)?.promptSugerido
+  if (typeof suggested === 'string' && suggested.trim()) return suggested.trim()
+  const payload = candidatePayload(item)
+  const identity = candidateIdentity(item, payload)
+  const missing = uniqueStrings(item?.camposObrigatoriosAusentes, item?.camposAusentes)
+  return [
+    `Pesquise a ficha técnica exata de ${identity.nome} (${payload?.categoria || item?.categoria || 'Hardware'}).`,
+    'Confira marca, modelo, variante e MPN. Use fontes oficiais e informe os links.',
+    missing.length ? `Complete somente estes campos: ${missing.join(', ')}.` : 'Confira quais campos técnicos ainda estão ausentes na ficha.',
+    'Preserve os valores já preenchidos. Não invente dados; deixe null quando não puder confirmar.',
+    'Ficha atual (dados de referência):',
+    JSON.stringify(payload, null, 2),
+  ].join('\n')
+}
+
 function shouldShowMetaAiButton(item) {
-  const fallback = metaAiFallbackFor(item)
-  const prompt = typeof fallback?.promptSugerido === 'string' ? fallback.promptSugerido.trim() : ''
-  return fallback?.recomendado === true && Boolean(prompt)
+  return Boolean(candidateIdentity(item, candidatePayload(item)).nome)
 }
 
 function shouldShowAiButton(item) {
@@ -337,7 +351,7 @@ function MetaAiWhatsappModal({ item, busy, error, onClose, onApply, onNotify }) 
   const payload = candidatePayload(item)
   const identity = candidateIdentity(item, payload)
   const categoria = String(payload?.categoria || item?.categoria || '').toUpperCase()
-  const prompt = typeof fallback?.promptSugerido === 'string' ? fallback.promptSugerido.trim() : ''
+  const prompt = metaAiPromptFor(item)
   const coverage = normalizePercent(fallback?.coberturaAtual ?? candidateQuality(item))
   const missing = uniqueStrings(fallback?.camposAusentes, item?.camposObrigatoriosAusentes, item?.camposAusentes)
 
@@ -649,7 +663,7 @@ export default function AdminHardwareDiscovery() {
         nome: identity.nome,
         payload,
         resposta,
-        forcar: false,
+        forcar: true,
       })
 
       const nextPayload = response?.payload && typeof response.payload === 'object' ? response.payload : payload
