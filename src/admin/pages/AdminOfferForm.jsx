@@ -85,7 +85,6 @@ export default function AdminOfferForm() {
     setError(null)
     try {
       const body = {
-        parceiroId: Number(form.parceiroId),
         vendedorNome: String(form.vendedorNome ?? '').trim() || (editing ? null : undefined),
         vendedorIdentificador: String(form.vendedorIdentificador ?? '').trim() || (editing ? null : undefined),
         urlOriginal: String(form.urlOriginal ?? '').trim(),
@@ -94,7 +93,10 @@ export default function AdminOfferForm() {
         precoAnterior: form.precoAnterior === '' ? (editing ? null : undefined) : Number(form.precoAnterior),
         frete: form.frete === '' ? (editing ? null : undefined) : Number(form.frete),
         validoAte: form.validoAte ? new Date(form.validoAte).toISOString() : (editing ? null : undefined),
-        ...(!editing ? { [form.targetType === 'hardware' ? 'hardwareId' : 'produtoId']: Number(form.targetId) } : {}),
+        ...(!editing ? {
+          parceiroId: Number(form.parceiroId),
+          [form.targetType === 'hardware' ? 'hardwareId' : 'produtoId']: Number(form.targetId),
+        } : {}),
         ...(editing ? { status: form.status } : {}),
       }
       const saved = editing ? await adminService.offers.update(id, body) : await adminService.offers.create(body)
@@ -169,7 +171,7 @@ export default function AdminOfferForm() {
           <div className="admin-form-grid">
             <div className="admin-field"><label>Tipo</label><select className="admin-select" value={form.targetType} disabled={editing || Boolean(suggestionId)} onChange={(event) => { update('targetType', event.target.value); update('targetId', '') }}><option value="produto">Produto</option><option value="hardware">Hardware</option></select></div>
             <div className="admin-field"><label>Item</label><select className="admin-select" value={form.targetId} disabled={editing} required onChange={(event) => update('targetId', event.target.value)}><option value="">Selecione</option>{targets.map((target) => <option key={target.id} value={target.id}>{target.nome}</option>)}</select></div>
-            <div className="admin-field"><label>Parceiro</label><select className="admin-select" required value={form.parceiroId} onChange={(event) => update('parceiroId', event.target.value)}><option value="">Selecione</option>{data?.partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.nome}</option>)}</select></div>
+            <div className="admin-field"><label>Parceiro</label><select className="admin-select" required value={form.parceiroId} disabled={editing} onChange={(event) => update('parceiroId', event.target.value)}><option value="">Selecione</option>{data?.partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.nome}</option>)}</select></div>
             <div className="admin-field"><label>Status</label><select className="admin-select" value={form.status} disabled={!editing} onChange={(event) => update('status', event.target.value)}><option>ATIVA</option><option>INDISPONIVEL</option><option>DESCONTINUADA</option></select></div>
           </div>
         </section>
@@ -199,7 +201,7 @@ export default function AdminOfferForm() {
           {editing && <button className="btn btn-perigo" type="button" disabled={saving} onClick={deleteOffer}>Excluir oferta</button>}
           {editing && form.status !== 'ATIVA' && <button className="btn btn-secundario" type="button" disabled={saving} onClick={reactivateNow}>Reativar agora</button>}
           <button className="btn btn-primario" type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar oferta'}</button>
-          {editing && <small className="admin-offer-status-help">Status atual: <strong>{form.status}</strong>. A loja/parceiro pode ser alterada normalmente e a oferta também pode ser excluída.</small>}
+          {editing && <small className="admin-offer-status-help">Status atual: <strong>{form.status}</strong>. O item e o parceiro permanecem vinculados; preço, vendedor, links, validade, frete e status podem ser editados.</small>}
         </footer>
       </div>
 
