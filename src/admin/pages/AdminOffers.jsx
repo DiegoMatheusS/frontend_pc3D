@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getOfferCreatorName } from '../../utils/offerCreator'
+import { verificarLotePrecos } from '../utils/priceCheckBatch'
 import { adminService } from '../services/adminService'
 import { AdminError, AdminLoading, AdminPageHeader, AdminStatus, EmptyRow, formatDate, formatMoney } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
@@ -41,6 +42,8 @@ export default function AdminOffers() {
   const [search, setSearch] = useState('')
   const [partnerId, setPartnerId] = useState('')
   const [status, setStatus] = useState('')
+  const stopPriceCheck = useRef(false)
+  useEffect(() => () => { stopPriceCheck.current = true }, [])
   const [checkingPrices, setCheckingPrices] = useState(false)
   const [checkingOfferId, setCheckingOfferId] = useState(null)
   const [offerCheckResults, setOfferCheckResults] = useState({})
@@ -185,9 +188,19 @@ export default function AdminOffers() {
   }
 
   async function verifyPrices() {
+    stopPriceCheck.current = false
     setCheckingPrices(true)
+    setPriceReport(null)
+    setReportOpen(true)
     try {
-      const result = await adminService.offers.verifyPrices(50)
+      const result = await verificarLotePrecos({
+        request: (limite, excluirIds) => adminService.offers.verifyPrices(limite, excluirIds),
+        shouldStop: () => stopPriceCheck.current,
+        onProgress: (report) => {
+          setPriceReport(report)
+          try { sessionStorage.setItem('criabyteUltimoRelatorioPrecos', JSON.stringify(report)) } catch { /* opcional */ }
+        },
+      })
       setPriceReport(result)
       setReportOpen(true)
       try { sessionStorage.setItem('criabyteUltimoRelatorioPrecos', JSON.stringify(result)) } catch { /* opcional */ }
@@ -260,7 +273,8 @@ export default function AdminOffers() {
   return <>
     <AdminPageHeader title="Ofertas afiliadas" description="Gerencie múltiplas ofertas por Produto, com parceiro, preço e link afiliado independentes.">
       {priceReport && <button className="btn btn-secundario" type="button" onClick={() => setReportOpen((current) => !current)}>{reportOpen ? 'Fechar relatório' : 'Relatório'}</button>}
-      {canWriteCatalog && <button className="btn btn-secundario" type="button" onClick={verifyPrices} disabled={checkingPrices}>{checkingPrices ? 'Verificando preços...' : 'Verificar preços'}</button>}
+      {checkingPrices && <button className="btn btn-secundario" type="button" onClick={() => { stopPriceCheck.current = true }}>Parar após este lote</button>}
+      {canWriteCatalog && <button className="btn btn-secundario" type="button" onClick={verifyPrices} disabled={checkingPrices || checkingOfferId !== null}>{checkingPrices ? `Verificando: ${priceReport?.verificadas || 0}/50` : 'Verificar preços'}</button>}
       {canWriteCatalog && <Link className="btn btn-primario" to="/admin/ofertas/novo">+ Nova oferta</Link>}
     </AdminPageHeader>
 

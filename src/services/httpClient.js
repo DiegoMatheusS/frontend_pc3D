@@ -19,7 +19,9 @@ export class ApiError extends Error {
 
 function buildUrl(path) {
   if (/^https?:\/\//i.test(path)) return path
-  return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+  const base = API_BASE_URL.replace(/\/api$/i, '')
+  const url = `${base}${path.startsWith('/') ? path : `/${path}`}`
+  return url.replace(/^http:\/\/(api\.criabyte\.com\.br)(?=\/|$)/i, 'https://$1')
 }
 
 async function readResponse(response) {
@@ -30,6 +32,9 @@ async function readResponse(response) {
 }
 
 function getErrorMessage(data, status) {
+  if (status === 404 && /Cannot (GET|POST)/i.test(String(data?.mensagem || data?.message || ''))) {
+    return 'A rota solicitada não foi encontrada no servidor. Confira a versão publicada do backend e o redirecionamento da API.'
+  }
   if (Array.isArray(data?.message)) return data.message.join(' ')
   if (typeof data?.message === 'string' && data.message.trim()) return data.message
   if (typeof data?.mensagem === 'string' && data.mensagem.trim()) return data.mensagem
@@ -82,7 +87,23 @@ export async function apiRequest(path, options = {}) {
     })
   }
 
-  const data = await readResponse(response)
+  let data
+  try {
+    data = await readResponse(response)
+  } catch {
+    throw new ApiError('O servidor retornou uma resposta inválida.', { status: response.status, url })
+  }
+  // Reenvia apenas POST de enriquecimento convertido em GET por redirecionamento,
+  // no mesmo endpoint e origem. Não repete erros de processamento nem cadastros.
+  const isEnrichment = /\/(?:ia-tecnica|meta-ai-whatsapp)\/enriquecer\/?$/.test(new URL(url, window.location.origin).pathname)
+  if (options.redirect !== 'error' && method === 'POST' && isEnrichment && response.redirected && response.status === 404
+      && /Cannot GET/i.test(String(data?.mensagem || data?.message || data || ''))) {
+    const original = new URL(url, window.location.origin)
+    const destination = new URL(response.url)
+    if (destination.origin === original.origin && destination.pathname.replace(/\/$/, '') === original.pathname.replace(/\/$/, '')) {
+      return apiRequest(destination.href, { ...options, method, redirect: 'error' })
+    }
+  }
 
   if (!response.ok) {
     throw new ApiError(getErrorMessage(data, response.status), {
