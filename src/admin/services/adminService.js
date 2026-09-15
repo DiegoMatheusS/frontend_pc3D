@@ -11,6 +11,8 @@ const IA_TECNICA_PROXY_PATH = String(
   || '/api/admin/hardwares/descobrir/ia-tecnica/enriquecer',
 ).trim()
 
+const IA_TECNICA_PROVIDER = 'OPENAI'
+
 function unwrapList(data) {
   if (Array.isArray(data)) return data
   const candidates = [
@@ -33,8 +35,6 @@ function unwrapList(data) {
 
 function unwrapOne(data) {
   if (!data || typeof data !== 'object') return data
-  // Respostas de fluxo/IA precisam permanecer inteiras mesmo que tenham chaves
-  // chamadas `produto`, `hardware` ou `oferta`.
   if (
     data.status !== undefined
     || data.tokenConfirmacao !== undefined
@@ -45,13 +45,9 @@ function unwrapOne(data) {
     || data.analise !== undefined
     || data.acoesPrevistas !== undefined
   ) return data
-  // Respostas especializadas (Notebook/Build) possuem `produto` como relação.
-  // Se o objeto já tem id próprio, ele é a entidade e não deve ser reduzido a data.produto.
   if (data.id !== undefined && data.id !== null) return data
   return data?.item || data?.dados || data?.produto || data?.hardware || data?.oferta || data?.parceiro || data?.usuario || data?.notebook || data?.build || data
 }
-
-
 
 async function list(path) {
   return unwrapList(await apiRequest(path))
@@ -154,7 +150,7 @@ export const adminService = {
       try {
         const adminItems = await list('/api/admin/hardwares')
         if (adminItems.length) return adminItems
-      } catch { /* fallback público abaixo */ }
+      } catch { }
       return list('/api/hardwares')
     },
     get: (id) => one(`/api/admin/hardwares/${id}`),
@@ -166,7 +162,12 @@ export const adminService = {
     createDiscovered: (body) => oneRequest('/api/admin/hardwares/descobrir/cadastrar', 'POST', body),
     createDiscoveredBatch: (itens) => oneRequest('/api/admin/hardwares/descobrir/cadastrar-lote', 'POST', { itens }),
     enrichDiscoveredWithMetaAi: (body) => oneRequestWithTimeout(META_AI_WHATSAPP_PROXY_PATH, 'POST', body, { timeoutMs: 150000 }),
-    enrichDiscoveredWithAi: (body) => oneRequestWithTimeout(IA_TECNICA_PROXY_PATH, 'POST', body, { timeoutMs: 150000 }),
+    enrichDiscoveredWithAi: (body) => oneRequestWithTimeout(
+      IA_TECNICA_PROXY_PATH,
+      'POST',
+      { ...(body || {}), provedor: IA_TECNICA_PROVIDER },
+      { timeoutMs: 150000 },
+    ),
     models: (hardwareId) => list(`/api/admin/hardwares/${hardwareId}/modelos-3d`),
     createModel: (hardwareId, body) => oneRequest(`/api/admin/hardwares/${hardwareId}/modelos-3d`, 'POST', body),
     setHomeModel: (modelId, mostrarNoHome) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}/mostrar-no-home`, 'PATCH', { mostrarNoHome }),
