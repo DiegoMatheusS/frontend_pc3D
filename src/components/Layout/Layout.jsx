@@ -2,6 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import Header from '../Header/Header'
 import Footer from '../Footer/Footer'
 import RouteEffects from '../RouteEffects/RouteEffects'
+import AIAssistant from '../AIAssistant/AIAssistant'
 
 export default function Layout() {
   const location = useLocation()
@@ -16,6 +17,7 @@ export default function Layout() {
         <Outlet />
       </main>
       {!isBuilder && <Footer />}
+      <AIAssistant />
     </div>
   )
 }
