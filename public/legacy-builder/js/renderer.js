@@ -59,16 +59,13 @@ renderizador.setPixelRatio(
     Math.min(window.devicePixelRatio || 1, qualidade3DAtual === "baixa" ? 1 : 2)
 );
 
-// 💡 Correção de cor sRGB: Faz os modelos .glb exibirem as cores reais e vivas
 if ('outputColorSpace' in renderizador) {
     renderizador.outputColorSpace = THREE.SRGBColorSpace;
 } else {
     renderizador.outputEncoding = THREE.sRGBEncoding;
 }
 
-// O tamanho correto será definido pelo pcbuildscript.js
 renderizador.setSize(1, 1, false);
-
 renderizador.shadowMap.enabled = qualidade3DAtual !== "baixa";
 renderizador.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -82,7 +79,7 @@ function definirQualidade3D(nivel = "alta") {
     try {
         localStorage.setItem("criaByteQualidade3D", qualidade3DAtual);
     } catch {
-        // A preferência é opcional; o 3D continua funcionando sem armazenamento local.
+        // A preferência é opcional.
     }
 
     return qualidade3DAtual;
@@ -112,71 +109,41 @@ const controles = new THREE.OrbitControls(
 
 controles.enableDamping = true;
 controles.dampingFactor = 0.06;
-
 controles.autoRotate = false;
 controles.autoRotateSpeed = 2;
-
 controles.enablePan = true;
 controles.enableZoom = true;
 controles.enableRotate = true;
-
 controles.minDistance = 4;
 controles.maxDistance = 18;
-
 controles.target.set(0, 2.3, 0);
 controles.update();
 
-// O botão de rotação é configurado pelo pcbuildscript.js.
-
 // ==========================================================================
-// 5. ILUMINAÇÃO (Ajustada para clarear os modelos GLB)
+// 5. ILUMINAÇÃO
 // ==========================================================================
 
-const luzAmbiente = new THREE.AmbientLight(
-    0xffffff,
-    2.2
-);
+const luzAmbiente = new THREE.AmbientLight(0xffffff, 2.2);
 cena.add(luzAmbiente);
 
-const luzHemisferio = new THREE.HemisphereLight(
-    0xffffff,
-    0x444444,
-    1.0
-);
+const luzHemisferio = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
 luzHemisferio.position.set(0, 10, 0);
 cena.add(luzHemisferio);
 
-const luzPrincipal = new THREE.DirectionalLight(
-    0xffffff,
-    1.5
-);
-
+const luzPrincipal = new THREE.DirectionalLight(0xffffff, 1.5);
 luzPrincipal.position.set(6, 9, 7);
 luzPrincipal.castShadow = true;
 cena.add(luzPrincipal);
 
-const luzPreenchimento = new THREE.DirectionalLight(
-    0xbfd7ff,
-    0.8
-);
-
+const luzPreenchimento = new THREE.DirectionalLight(0xbfd7ff, 0.8);
 luzPreenchimento.position.set(-6, 5, -4);
 cena.add(luzPreenchimento);
 
-const luzAlerta = new THREE.PointLight(
-    0xff3344,
-    0,
-    12
-);
-
+const luzAlerta = new THREE.PointLight(0xff3344, 0, 12);
 luzAlerta.position.set(2, 3, 2);
 cena.add(luzAlerta);
 
-const luzFundo = new THREE.DirectionalLight(
-    0xffffff,
-    0.9
-);
-
+const luzFundo = new THREE.DirectionalLight(0xffffff, 0.9);
 luzFundo.position.set(-6, -4, -6);
 cena.add(luzFundo);
 
@@ -225,8 +192,6 @@ gerenciador.onLoad = () => {
         }, 350);
     }
 
-    // Alguns GLBs chegam depois do evento que alterou a montagem. Reexecuta
-    // as correções quando a fila do loader termina para não depender do timing.
     window.setTimeout(() => agendarCorrecoesMontagem3D(), 0);
 };
 
@@ -367,8 +332,6 @@ function ehWaterCoolerSnapshot() {
     }
     if (Number(specs.tamanhoRadiadorMm) > 0) return true;
 
-    // O fallback procedural de air cooler possui dissipador + uma fan (2 filhos).
-    // AIO procedural possui radiador + fan(s) + bomba (3 ou mais filhos).
     const grupo = cena.getObjectByName("grupo-modelos-cooler");
     const procedural = grupo?.children?.find((objeto) => objeto?.userData?.fallback3D === true);
     return Boolean(procedural && procedural.children?.length >= 3);
@@ -591,9 +554,6 @@ function corrigirCirculosDecorativosGabinete() {
     const grupo = cena.getObjectByName("grupo-modelos-gabinete");
     if (!grupo) return;
 
-    // TorusGeometry dentro do grupo do gabinete é criado exclusivamente pelo
-    // fallback procedural para sugerir fans frontais. Não é parte do GLB real.
-    // Remove em qualquer gabinete para não deixar argolas atravessando a frente.
     grupo.traverse((objeto) => {
         if (!objeto.isMesh || objeto.geometry?.type !== "TorusGeometry") return;
         objeto.visible = false;
@@ -601,11 +561,242 @@ function corrigirCirculosDecorativosGabinete() {
     });
 }
 
+// ==========================================================================
+// 8. KITS DE MEMÓRIA RAM
+// ==========================================================================
+
+function inferirQuantidadeModulosMemoria(peca = {}) {
+    const specs = peca?.especificacoes && typeof peca.especificacoes === "object"
+        ? peca.especificacoes
+        : {};
+
+    const camposNumericos = [
+        specs.quantidadeModulos,
+        specs.quantidadePentes,
+        specs.numeroModulos,
+        specs.modulos,
+        specs.kitQuantidade,
+        peca.quantidadeModulos,
+        peca.quantidadePentes,
+    ];
+
+    for (const valor of camposNumericos) {
+        if (Array.isArray(valor) && valor.length >= 1 && valor.length <= 4) return valor.length;
+        const numero = Number(valor);
+        if (Number.isInteger(numero) && numero >= 1 && numero <= 4) return numero;
+    }
+
+    const total = Number(specs.capacidadeTotalGb ?? specs.capacidadeGbTotal);
+    const porModulo = Number(specs.capacidadePorModuloGb ?? specs.capacidadeModuloGb);
+    if (Number.isFinite(total) && total > 0 && Number.isFinite(porModulo) && porModulo > 0) {
+        const quantidade = Math.round(total / porModulo);
+        if (quantidade >= 1 && quantidade <= 4 && Math.abs(total - quantidade * porModulo) < 0.01) {
+            return quantidade;
+        }
+    }
+
+    const texto = normalizarTextoLayout3D([
+        peca?.nome,
+        peca?.modelo,
+        peca?.descricao,
+        specs.kit,
+        specs.configuracao,
+    ].filter(Boolean).join(" "));
+
+    const padroes = [
+        /(?:^|\D)([1-4])\s*[x×]\s*\d+\s*(?:gb|gib)(?:\D|$)/i,
+        /\bkit\s*(?:de\s*)?([1-4])\s*(?:x|modulos?|pentes?)\b/i,
+        /\b([1-4])\s*(?:modulos?|pentes?)\b/i,
+    ];
+
+    for (const padrao of padroes) {
+        const encontrado = texto.match(padrao);
+        const quantidade = Number(encontrado?.[1]);
+        if (quantidade >= 1 && quantidade <= 4) return quantidade;
+    }
+
+    return 1;
+}
+
+function idSlotMemoria(valor) {
+    if (!valor) return "";
+    if (typeof valor === "object") return String(valor.id ?? valor.hardwareId ?? "");
+    return String(valor);
+}
+
+function encontrarPecaListaAtual(categoria, idPeca) {
+    const itens = snapshotMontagem3D?.listaPecas?.itens;
+    if (!Array.isArray(itens)) return null;
+    return itens.find((item) =>
+        item?.peca &&
+        String(item.peca.id) === String(idPeca) &&
+        (!categoria || item.categoria === categoria || item.peca.categoria === categoria)
+    )?.peca ?? null;
+}
+
+function normalizarSnapshotPrecoKitMemoria(snapshot) {
+    const resumo = snapshot?.componentesResumo;
+    if (!resumo || !Array.isArray(resumo.itens)) return snapshot;
+
+    const itens = resumo.itens.map((item) => ({
+        ...item,
+        peca: item?.peca ? { ...item.peca } : item?.peca,
+    }));
+    const grupos = new Map();
+
+    itens.forEach((item, indice) => {
+        if (item?.categoria !== "memoria" || !item?.peca) return;
+        const quantidadeKit = inferirQuantidadeModulosMemoria(item.peca);
+        if (quantidadeKit <= 1) return;
+        const chave = String(item.peca.hardwareId ?? item.peca.id ?? item.peca.nome ?? indice);
+        if (!grupos.has(chave)) grupos.set(chave, { quantidadeKit, indices: [] });
+        grupos.get(chave).indices.push(indice);
+    });
+
+    let desconto = 0;
+    let mudou = false;
+
+    grupos.forEach(({ quantidadeKit, indices }) => {
+        const quantidadeFisica = Math.min(quantidadeKit, indices.length);
+        if (quantidadeFisica <= 1) return;
+
+        for (let posicao = 1; posicao < quantidadeFisica; posicao += 1) {
+            const indice = indices[posicao];
+            const peca = itens[indice].peca;
+            const preco = Number(peca?.preco ?? 0);
+            if (Number.isFinite(preco) && preco > 0) desconto += preco;
+            itens[indice].peca = {
+                ...peca,
+                preco: 0,
+                precoFormatado: "Incluído no kit",
+                moduloIncluidoNoKit: true,
+            };
+            mudou = true;
+        }
+    });
+
+    if (!mudou) return snapshot;
+
+    const linksVistos = new Set();
+    const linksCompra = Array.isArray(resumo.linksCompra)
+        ? resumo.linksCompra.filter((item) => {
+            if (item?.categoria !== "memoria") return true;
+            const chave = String(item?.peca?.hardwareId ?? item?.peca?.id ?? item?.peca?.nome ?? "");
+            if (!chave || linksVistos.has(chave)) return false;
+            linksVistos.add(chave);
+            return true;
+        })
+        : resumo.linksCompra;
+
+    return {
+        ...snapshot,
+        __kitRamNormalizado: true,
+        precoTotal: Math.max(0, Number(snapshot.precoTotal || 0) - desconto),
+        componentesResumo: {
+            ...resumo,
+            itens,
+            linksCompra,
+        },
+    };
+}
+
+function instalarSelecaoAutomaticaKitMemoria() {
+    const bridge = globalThis.PCBuilderLegacyBridge;
+    if (!bridge || bridge.__kitMemoriaSlotsInstalado === true || typeof bridge.selecionarPeca !== "function") {
+        return;
+    }
+
+    const selecionarOriginal = bridge.selecionarPeca.bind(bridge);
+    const obterEstadoOriginal = typeof bridge.obterEstado === "function"
+        ? bridge.obterEstado.bind(bridge)
+        : null;
+    const finalizarOriginal = typeof bridge.finalizar === "function"
+        ? bridge.finalizar.bind(bridge)
+        : null;
+    const selecionarAutomaticaOriginal = typeof bridge.selecionarPecaAutomatica === "function"
+        ? bridge.selecionarPecaAutomatica.bind(bridge)
+        : null;
+
+    bridge.selecionarPeca = (categoria, idPeca, slotStr = "", fluxo = "") => {
+        if (categoria !== "memoria") {
+            return selecionarOriginal(categoria, idPeca, slotStr, fluxo);
+        }
+
+        const peca = encontrarPecaListaAtual("memoria", idPeca);
+        const quantidade = inferirQuantidadeModulosMemoria(peca ?? {});
+        if (quantidade <= 1) {
+            return selecionarOriginal(categoria, idPeca, slotStr, fluxo);
+        }
+
+        const slotsAtuais = Array.isArray(snapshotMontagem3D?.configuracao?.memoria)
+            ? snapshotMontagem3D.configuracao.memoria
+            : [null, null, null, null];
+        const slotInicial = Number.parseInt(slotStr, 10);
+        const inicialValido = Number.isInteger(slotInicial) && slotInicial >= 0 && slotInicial < 4;
+        const parDualChannel = { 0: 2, 1: 3, 2: 0, 3: 1 };
+        const ordem = inicialValido
+            ? [slotInicial, parDualChannel[slotInicial], 1, 3, 0, 2]
+            : [1, 3, 0, 2];
+        const unicos = [...new Set(ordem)];
+        const escolhidos = [];
+
+        for (const indice of unicos) {
+            const atual = idSlotMemoria(slotsAtuais[indice]);
+            const podeUsar = indice === slotInicial || !atual || atual === String(idPeca);
+            if (!podeUsar) continue;
+            escolhidos.push(indice);
+            if (escolhidos.length >= quantidade) break;
+        }
+
+        if (escolhidos.length < quantidade) {
+            console.warn(`O kit de RAM ${quantidade}x precisa de ${quantidade} slots disponíveis.`);
+            return false;
+        }
+
+        escolhidos.forEach((indice) => {
+            const atual = idSlotMemoria(slotsAtuais[indice]);
+            if (atual === String(idPeca)) return;
+            selecionarOriginal("memoria", idPeca, String(indice), "");
+        });
+
+        return true;
+    };
+
+    if (selecionarAutomaticaOriginal) {
+        bridge.selecionarPecaAutomatica = (categoria, idPeca) => {
+            if (categoria !== "memoria") return selecionarAutomaticaOriginal(categoria, idPeca);
+            const peca = encontrarPecaListaAtual("memoria", idPeca);
+            if (inferirQuantidadeModulosMemoria(peca ?? {}) <= 1) {
+                return selecionarAutomaticaOriginal(categoria, idPeca);
+            }
+            return bridge.selecionarPeca("memoria", idPeca, "1", "");
+        };
+    }
+
+    if (obterEstadoOriginal) {
+        bridge.obterEstado = () => normalizarSnapshotPrecoKitMemoria(obterEstadoOriginal());
+    }
+
+    if (finalizarOriginal) {
+        bridge.finalizar = (...args) => {
+            const resultado = finalizarOriginal(...args);
+            if (!resultado?.estado) return resultado;
+            return {
+                ...resultado,
+                estado: normalizarSnapshotPrecoKitMemoria(resultado.estado),
+            };
+        };
+    }
+
+    bridge.__kitMemoriaSlotsInstalado = true;
+}
+
 function aplicarCorrecoesMontagem3D() {
     aplicarWaterCoolerNoTeto();
     corrigirOrientacaoAsusTufRx9070();
     corrigirFansDentroDoGabinete();
     corrigirCirculosDecorativosGabinete();
+    instalarSelecaoAutomaticaKitMemoria();
 }
 
 function agendarCorrecoesMontagem3D() {
@@ -619,12 +810,24 @@ if (!globalThis.__criaByteCorrecoesLayout3DInstaladas) {
     globalThis.__criaByteCorrecoesLayout3DInstaladas = true;
     window.addEventListener("pcbuilder:statechange", (evento) => {
         snapshotMontagem3D = evento?.detail ?? null;
+        instalarSelecaoAutomaticaKitMemoria();
         agendarCorrecoesMontagem3D();
+
+        if (!evento?.detail?.__kitRamNormalizado) {
+            const normalizado = normalizarSnapshotPrecoKitMemoria(evento?.detail);
+            if (normalizado && normalizado !== evento?.detail) {
+                queueMicrotask(() => {
+                    window.dispatchEvent(new CustomEvent("pcbuilder:statechange", {
+                        detail: normalizado,
+                    }));
+                });
+            }
+        }
     });
 }
 
 // ==========================================================================
-// 8. EXPORTAÇÕES
+// 9. EXPORTAÇÕES
 // ==========================================================================
 
 export {
