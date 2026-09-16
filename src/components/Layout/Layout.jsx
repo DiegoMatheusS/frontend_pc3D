@@ -3,6 +3,7 @@ import Header from '../Header/Header'
 import Footer from '../Footer/Footer'
 import RouteEffects from '../RouteEffects/RouteEffects'
 import AIAssistant from '../AIAssistant/AIAssistant'
+import PublicUiEnhancements from '../PublicUiEnhancements/PublicUiEnhancements'
 
 export default function Layout() {
   const location = useLocation()
@@ -12,6 +13,7 @@ export default function Layout() {
     <div className={`app-shell ${isBuilder ? 'app-shell--builder' : ''}`}>
       <a className="skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
       <RouteEffects />
+      <PublicUiEnhancements />
       <Header />
       <main id="conteudo-principal" className="app-main" tabIndex="-1">
         <Outlet />
