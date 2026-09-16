@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import AuthProvider from './contexts/AuthProvider'
 import './styles/tokens.css'
 import './index.css'
+import './styles/disable-public-ai-assistant.css'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary.jsx'
 
