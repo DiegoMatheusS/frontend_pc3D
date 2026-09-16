@@ -1,0 +1,8 @@
+/* Temporário: o assistente de IA do montador público fica oculto até a revisão das respostas. */
+.ia-btn-flutuante,
+.ia-overlay,
+.ia-painel,
+.ia-balao-boas-vindas,
+.btn-montar-ia {
+  display: none !important;
+}
