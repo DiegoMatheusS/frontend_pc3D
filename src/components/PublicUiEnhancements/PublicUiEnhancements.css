@@ -1,0 +1,25 @@
+.ai-guided__heading--topic {
+  align-items: end;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ai-guided__heading--topic > div {
+  min-width: 0;
+}
+
+.ai-guided__heading .ai-guided__topic-title {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text);
+  font-size: 23px;
+  line-height: 1.08;
+  font-weight: 850;
+  letter-spacing: -0.025em;
+}
+
+@media (max-width: 520px) {
+  .ai-guided__heading .ai-guided__topic-title {
+    font-size: 21px;
+  }
+}
