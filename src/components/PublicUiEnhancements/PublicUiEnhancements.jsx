@@ -163,7 +163,11 @@ export default function PublicUiEnhancements() {
       }
 
       try {
-        const renderer = await import(/* @vite-ignore */ '/legacy-builder/js/renderer.js')
+        // Mantém o renderer como asset público carregado em runtime. Usar uma
+        // variável impede o Vite/Rolldown de tentar resolver /legacy-builder
+        // durante o build, já que esse arquivo vive em public/.
+        const rendererUrl = '/legacy-builder/js/renderer.js'
+        const renderer = await import(/* @vite-ignore */ rendererUrl)
         if (cancelado) return
         const aplicar = () => aplicarCorrecoes3D(renderer.cena)
         document.addEventListener('pcbuilder:statechange', aplicar)
