@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
-import { likeProduct, unlikeProduct } from '../../services/productsService'
+import { getProductLikeSummary, likeProduct, unlikeProduct } from '../../services/productsService'
 import { asArray, asNumber, asText, formatCurrency, formatRating } from '../../utils/display'
 import './ProductCard.css'
 
@@ -12,6 +12,8 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
   const navigate = useNavigate()
   const location = useLocation()
   const { user } = useAuth()
+  const userIdentity = String(user?.id ?? user?.email ?? '')
+  const currentUserIdentityRef = useRef(userIdentity)
   const [liked, setLiked] = useState(product.likedByUser === true)
   const [likeCount, setLikeCount] = useState(Number(product.likesCount) || 0)
   const [likePending, setLikePending] = useState(false)
@@ -29,9 +31,36 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
     : 0
 
   useEffect(() => {
-    setLiked(product.likedByUser === true)
+    currentUserIdentityRef.current = userIdentity
+  }, [userIdentity])
+
+  useEffect(() => {
+    let active = true
+    const productId = Number(product.id)
+
+    // Nunca carrega o Like da conta anterior enquanto a nova sessão é resolvida.
+    // O contador é global, mas o estado colorido do botão pertence ao usuário atual.
+    setLiked(false)
     setLikeCount(Number(product.likesCount) || 0)
-  }, [product.id, product.likedByUser, product.likesCount])
+
+    if (!Number.isInteger(productId) || productId <= 0) {
+      return () => { active = false }
+    }
+
+    getProductLikeSummary([productId])
+      .then((items) => {
+        if (!active || currentUserIdentityRef.current !== userIdentity) return
+        const summary = items.find((item) => Number(item?.produtoId) === productId)
+        if (!summary) return
+        setLiked(summary.likedByUser === true)
+        setLikeCount(Number(summary.likesCount) || 0)
+      })
+      .catch(() => {
+        // Em falha de sincronização, é mais seguro não reaproveitar o Like de outra conta.
+      })
+
+    return () => { active = false }
+  }, [product.id, product.likesCount, userIdentity])
 
   function openCard(event) {
     if (event.target.closest('a, button, input, select, textarea, label')) return
@@ -54,11 +83,17 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
       return
     }
 
+    const requestUserIdentity = userIdentity
     setLikePending(true)
     try {
       const result = liked
         ? await unlikeProduct(product.id)
         : await likeProduct(product.id)
+
+      // Se a conta mudou enquanto a requisição estava em andamento, a resposta
+      // pertence à sessão antiga e não deve alterar o botão da sessão nova.
+      if (currentUserIdentityRef.current !== requestUserIdentity) return
+
       setLiked(result.likedByUser === true)
       setLikeCount(Number(result.likesCount) || 0)
     } catch (error) {
