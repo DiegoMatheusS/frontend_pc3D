@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
+import { getNotifications, markNotificationRead } from '../../services/notificationsService'
 import './Header.css'
 
 const CHAVE_TEMA = 'pcBuilderTema'
@@ -32,15 +33,23 @@ function initials(name = '') {
   return `${parts[0]?.[0] || 'C'}${parts[1]?.[0] || 'B'}`.toUpperCase()
 }
 
+function notificationReferenceUrl(item = {}) {
+  const referenceType = String(item?.referenciaTipo || '').toUpperCase()
+  const referenceId = String(item?.referenciaId || '').trim()
+  if (referenceType === 'BUILD_COMUNIDADE' && referenceId) return `/comunidade/${encodeURIComponent(referenceId)}`
+  return null
+}
+
 function notificationView(item = {}) {
   const type = String(item?.tipo || item?.type || '').toUpperCase()
   const reason = String(item?.motivo || item?.detalhes?.motivo || item?.metadata?.motivo || '').trim()
+  const referenceUrl = notificationReferenceUrl(item)
 
   if (type === 'SUGESTAO_OFERTA_APROVADA') {
     return {
       title: item?.titulo || 'Sugestão de oferta aprovada',
       message: item?.mensagem || item?.texto || 'Sua sugestão de oferta foi aprovada e publicada.',
-      url: item?.url || item?.link || (item?.produtoId ? `/produto/${item.produtoId}` : '/conta'),
+      url: item?.url || item?.link || referenceUrl || (item?.produtoId ? `/produto/${item.produtoId}` : '/conta'),
       tone: 'success',
     }
   }
@@ -50,27 +59,37 @@ function notificationView(item = {}) {
     return {
       title: item?.titulo || 'Sugestão de oferta rejeitada',
       message: reason && !String(base).includes(reason) ? `${base} Motivo: ${reason}` : base,
-      url: item?.url || item?.link || '/conta',
+      url: item?.url || item?.link || referenceUrl || '/conta',
       tone: 'danger',
     }
   }
 
-  if (type.includes('COMENT')) return { title: item?.titulo || 'Novo comentário', message: item?.mensagem || item?.texto || 'Há um novo comentário relacionado ao seu conteúdo.', url: item?.url || item?.link || '/conta', tone: 'info' }
-  if (type.includes('RESPOST')) return { title: item?.titulo || 'Nova resposta', message: item?.mensagem || item?.texto || 'Responderam a um dos seus comentários.', url: item?.url || item?.link || '/conta', tone: 'info' }
-  if (type.includes('LIKE') || type.includes('CURTID')) return { title: item?.titulo || 'Nova curtida', message: item?.mensagem || item?.texto || 'Seu conteúdo recebeu uma nova curtida.', url: item?.url || item?.link || '/conta', tone: 'like' }
-  if (type.includes('AVALI') || type.includes('ESTRELA')) return { title: item?.titulo || 'Nova avaliação', message: item?.mensagem || item?.texto || 'Há uma nova avaliação relacionada ao seu conteúdo.', url: item?.url || item?.link || '/conta', tone: 'rating' }
+  if (type.includes('REMOVID') || type.includes('MODER') || type.includes('ALTERADA_ADMIN') || type.includes('ALTERADO_ADMIN')) {
+    return {
+      title: item?.titulo || 'Alteração da administração',
+      message: item?.mensagem || item?.texto || 'A administração alterou um conteúdo que você publicou.',
+      url: item?.url || item?.link || referenceUrl || '/conta',
+      tone: 'danger',
+    }
+  }
+
+  if (type.includes('COMENT')) return { title: item?.titulo || 'Novo comentário', message: item?.mensagem || item?.texto || 'Há um novo comentário relacionado ao seu conteúdo.', url: item?.url || item?.link || referenceUrl || '/conta', tone: 'info' }
+  if (type.includes('RESPOST')) return { title: item?.titulo || 'Nova resposta', message: item?.mensagem || item?.texto || 'Responderam a um dos seus comentários.', url: item?.url || item?.link || referenceUrl || '/conta', tone: 'info' }
+  if (type.includes('LIKE') || type.includes('CURTID')) return { title: item?.titulo || 'Nova curtida', message: item?.mensagem || item?.texto || 'Seu conteúdo recebeu uma nova curtida.', url: item?.url || item?.link || referenceUrl || '/conta', tone: 'like' }
+  if (type.includes('AVALI') || type.includes('ESTRELA')) return { title: item?.titulo || 'Nova avaliação', message: item?.mensagem || item?.texto || 'Há uma nova avaliação relacionada ao seu conteúdo.', url: item?.url || item?.link || referenceUrl || '/conta', tone: 'rating' }
 
   return {
     title: item?.titulo || 'Nova atividade',
     message: item?.mensagem || item?.texto || 'Há uma nova interação relacionada à sua conta.',
-    url: item?.url || item?.link || '/conta',
+    url: item?.url || item?.link || referenceUrl || '/conta',
     tone: 'default',
   }
 }
 
 export default function Header() {
-  const { user, loading, logout, refresh } = useAuth()
+  const { user, loading, logout } = useAuth()
   const isLoggedIn = Boolean(user)
+  const userIdentity = String(user?.id ?? user?.email ?? '')
   const location = useLocation()
   const navigate = useNavigate()
   const [menuAberto, setMenuAberto] = useState(false)
@@ -80,6 +99,8 @@ export default function Header() {
   const [buscaAberta, setBuscaAberta] = useState(false)
   const [busca, setBusca] = useState('')
   const [notificacoesAbertas, setNotificacoesAbertas] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
   const accountRef = useRef(null)
   const storeRef = useRef(null)
   const searchRef = useRef(null)
@@ -88,43 +109,56 @@ export default function Header() {
   const lojaAtiva = ['/loja', '/pecas', '/notebooks', '/ofertas', '/produto'].some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`))
   const lojaLabel = getStoreSectionLabel(location)
 
+  const carregarNotificacoes = useCallback(async () => {
+    if (!isLoggedIn) {
+      setNotifications([])
+      setUnreadNotifications(0)
+      return
+    }
+    try {
+      const result = await getNotifications(30)
+      setNotifications(result.notifications)
+      setUnreadNotifications(result.unread)
+    } catch {
+      // A notificação é auxiliar e não deve interromper a navegação.
+    }
+  }, [isLoggedIn, userIdentity])
+
   useEffect(() => {
     document.documentElement.dataset.theme = tema
-    // Mantém também o atributo usado pelo CSS legado do montador/IA.
     document.documentElement.dataset.tema = tema === 'dark' ? 'escuro' : 'claro'
     localStorage.setItem(CHAVE_TEMA, tema)
   }, [tema])
 
   useEffect(() => {
-    if (!isLoggedIn || typeof refresh !== 'function') return undefined
+    if (!isLoggedIn) {
+      setNotifications([])
+      setUnreadNotifications(0)
+      return undefined
+    }
+
     let active = true
     const updateNotifications = () => {
       if (!active || document.visibilityState === 'hidden') return
-      refresh().catch(() => { /* notificação não deve derrubar o Header */ })
+      carregarNotificacoes()
     }
-    const timer = window.setInterval(updateNotifications, 60000)
+
+    updateNotifications()
+    const timer = window.setInterval(updateNotifications, 30000)
     window.addEventListener('focus', updateNotifications)
     return () => {
       active = false
       window.clearInterval(timer)
       window.removeEventListener('focus', updateNotifications)
     }
-  }, [isLoggedIn, refresh])
+  }, [isLoggedIn, userIdentity, carregarNotificacoes])
 
   useEffect(() => {
     function handleOutsideClick(event) {
-      if (accountRef.current && !accountRef.current.contains(event.target)) {
-        setContaAberta(false)
-      }
-      if (storeRef.current && !storeRef.current.contains(event.target)) {
-        setLojaAberta(false)
-      }
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
-        setBuscaAberta(false)
-      }
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
-        setNotificacoesAbertas(false)
-      }
+      if (accountRef.current && !accountRef.current.contains(event.target)) setContaAberta(false)
+      if (storeRef.current && !storeRef.current.contains(event.target)) setLojaAberta(false)
+      if (searchRef.current && !searchRef.current.contains(event.target)) setBuscaAberta(false)
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) setNotificacoesAbertas(false)
     }
 
     function handleKeyDown(event) {
@@ -133,6 +167,7 @@ export default function Header() {
       setLojaAberta(false)
       setContaAberta(false)
       setBuscaAberta(false)
+      setNotificacoesAbertas(false)
     }
 
     document.addEventListener('pointerdown', handleOutsideClick)
@@ -188,11 +223,22 @@ export default function Header() {
 
   async function handleLogout() {
     await logout()
+    setNotifications([])
+    setUnreadNotifications(0)
     fecharMenus()
   }
 
-  const notifications = Array.isArray(user?.notificacoes) ? user.notificacoes : []
-  const unreadNotifications = notifications.filter((item) => item?.lida !== true).length
+  async function abrirNotificacao(item, url) {
+    if (item?.id && item?.lida !== true) {
+      setNotifications((current) => current.map((notification) => (
+        notification?.id === item.id ? { ...notification, lida: true } : notification
+      )))
+      setUnreadNotifications((current) => Math.max(0, current - 1))
+      markNotificationRead(item.id).catch(() => carregarNotificacoes())
+    }
+    fecharMenus()
+    navigate(url)
+  }
 
   return (
     <header className="site-header">
@@ -330,7 +376,7 @@ export default function Header() {
                 onClick={() => {
                   setNotificacoesAbertas((value) => {
                     const next = !value
-                    if (next && typeof refresh === 'function') refresh().catch(() => {})
+                    if (next) carregarNotificacoes()
                     return next
                   })
                   setContaAberta(false); setLojaAberta(false); setBuscaAberta(false)
@@ -340,16 +386,21 @@ export default function Header() {
                 {unreadNotifications > 0 && <b>{unreadNotifications > 99 ? '99+' : unreadNotifications}</b>}
               </button>
               <div className="header-notifications__panel">
-                <header><strong>Notificações</strong><span>Sugestões, comentários, respostas, likes e avaliações</span></header>
+                <header><strong>Notificações</strong><span>Comentários, respostas e alterações nas suas publicações</span></header>
                 {notifications.length ? (
                   <div className="header-notifications__list">
                     {notifications.slice(0, 8).map((item, index) => {
                       const view = notificationView(item)
                       return (
-                        <Link key={item?.id || index} className={`${item?.lida === false ? 'is-unread ' : ''}notification-tone-${view.tone}`.trim()} to={view.url} onClick={fecharMenus}>
+                        <button
+                          key={item?.id || index}
+                          type="button"
+                          className={`${item?.lida === false ? 'is-unread ' : ''}notification-tone-${view.tone}`.trim()}
+                          onClick={() => abrirNotificacao(item, view.url)}
+                        >
                           <strong>{view.title}</strong>
                           <span>{view.message}</span>
-                        </Link>
+                        </button>
                       )
                     })}
                   </div>
