@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
 import { getProductLikeSummary, likeProduct, unlikeProduct } from '../../services/productsService'
 import { asArray, asNumber, asText, formatCurrency, formatRating } from '../../utils/display'
@@ -10,7 +10,6 @@ const productHref = (product) => `/produto/${encodeURIComponent(productReference
 
 export default function ProductCard({ product = {}, onCompare, selected = false }) {
   const navigate = useNavigate()
-  const location = useLocation()
   const { user } = useAuth()
   const userIdentity = String(user?.id ?? user?.email ?? '')
   const currentUserIdentityRef = useRef(userIdentity)
@@ -38,8 +37,6 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
     let active = true
     const productId = Number(product.id)
 
-    // Nunca carrega o Like da conta anterior enquanto a nova sessão é resolvida.
-    // O contador é global, mas o estado colorido do botão pertence ao usuário atual.
     setLiked(false)
     setLikeCount(Number(product.likesCount) || 0)
 
@@ -52,15 +49,13 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
         if (!active || currentUserIdentityRef.current !== userIdentity) return
         const summary = items.find((item) => Number(item?.produtoId) === productId)
         if (!summary) return
-        setLiked(summary.likedByUser === true)
+        setLiked(Boolean(user) && summary.likedByUser === true)
         setLikeCount(Number(summary.likesCount) || 0)
       })
-      .catch(() => {
-        // Em falha de sincronização, é mais seguro não reaproveitar o Like de outra conta.
-      })
+      .catch(() => {})
 
     return () => { active = false }
-  }, [product.id, product.likesCount, userIdentity])
+  }, [product.id, product.likesCount, userIdentity, user])
 
   function openCard(event) {
     if (event.target.closest('a, button, input, select, textarea, label')) return
@@ -76,31 +71,30 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
   }
 
   async function handleLike() {
-    if (likePending) return
-    if (!user) {
-      const retorno = `${location.pathname}${location.search}`
-      navigate(`/entrar?retorno=${encodeURIComponent(retorno)}`)
-      return
-    }
+    if (likePending || !user) return
+
+    const productId = Number(product.id)
+    if (!Number.isInteger(productId) || productId <= 0) return
 
     const requestUserIdentity = userIdentity
     setLikePending(true)
     try {
       const result = liked
-        ? await unlikeProduct(product.id)
-        : await likeProduct(product.id)
+        ? await unlikeProduct(productId)
+        : await likeProduct(productId)
 
-      // Se a conta mudou enquanto a requisição estava em andamento, a resposta
-      // pertence à sessão antiga e não deve alterar o botão da sessão nova.
       if (currentUserIdentityRef.current !== requestUserIdentity) return
 
-      setLiked(result.likedByUser === true)
-      setLikeCount(Number(result.likesCount) || 0)
-    } catch (error) {
-      if (Number(error?.status) === 401) {
-        const retorno = `${location.pathname}${location.search}`
-        navigate(`/entrar?retorno=${encodeURIComponent(retorno)}`)
-      }
+      // O retorno da gravação já contém o total, mas consultamos novamente o
+      // resumo para exibir sempre a contagem autoritativa do banco. Isso evita
+      // que uma troca de conta ou renderização antiga deixe o contador defasado.
+      const items = await getProductLikeSummary([productId]).catch(() => [])
+      const summary = items.find((item) => Number(item?.produtoId) === productId)
+      const authoritative = summary || result
+
+      if (currentUserIdentityRef.current !== requestUserIdentity) return
+      setLiked(authoritative.likedByUser === true)
+      setLikeCount(Number(authoritative.likesCount) || 0)
     } finally {
       setLikePending(false)
     }
@@ -171,10 +165,11 @@ export default function ProductCard({ product = {}, onCompare, selected = false 
           <button
             className={`product-card__like ${liked ? 'is-liked' : ''}`}
             type="button"
-            aria-pressed={liked}
+            aria-pressed={user ? liked : false}
             aria-busy={likePending}
-            aria-label={liked ? `Remover Like de ${name}` : `Dar Like em ${name}`}
-            disabled={likePending}
+            aria-label={!user ? `Entre na sua conta para dar Like em ${name}` : liked ? `Remover Like de ${name}` : `Dar Like em ${name}`}
+            title={!user ? 'Entre na sua conta para dar Like' : undefined}
+            disabled={!user || likePending}
             onClick={handleLike}
           >
             <span aria-hidden="true">♥</span>
