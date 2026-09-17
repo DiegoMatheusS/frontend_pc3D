@@ -1,12 +1,20 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/authContext'
+import { likeProduct, unlikeProduct } from '../../services/productsService'
 import { asArray, asNumber, asText, formatCurrency, formatRating } from '../../utils/display'
 import './ProductCard.css'
 
 const productReference = (product) => product.slug || product.id
 const productHref = (product) => `/produto/${encodeURIComponent(productReference(product))}`
 
-export default function ProductCard({ product = {}, onCompare, selected = false, onLike, liked = false, likeCount = 0 }) {
+export default function ProductCard({ product = {}, onCompare, selected = false }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const { user } = useAuth()
+  const [liked, setLiked] = useState(product.likedByUser === true)
+  const [likeCount, setLikeCount] = useState(Number(product.likesCount) || 0)
+  const [likePending, setLikePending] = useState(false)
   const category = asText(product.category, 'Produto')
   const name = asText(product.name, 'Produto')
   const group = asText(product.group, 'hardwares')
@@ -20,6 +28,11 @@ export default function ProductCard({ product = {}, onCompare, selected = false,
     ? Math.round((1 - price / previousPrice) * 100)
     : 0
 
+  useEffect(() => {
+    setLiked(product.likedByUser === true)
+    setLikeCount(Number(product.likesCount) || 0)
+  }, [product.id, product.likedByUser, product.likesCount])
+
   function openCard(event) {
     if (event.target.closest('a, button, input, select, textarea, label')) return
     navigate(href)
@@ -30,6 +43,31 @@ export default function ProductCard({ product = {}, onCompare, selected = false,
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       navigate(href)
+    }
+  }
+
+  async function handleLike() {
+    if (likePending) return
+    if (!user) {
+      const retorno = `${location.pathname}${location.search}`
+      navigate(`/entrar?retorno=${encodeURIComponent(retorno)}`)
+      return
+    }
+
+    setLikePending(true)
+    try {
+      const result = liked
+        ? await unlikeProduct(product.id)
+        : await likeProduct(product.id)
+      setLiked(result.likedByUser === true)
+      setLikeCount(Number(result.likesCount) || 0)
+    } catch (error) {
+      if (Number(error?.status) === 401) {
+        const retorno = `${location.pathname}${location.search}`
+        navigate(`/entrar?retorno=${encodeURIComponent(retorno)}`)
+      }
+    } finally {
+      setLikePending(false)
     }
   }
 
@@ -95,10 +133,18 @@ export default function ProductCard({ product = {}, onCompare, selected = false,
         </div>
 
         <div className="product-card__social">
-          <button className={`product-card__like ${liked ? 'is-liked' : ''}`} type="button" aria-pressed={liked} onClick={() => onLike?.(product)}>
+          <button
+            className={`product-card__like ${liked ? 'is-liked' : ''}`}
+            type="button"
+            aria-pressed={liked}
+            aria-busy={likePending}
+            aria-label={liked ? `Remover Like de ${name}` : `Dar Like em ${name}`}
+            disabled={likePending}
+            onClick={handleLike}
+          >
             <span aria-hidden="true">♥</span>
-            <span>{liked ? 'Curtido' : 'Like'}</span>
-            <b>{Number(likeCount) || 0}</b>
+            <span>Like</span>
+            <b>{likeCount}</b>
           </button>
         </div>
 
