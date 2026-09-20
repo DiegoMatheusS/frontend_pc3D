@@ -268,7 +268,7 @@ function HardwareCard({ item, index, selected, busy, metaBusy, aiBusy, itemError
       <div className={`admin-discovery-card-actions ${(showMetaAi || metaApplied) ? 'has-meta-ai' : ''} ${(showAi || aiApplied) ? 'has-ai' : ''}`}>
         <button type="button" className="btn btn-secundario btn-pequeno" onClick={() => onOpen(item)} disabled={busy || metaBusy || aiBusy}>Ver ficha completa</button>
         {(showAi || aiApplied) && <button type="button" className="btn btn-pequeno admin-discovery-ai-btn" onClick={() => onAi(item, index)} disabled={busy || metaBusy || aiBusy || aiCompleted}>{aiBusy ? 'Completando com IA...' : aiCompleted ? 'Ficha completada pela IA' : aiApplied ? 'Completar novamente com IA' : 'Completar com IA'}</button>}
-        {(showMetaAi || metaApplied) && <button type="button" className="btn btn-pequeno admin-discovery-meta-ai-btn" onClick={() => onMetaAi(item, index)} disabled={busy || metaBusy || aiBusy || metaApplied}>{metaApplied ? 'Dados complementados' : metaBusy ? 'Analisando resposta...' : 'Completar com Meta AI'}</button>}
+        {(showMetaAi || metaApplied) && <button type="button" className="btn btn-pequeno admin-discovery-meta-ai-btn" onClick={() => onMetaAi(item, index)} disabled={busy || metaBusy || aiBusy}>{metaBusy ? 'Analisando resposta...' : metaApplied ? 'Completar novamente com Meta AI' : 'Completar com Meta AI'}</button>}
         <button type="button" className="btn btn-primario btn-pequeno" onClick={() => onAdd(item, index)} disabled={busy || metaBusy || aiBusy}>{busy ? 'Cadastrando...' : 'Cadastrar'}</button>
       </div>
     </article>
