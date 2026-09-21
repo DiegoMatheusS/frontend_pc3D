@@ -1,20 +1,44 @@
-name: Admin Assistant
+name: Frontend Admin and Store
 
 on:
   pull_request:
     paths:
       - "src/admin/components/AdminAssistant.jsx"
       - "src/admin/Admin.css"
+      - "src/components/Header/**"
+      - "src/pages/Store/**"
+      - "src/pages/ProductDetails/**"
+      - "src/services/productsService.js"
+      - "src/services/normalizers.js"
+      - "src/data/productsMock.js"
       - "src/src/admin/components/AdminAssistant.jsx"
       - "src/src/admin/Admin.css"
-      - "src/src/admin/components/AdminAssistant.jsx"
-      - "src/src/admin/Admin.css"
+      - "src/src/components/Header/**"
+      - "src/src/pages/Store/**"
+      - "src/src/pages/ProductDetails/**"
+      - "src/src/services/productsService.js"
+      - "src/src/services/normalizers.js"
+      - "src/src/data/productsMock.js"
       - ".github/workflows/admin-assistant.yml"
   push:
     branches: [main]
     paths:
       - "src/admin/components/AdminAssistant.jsx"
       - "src/admin/Admin.css"
+      - "src/components/Header/**"
+      - "src/pages/Store/**"
+      - "src/pages/ProductDetails/**"
+      - "src/services/productsService.js"
+      - "src/services/normalizers.js"
+      - "src/data/productsMock.js"
+      - "src/src/admin/components/AdminAssistant.jsx"
+      - "src/src/admin/Admin.css"
+      - "src/src/components/Header/**"
+      - "src/src/pages/Store/**"
+      - "src/src/pages/ProductDetails/**"
+      - "src/src/services/productsService.js"
+      - "src/src/services/normalizers.js"
+      - "src/src/data/productsMock.js"
 
 permissions:
   contents: read
@@ -22,7 +46,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,11 +54,24 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Lint do Assistente Admin
-        run: npx eslint src/admin/components/AdminAssistant.jsx src/src/admin/components/AdminAssistant.jsx
+      - name: Lint das áreas alteradas
+        run: >
+          npx eslint
+          src/admin/components/AdminAssistant.jsx
+          src/src/admin/components/AdminAssistant.jsx
+          src/components/Header/Header.jsx
+          src/src/components/Header/Header.jsx
+          src/pages/Store/Store.jsx
+          src/src/pages/Store/Store.jsx
+          src/pages/ProductDetails/ProductDetails.jsx
+          src/src/pages/ProductDetails/ProductDetails.jsx
+          src/services/productsService.js
+          src/src/services/productsService.js
+          src/services/normalizers.js
+          src/src/services/normalizers.js
       - name: Build da raiz
         run: npm run build
-      - name: Build da raiz configurada como /src
+      - name: Build com /src como raiz
         working-directory: src
         run: |
           npm ci
