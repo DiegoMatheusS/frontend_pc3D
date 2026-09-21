@@ -1,6 +1,7 @@
 export const productGroups = [
   { id: 'todos', label: 'Todos' },
   { id: 'hardwares', label: 'Peças para PC' },
+  { id: 'computadores', label: 'Computadores' },
   { id: 'celulares', label: 'Celulares' },
   { id: 'tablets', label: 'Tablets e leitura' },
   { id: 'notebooks', label: 'Notebooks' },
