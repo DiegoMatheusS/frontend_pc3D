@@ -999,6 +999,8 @@ export default function AdminAssistant({ open, onClose }) {
   }
 
   async function analyzeRegistration(url, affiliateUrl = '') {
+    const flowId = flow?.flowId
+    if (!flowId || activeFlowId.current !== flowId) return
     setSending(true)
     try {
       try {
@@ -1008,6 +1010,7 @@ export default function AdminAssistant({ open, onClose }) {
           ...(flow.action === ACTION_PRODUCT && affiliateUrl ? { urlAfiliada: affiliateUrl } : {}),
         }
         const result = await adminService.chatbot.analyzeRegistration(body)
+        if (activeFlowId.current !== flowId) return
         const readiness = getAiReadiness(result)
         const warnings = Array.isArray(result?.avisos) ? result.avisos : []
         const safePreview = Boolean(
@@ -1052,6 +1055,7 @@ export default function AdminAssistant({ open, onClose }) {
       }
 
       const preview = await adminService.ai.importLink(url)
+      if (activeFlowId.current !== flowId) return
       const previewWithAffiliate = flow.action === ACTION_PRODUCT && affiliateUrl
         ? {
             ...preview,
@@ -1065,28 +1069,31 @@ export default function AdminAssistant({ open, onClose }) {
       setFlow((current) => ({ ...current, step: 'PREVIEW', url, affiliateUrl, preview: previewWithAffiliate, backendReady: false }))
       setMessages((current) => [...current, { role: 'assistente', text: 'A IA analisou o link. O backend de confirmação automática ainda não está disponível, então deixei a prévia pronta para abrir no formulário.' }])
     } catch (error) {
-      setFlow((current) => current ? { ...current, step: 'URL', preview: null } : current)
+      if (activeFlowId.current !== flowId) return
+      setFlow((current) => current && current.flowId === flowId ? { ...current, step: 'URL', preview: null } : current)
       setMessages((current) => [...current, { role: 'assistente', text: error?.message || 'Não foi possível analisar esse link.' }])
     } finally {
-      setSending(false)
+      if (activeFlowId.current === flowId) setSending(false)
     }
   }
 
   async function confirmRegistration() {
+    const flowId = flow?.flowId
     const readiness = getAiReadiness(flow?.preview || {})
     const blockedByReadiness = !flow?.manualComplete && (
       flow?.preview?.podeConfirmar === false
       || readiness.ready === false
       || readiness.enabled === false
     )
-    if (!flow?.backendReady || !flow?.preview?.tokenConfirmacao || sending || blockedByReadiness) return
+    if (!flowId || activeFlowId.current !== flowId || !flow?.backendReady || !flow?.preview?.tokenConfirmacao || sending || blockedByReadiness) return
     setSending(true)
     try {
       await finishRegistration(flow.preview, flow.adjustments || {})
     } catch (error) {
+      if (activeFlowId.current !== flowId) return
       setMessages((current) => [...current, { role: 'assistente', text: error?.message || 'Não foi possível confirmar o cadastro.' }])
     } finally {
-      setSending(false)
+      if (activeFlowId.current === flowId) setSending(false)
     }
   }
 
@@ -1122,8 +1129,9 @@ export default function AdminAssistant({ open, onClose }) {
   }
 
   async function answerRegistrationQuestion(text) {
+    const flowId = flow?.flowId
     const question = flow?.questions?.[flow?.questionIndex || 0]
-    if (!question) return
+    if (!flowId || activeFlowId.current !== flowId || !question) return
     setSending(true)
     try {
       const field = question.field
@@ -1149,6 +1157,7 @@ export default function AdminAssistant({ open, onClose }) {
           categoriaEsperada: value,
         }
         preview = await adminService.chatbot.analyzeRegistration(body)
+        if (activeFlowId.current !== flowId) return
       } else if (field === 'preco' || field === 'precoAnterior') {
         adjustments[field] = value
       } else {
@@ -1197,12 +1206,13 @@ export default function AdminAssistant({ open, onClose }) {
       }))
       setMessages((current) => [...current, { role: 'assistente', text: remaining[0].prompt }])
     } catch (error) {
+      if (activeFlowId.current !== flowId) return
       setMessages((current) => [...current, {
         role: 'assistente',
         text: error?.message || 'Não consegui aplicar essa resposta. Tente novamente.',
       }])
     } finally {
-      setSending(false)
+      if (activeFlowId.current === flowId) setSending(false)
     }
   }
 
@@ -1238,8 +1248,11 @@ export default function AdminAssistant({ open, onClose }) {
   }
 
   const buildStep = flow?.action === ACTION_BUILD ? BUILD_COMPONENT_STEPS[Number(flow?.componentIndex || 0)] : null
+  const buildInfoQuestions = Array.isArray(flow?.buildInfoQuestions) && flow.buildInfoQuestions.length
+    ? flow.buildInfoQuestions
+    : BUILD_INFO_QUESTIONS
   const inputPlaceholder = flow?.action === ACTION_BUILD && flow?.step === 'BUILD_INFO'
-    ? (BUILD_INFO_QUESTIONS[Number(flow?.infoIndex || 0)]?.prompt || 'Responda para continuar...')
+    ? (buildInfoQuestions[Number(flow?.infoIndex || 0)]?.prompt || 'Responda para continuar...')
     : flow?.action === ACTION_BUILD && ['BUILD_COMPONENT', 'BUILD_CANDIDATE'].includes(flow?.step)
       ? buildComponentPrompt(buildStep)
       : flow?.step === 'QUESTIONS'
@@ -1272,26 +1285,36 @@ export default function AdminAssistant({ open, onClose }) {
         {!flow && (canCreateProduct || canCreateHardware || canCreateBuild) && <div className="admin-ia-quick-actions" aria-label="Ações rápidas do assistente">
           {canCreateProduct && <button type="button" onClick={() => startRegistration(ACTION_PRODUCT)}><span aria-hidden="true">＋</span><strong>Cadastrar Produto</strong><small>2 links → IA → cadastro</small></button>}
           {canCreateHardware && <button type="button" onClick={() => startRegistration(ACTION_HARDWARE)}><span aria-hidden="true">◇</span><strong>Cadastrar Hardware</strong><small>Link → ficha técnica</small></button>}
-          {canCreateBuild && <button type="button" onClick={startBuildRegistration}><span aria-hidden="true">PC</span><strong>Cadastrar PC Montado</strong><small>Chat guiado → peças → publicar</small></button>}
+          {canCreateBuild && <button type="button" onClick={startBuildRegistration}><span aria-hidden="true">PC</span><strong>Cadastrar PC Montado</strong><small>Link → IA → peças → publicar</small></button>}
         </div>}
         {messages.map((message,index)=><div key={`${message.role}-${index}`} className={`admin-ia-chat-msg admin-ia-chat-msg--${message.role}`}>{message.text}</div>)}
         {flow?.step === 'PREVIEW' && <RegistrationPreview flow={flow} onConfirm={confirmRegistration} onCancel={cancelRegistration} onOpenForm={openFallbackForm} sending={sending} />}
         {flow?.step === 'BUILD_PREVIEW' && <BuildRegistrationPreview flow={flow} onConfirm={confirmBuildRegistration} onCancel={cancelRegistration} sending={sending} />}
         {sending&&<div className="admin-ia-chat-digitando"><span/><span/><span/></div>}
       </div>
-      {flow?.step === 'URL'
-        ? <RegistrationLinkForm
+      {['URL', 'BUILD_URL'].includes(flow?.step)
+        ? <>
+            {flow && <div className="admin-ia-flow-cancel" aria-label="Cancelar cadastro em andamento">
+              <span><strong>Cadastro em andamento</strong><small>Você pode cancelar a qualquer momento.</small></span>
+              <button type="button" className="btn btn-secundario btn-pequeno" onClick={cancelRegistration}>Cancelar cadastro</button>
+            </div>}
+            <RegistrationLinkForm
             flow={flow}
             onChange={(field, value) => setFlow((current) => current ? { ...current, [field]: value } : current)}
-            onSubmit={analyzeRegistration}
+            onSubmit={flow?.action === ACTION_BUILD ? analyzeBuildLink : analyzeRegistration}
             onCancel={cancelRegistration}
             sending={sending}
           />
+          </>
         : <>
+            {flow && <div className="admin-ia-flow-cancel" aria-label="Cancelar cadastro em andamento">
+              <span><strong>Cadastro em andamento</strong><small>Você pode cancelar a qualquer momento.</small></span>
+              <button type="button" className="btn btn-secundario btn-pequeno" onClick={cancelRegistration}>Cancelar cadastro</button>
+            </div>}
             {!flow && (canCreateProduct || canCreateHardware || canCreateBuild) && <div className="admin-ia-quick-actions admin-ia-quick-actions--bottom" aria-label="Ações de cadastro junto da caixa de mensagem">
               {canCreateProduct && <button type="button" onClick={() => startRegistration(ACTION_PRODUCT)}><span aria-hidden="true">＋</span><strong>Cadastrar Produto</strong><small>2 links → IA → cadastro</small></button>}
               {canCreateHardware && <button type="button" onClick={() => startRegistration(ACTION_HARDWARE)}><span aria-hidden="true">◇</span><strong>Cadastrar Hardware</strong><small>Link → ficha técnica</small></button>}
-              {canCreateBuild && <button type="button" onClick={startBuildRegistration}><span aria-hidden="true">PC</span><strong>Cadastrar PC Montado</strong><small>Chat guiado → peças → publicar</small></button>}
+              {canCreateBuild && <button type="button" onClick={startBuildRegistration}><span aria-hidden="true">PC</span><strong>Cadastrar PC Montado</strong><small>Link → IA → peças → publicar</small></button>}
             </div>}
             {flow?.action === ACTION_BUILD && flow?.step === 'BUILD_CANDIDATE' && Array.isArray(flow?.buildCandidates) && flow.buildCandidates.length > 0 && <div className="admin-ia-build-candidates" aria-label="Opções de Hardware">
               {flow.buildCandidates.map((hardware) => <button key={hardware.id} type="button" onClick={() => appendBuildComponent(hardware)} disabled={sending}>
