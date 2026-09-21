@@ -608,7 +608,12 @@ export default function AdminAssistant({ open, onClose }) {
 
   async function confirmRegistration() {
     const readiness = getAiReadiness(flow?.preview || {})
-    if (!flow?.backendReady || !flow?.preview?.tokenConfirmacao || sending || readiness.ready === false || readiness.enabled === false) return
+    const blockedByReadiness = !flow?.manualComplete && (
+      flow?.preview?.podeConfirmar === false
+      || readiness.ready === false
+      || readiness.enabled === false
+    )
+    if (!flow?.backendReady || !flow?.preview?.tokenConfirmacao || sending || blockedByReadiness) return
     setSending(true)
     try {
       await finishRegistration(flow.preview, flow.adjustments || {})
@@ -765,6 +770,24 @@ export default function AdminAssistant({ open, onClose }) {
     ? (flow?.questions?.[flow?.questionIndex || 0]?.prompt || 'Responda o campo que falta...')
     : 'Pergunte sobre o catálogo...'
 
+  const stickyReadiness = getAiReadiness(flow?.preview || {})
+  const showStickyConfirm = Boolean(
+    flow?.step === 'PREVIEW'
+    && flow?.backendReady
+    && flow?.preview?.tokenConfirmacao
+  )
+  const stickyConfirmDisabled = Boolean(
+    sending
+    || (
+      !flow?.manualComplete
+      && (
+        flow?.preview?.podeConfirmar === false
+        || stickyReadiness.ready === false
+        || stickyReadiness.enabled === false
+      )
+    )
+  )
+
   return (
     <aside className="admin-ia-painel" data-aberto={open ? 'true' : 'false'} aria-hidden={!open}>
       <header className="admin-ia-cabecalho"><div className="admin-ia-cabecalho-info"><span className="admin-ia-cabecalho-icone">✦</span><div><strong>Assistente Admin</strong><small>Backend / catálogo</small></div></div><button className="admin-ia-fechar" type="button" onClick={onClose} aria-label="Fechar">×</button></header>
@@ -785,7 +808,15 @@ export default function AdminAssistant({ open, onClose }) {
             onCancel={cancelRegistration}
             sending={sending}
           />
-        : <form className="admin-ia-entrada" onSubmit={send}><textarea className="admin-ia-textarea" value={draft} onChange={e=>setDraft(e.target.value)} placeholder={inputPlaceholder} maxLength={2000}/><button className="admin-ia-enviar" type="submit" disabled={!draft.trim()||sending}>➤</button></form>}
+        : <>
+            {showStickyConfirm && <div className="admin-ia-bottom-action" aria-label="Ação rápida da prévia">
+              <span><strong>Prévia pronta</strong><small>Revise acima se quiser; não precisa subir para confirmar.</small></span>
+              <button type="button" className="btn btn-primario btn-pequeno" onClick={confirmRegistration} disabled={stickyConfirmDisabled}>
+                {sending ? 'Confirmando...' : 'Confirmar e publicar'}
+              </button>
+            </div>}
+            <form className="admin-ia-entrada" onSubmit={send}><textarea className="admin-ia-textarea" value={draft} onChange={e=>setDraft(e.target.value)} placeholder={inputPlaceholder} maxLength={2000}/><button className="admin-ia-enviar" type="submit" disabled={!draft.trim()||sending}>➤</button></form>
+          </>}
     </aside>
   )
 }
