@@ -26,6 +26,17 @@ const STORE_GROUP_LABELS = {
   setup: 'Setup',
 }
 
+const STORE_SECTION_LABELS = {
+  computadores: 'Computadores',
+  mobilidade: 'Celulares e mobilidade',
+  games: 'Games',
+  'tv-audio-foto-video': 'TV, áudio, foto e vídeo',
+  'casa-inteligente': 'Casa inteligente',
+  eletroportateis: 'Eletroportáteis',
+  'rede-impressao-maker': 'Rede, impressão e maker',
+  'acessorios-ofertas': 'Acessórios e ofertas',
+}
+
 const STORE_CATEGORY_LABELS = {
   celulares: 'Celulares',
   tablets: 'Tablets',
@@ -59,6 +70,7 @@ const STORE_CATEGORY_LABELS = {
 
 const STORE_MENU_SECTIONS = [
   {
+    id: 'computadores',
     title: 'Computadores',
     links: [
       ['Todos os produtos', '/loja'],
@@ -69,6 +81,7 @@ const STORE_MENU_SECTIONS = [
     ],
   },
   {
+    id: 'mobilidade',
     title: 'Celulares e mobilidade',
     links: [
       ['Celulares', '/loja?categoria=celulares'],
@@ -79,6 +92,7 @@ const STORE_MENU_SECTIONS = [
     ],
   },
   {
+    id: 'games',
     title: 'Games',
     links: [
       ['Videogames e consoles', '/loja?categoria=videogames-consoles'],
@@ -89,6 +103,7 @@ const STORE_MENU_SECTIONS = [
     ],
   },
   {
+    id: 'tv-audio-foto-video',
     title: 'TV, áudio, foto e vídeo',
     links: [
       ['Smart TVs', '/loja?categoria=smart-tvs'],
@@ -102,6 +117,7 @@ const STORE_MENU_SECTIONS = [
     ],
   },
   {
+    id: 'casa-inteligente',
     title: 'Casa inteligente',
     links: [
       ['Robôs aspiradores', '/loja?categoria=robos-aspiradores'],
@@ -114,6 +130,7 @@ const STORE_MENU_SECTIONS = [
     ],
   },
   {
+    id: 'eletroportateis',
     title: 'Eletroportáteis',
     links: [
       ['Air fryers', '/loja?categoria=air-fryers'],
@@ -124,6 +141,7 @@ const STORE_MENU_SECTIONS = [
     ],
   },
   {
+    id: 'rede-impressao-maker',
     title: 'Rede, impressão e maker',
     links: [
       ['Roteadores', '/loja?categoria=roteadores'],
@@ -135,6 +153,7 @@ const STORE_MENU_SECTIONS = [
     ],
   },
   {
+    id: 'acessorios-ofertas',
     title: 'Acessórios e ofertas',
     links: [
       ['Carregadores', '/loja?categoria=carregadores'],
@@ -163,8 +182,10 @@ function getStoreSectionLabel(location) {
   if (path.startsWith('/produto')) return 'Produtos'
   if (path === '/loja') {
     const params = new URLSearchParams(location.search)
+    const section = params.get('secao')
     const category = params.get('categoria')
     const group = params.get('grupo')
+    if (section && STORE_SECTION_LABELS[section]) return STORE_SECTION_LABELS[section]
     if (category && STORE_CATEGORY_LABELS[category]) return STORE_CATEGORY_LABELS[category]
     if (group && STORE_GROUP_LABELS[group]) return STORE_GROUP_LABELS[group]
   }
@@ -231,6 +252,9 @@ export default function Header() {
   const notificationsRef = useRef(null)
   const lojaAtiva = ['/loja', '/pecas', '/notebooks', '/ofertas', '/produto'].some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`))
   const lojaLabel = getStoreSectionLabel(location)
+  const lojaSecaoAtiva = location.pathname.startsWith('/loja')
+    ? new URLSearchParams(location.search).get('secao')
+    : null
 
   useEffect(() => {
     document.documentElement.dataset.theme = tema
@@ -377,7 +401,13 @@ export default function Header() {
             <div id="menu-loja" className="store-menu__dropdown store-menu__mega">
               {STORE_MENU_SECTIONS.map((section) => (
                 <section className="store-menu__section" key={section.title}>
-                  <strong>{section.title}</strong>
+                  <Link
+                    className={`store-menu__section-title ${lojaSecaoAtiva === section.id ? 'is-active' : ''}`.trim()}
+                    to={`/loja?secao=${section.id}`}
+                    onClick={fecharMenus}
+                  >
+                    {section.title}
+                  </Link>
                   <div>
                     {section.links.map(([label, to]) => (
                       <NavLink key={to} to={to} onClick={fecharMenus}>{label}</NavLink>
