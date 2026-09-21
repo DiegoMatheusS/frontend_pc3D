@@ -809,6 +809,10 @@ export default function AdminAssistant({ open, onClose }) {
             sending={sending}
           />
         : <>
+            {!flow && (canCreateProduct || canCreateHardware) && <div className="admin-ia-quick-actions admin-ia-quick-actions--bottom" aria-label="Ações de cadastro junto da caixa de mensagem">
+              {canCreateProduct && <button type="button" onClick={() => startRegistration(ACTION_PRODUCT)}><span aria-hidden="true">＋</span><strong>Cadastrar Produto</strong><small>2 links → IA → cadastro</small></button>}
+              {canCreateHardware && <button type="button" onClick={() => startRegistration(ACTION_HARDWARE)}><span aria-hidden="true">◇</span><strong>Cadastrar Hardware</strong><small>Link → ficha técnica</small></button>}
+            </div>}
             {showStickyConfirm && <div className="admin-ia-bottom-action" aria-label="Ação rápida da prévia">
               <span><strong>Prévia pronta</strong><small>Revise acima se quiser; não precisa subir para confirmar.</small></span>
               <button type="button" className="btn btn-primario btn-pequeno" onClick={confirmRegistration} disabled={stickyConfirmDisabled}>
