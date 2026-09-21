@@ -133,13 +133,22 @@
   align-content: start;
   gap: 6px;
 }
-.store-menu__section > strong {
-  padding: 2px 8px 5px;
-  color: var(--color-muted);
-  font-size: 10px;
-  font-weight: 850;
+.store-menu__section-title {
+  display: block;
+  padding: 4px 8px 6px !important;
+  color: var(--color-text) !important;
+  background: transparent;
+  font-size: 10px !important;
+  font-weight: 950;
   letter-spacing: .06em;
+  line-height: 1.2 !important;
   text-transform: uppercase;
+  text-decoration: none;
+}
+.store-menu__section-title:hover,
+.store-menu__section-title.is-active {
+  color: var(--color-primary) !important;
+  background: var(--color-primary-soft);
 }
 .store-menu__section > div {
   display: grid;

@@ -19,6 +19,56 @@ const productLikeCount = (product) => Number(
   product?.likesCount ?? product?.curtidasCount ?? product?.curtidas ?? product?.likes ?? 0,
 ) || 0
 
+const STORE_SECTION_FILTERS = {
+  computadores: {
+    label: 'Computadores',
+    groups: ['hardwares', 'notebooks', 'computadores', 'monitores'],
+    categories: [],
+  },
+  mobilidade: {
+    label: 'Celulares e mobilidade',
+    groups: [],
+    categories: ['celulares', 'tablets', 'relogios-inteligentes', 'e-readers', 'power-banks'],
+  },
+  games: {
+    label: 'Games',
+    groups: [],
+    categories: ['videogames-consoles', 'jogos', 'controles-videogame', 'joysticks', 'volantes'],
+  },
+  'tv-audio-foto-video': {
+    label: 'TV, áudio, foto e vídeo',
+    groups: [],
+    categories: ['smart-tvs', 'projetores', 'cameras', 'cameras-de-acao', 'drones', 'caixas-de-som', 'soundbars', 'home-theaters'],
+  },
+  'casa-inteligente': {
+    label: 'Casa inteligente',
+    groups: [],
+    categories: ['robos-aspiradores', 'aspiradores-de-po', 'smart-speakers', 'cameras-de-seguranca', 'lampadas-inteligentes', 'tomadas-inteligentes', 'fechaduras-inteligentes'],
+  },
+  eletroportateis: {
+    label: 'Eletroportáteis',
+    groups: [],
+    categories: ['air-fryers', 'cafeteiras', 'liquidificadores', 'ventiladores', 'climatizadores'],
+  },
+  'rede-impressao-maker': {
+    label: 'Rede, impressão e maker',
+    groups: [],
+    categories: ['roteadores', 'repetidores-wifi', 'switches-de-rede', 'impressoras', 'scanners', 'impressoras-3d', 'kits-arduino-robotica'],
+  },
+  'acessorios-ofertas': {
+    label: 'Acessórios e ofertas',
+    groups: ['perifericos', 'setup'],
+    categories: ['carregadores', 'cabos-adaptadores', 'hubs-usb', 'dock-stations', 'armazenamento-externo'],
+  },
+}
+
+function matchesStoreSection(product, sectionId) {
+  if (!sectionId) return true
+  const section = STORE_SECTION_FILTERS[sectionId]
+  if (!section) return true
+  return section.groups.includes(product?.group) || section.categories.includes(product?.categoryKey)
+}
+
 const comparisonByCategory = {
   processador: [
     ['Socket', 'socket'], ['Geração', 'generation'], ['Arquitetura', 'architecture'],
@@ -162,6 +212,10 @@ export default function Store({ defaultGroup = 'todos' }) {
   const [loadError, setLoadError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const [searchParams, setSearchParams] = useSearchParams()
+  const requestedSectionId = searchParams.get('secao')
+  const sectionId = requestedSectionId && STORE_SECTION_FILTERS[requestedSectionId]
+    ? requestedSectionId
+    : ''
   const lastSyncedSearchRef = useRef(null)
   const descriptionRequestsRef = useRef(new Set())
   const comparisonDialogRef = useAccessibleDialog(comparisonOpen, setComparisonOpen)
@@ -242,11 +296,17 @@ export default function Store({ defaultGroup = 'todos' }) {
     lastSyncedSearchRef.current = searchKey
 
     const requestedGroup = searchParams.get('grupo')
+    const requestedSection = searchParams.get('secao')
+    const hasRequestedSection = Boolean(
+      requestedSection && STORE_SECTION_FILTERS[requestedSection],
+    )
     const nextGroup = defaultGroup === 'hardwares'
       ? 'hardwares'
-      : requestedGroup && groups.some((item) => item.id === requestedGroup)
-        ? requestedGroup
-        : defaultGroup
+      : hasRequestedSection
+        ? 'todos'
+        : requestedGroup && groups.some((item) => item.id === requestedGroup)
+          ? requestedGroup
+          : defaultGroup
 
     setGroup(nextGroup)
     setQuery(searchParams.get('busca') || '')
@@ -271,7 +331,13 @@ export default function Store({ defaultGroup = 'todos' }) {
     }
   }, [defaultGroup, groups, products, searchParams, setSearchParams])
 
-  const visiblePool = useMemo(() => products.filter((product) => group === 'todos' || product.group === group), [products, group])
+  const visiblePool = useMemo(
+    () => products.filter((product) => (
+      (group === 'todos' || product.group === group)
+      && matchesStoreSection(product, sectionId)
+    )),
+    [products, group, sectionId],
+  )
   const categories = useMemo(() => {
     const values = new Set(visiblePool.map((product) => product.category).filter(Boolean))
     if (defaultGroup === 'hardwares' || group === 'hardwares' || group === 'todos') values.add('Cooler')
@@ -285,6 +351,7 @@ export default function Store({ defaultGroup = 'todos' }) {
     const result = products.filter((product) => {
       const haystack = normalize([product.name, product.brand, product.category, product.description, ...product.tags].join(' '))
       return (group === 'todos' || product.group === group)
+        && matchesStoreSection(product, sectionId)
         && (category === 'todos' || product.category === category)
         && (brand === 'todos' || product.brand === brand)
         && product.price <= max
@@ -300,7 +367,7 @@ export default function Store({ defaultGroup = 'todos' }) {
       if (sortBy === 'nome') return a.name.localeCompare(b.name, 'pt-BR')
       return (b.rating * Math.log10(b.reviewsCount + 10)) - (a.rating * Math.log10(a.reviewsCount + 10))
     })
-  }, [products, query, group, category, brand, maxPrice, sortBy])
+  }, [products, query, group, sectionId, category, brand, maxPrice, sortBy])
 
   const visibleProducts = filtered.slice(0, visibleCount)
   const remainingProducts = Math.max(0, filtered.length - visibleProducts.length)
@@ -360,6 +427,7 @@ export default function Store({ defaultGroup = 'todos' }) {
     const next = new URLSearchParams(searchParams)
     next.delete('categoria')
     next.delete('comparar')
+    next.delete('secao')
     if (nextGroup === 'todos') next.delete('grupo')
     else next.set('grupo', nextGroup)
     setSearchParams(next, { replace: true })
@@ -472,20 +540,26 @@ export default function Store({ defaultGroup = 'todos' }) {
     next.delete('categoria')
     next.delete('comparar')
     next.delete('grupo')
+    next.delete('secao')
     setSearchParams(next, { replace: true })
   }
 
   const activeGroupLabel = groups.find((item) => item.id === group)?.label
+  const activeSectionLabel = sectionId ? STORE_SECTION_FILTERS[sectionId]?.label : ''
   const pageTitle = defaultGroup === 'hardwares'
     ? 'Peças para computador'
-    : group === 'todos'
-      ? 'Todos os produtos'
-      : activeGroupLabel || 'Produtos'
+    : activeSectionLabel
+      ? activeSectionLabel
+      : group === 'todos'
+        ? 'Todos os produtos'
+        : activeGroupLabel || 'Produtos'
   const pageDescription = defaultGroup === 'hardwares'
     ? 'Encontre componentes para montar ou atualizar o computador e compare especificações antes de escolher.'
-    : group === 'todos'
-      ? 'Explore computadores, peças, celulares, tablets, games, TVs, áudio, fotografia, casa inteligente, eletroportáteis, rede e acessórios em um catálogo único.'
-      : `Explore ${String(activeGroupLabel || 'produtos').toLowerCase()} com especificações, comparação e ofertas disponíveis.`
+    : activeSectionLabel
+      ? `Explore somente os produtos de ${activeSectionLabel.toLowerCase()} agrupados nesta seção da Loja.`
+      : group === 'todos'
+        ? 'Explore computadores, peças, celulares, tablets, games, TVs, áudio, fotografia, casa inteligente, eletroportáteis, rede e acessórios em um catálogo único.'
+        : `Explore ${String(activeGroupLabel || 'produtos').toLowerCase()} com especificações, comparação e ofertas disponíveis.`
 
   const activeComparison = comparisonItems.length === 2 ? comparisonItems : compare
   const activeComparisonCategoryKey = activeComparison.length === 2 ? comparisonCategoryKey(activeComparison[0]) : ''
@@ -514,7 +588,7 @@ export default function Store({ defaultGroup = 'todos' }) {
       <div className="store-groups-wrap">
         <div className="page-container store-groups" aria-label="Grupos de produtos">
           {groups.filter((item) => defaultGroup !== 'hardwares' || ['todos', 'hardwares'].includes(item.id)).map((item) => (
-            <button key={item.id} type="button" className={group === item.id ? 'is-active' : ''} onClick={() => changeGroup(item.id)}>{item.label}</button>
+            <button key={item.id} type="button" className={!sectionId && group === item.id ? 'is-active' : ''} onClick={() => changeGroup(item.id)}>{item.label}</button>
           ))}
         </div>
       </div>
