@@ -584,7 +584,7 @@ export default function AdminAssistant({ open, onClose }) {
     try {
       const items = await adminService.hardwares.listForBuild()
       const hardwares = (Array.isArray(items) ? items : []).filter(
-        (hardware) => hardware?.ativo !== false && hardware?.publicado !== false,
+        (hardware) => hardware?.ativo !== false && hardware?.publicado === true,
       )
       if (!hardwares.length) {
         setMessages((current) => [...current, {
