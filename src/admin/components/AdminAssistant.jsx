@@ -145,7 +145,7 @@ function RegistrationLinkForm({ flow, onChange, onSubmit, onCancel, sending }) {
     <form className="admin-ia-link-form" onSubmit={(event) => { event.preventDefault(); if (ready) onSubmit(productUrl, affiliateUrl) }}>
       <div className="admin-ia-link-form__head">
         <strong>{isProduct ? 'Cadastro automático de produto' : 'Analisar Hardware por link'}</strong>
-        <small>{isProduct ? 'Mercado Livre e Shopee usam a API do marketplace quando disponível.' : 'A IA pesquisa a ficha técnica antes de cadastrar.'}</small>
+        <small>{isProduct ? 'Mercado Livre e Shopee usam API oficial quando disponível; Magazine Luiza/Magalu usa o extrator específico do ProjetoIA.' : 'A IA pesquisa a ficha técnica antes de cadastrar.'}</small>
       </div>
       <label>
         <span>Link do produto</span>
@@ -253,7 +253,7 @@ export default function AdminAssistant({ open, onClose }) {
     setMessages((current) => [...current, {
       role: 'assistente',
       text: action === ACTION_PRODUCT
-        ? 'Cole o link do produto e o seu link afiliado nos campos abaixo. Se a análise estiver segura, eu cadastro automaticamente; se houver dúvida, mostro a prévia.'
+        ? 'Cole o link do produto e o seu link afiliado nos campos abaixo. Funciona com Mercado Livre, Shopee e Magazine Luiza/Magalu. Se a análise estiver segura, eu cadastro automaticamente; se houver dúvida, mostro a prévia.'
         : `Cadastrar ${label}: cole o link abaixo. Vou analisar a ficha técnica antes de qualquer cadastro.`,
     }])
   }
