@@ -5,6 +5,150 @@ import './Header.css'
 
 const CHAVE_TEMA = 'pcBuilderTema'
 
+const STORE_GROUP_LABELS = {
+  hardwares: 'Peças para PC',
+  computadores: 'Computadores',
+  celulares: 'Celulares',
+  tablets: 'Tablets',
+  notebooks: 'Notebooks',
+  monitores: 'Monitores',
+  perifericos: 'Periféricos',
+  games: 'Games',
+  'tv-audio': 'TV e Áudio',
+  fotografia: 'Foto e Vídeo',
+  'casa-inteligente': 'Casa Inteligente',
+  eletroportateis: 'Eletroportáteis',
+  rede: 'Rede e Internet',
+  impressao: 'Impressão',
+  wearables: 'Wearables',
+  maker: 'Eletrônica e Maker',
+  acessorios: 'Acessórios',
+  setup: 'Setup',
+}
+
+const STORE_CATEGORY_LABELS = {
+  celulares: 'Celulares',
+  tablets: 'Tablets',
+  'e-readers': 'E-readers',
+  'mini-computadores': 'Mini PCs',
+  'videogames-consoles': 'Videogames',
+  jogos: 'Jogos',
+  'controles-videogame': 'Controles',
+  joysticks: 'Joysticks',
+  volantes: 'Volantes',
+  'smart-tvs': 'Smart TVs',
+  tvs: 'TVs',
+  projetores: 'Projetores',
+  cameras: 'Câmeras',
+  'cameras-de-acao': 'Câmeras de ação',
+  drones: 'Drones',
+  'relogios-inteligentes': 'Smartwatches',
+  'aspiradores-de-po': 'Aspiradores',
+  'robos-aspiradores': 'Robôs aspiradores',
+  'smart-speakers': 'Smart speakers',
+  'cameras-de-seguranca': 'Câmeras de segurança',
+  'lampadas-inteligentes': 'Lâmpadas inteligentes',
+  'tomadas-inteligentes': 'Tomadas inteligentes',
+  'fechaduras-inteligentes': 'Fechaduras inteligentes',
+  'air-fryers': 'Air fryers',
+  cafeteiras: 'Cafeteiras',
+  liquidificadores: 'Liquidificadores',
+  ventiladores: 'Ventiladores',
+  climatizadores: 'Climatizadores',
+}
+
+const STORE_MENU_SECTIONS = [
+  {
+    title: 'Computadores',
+    links: [
+      ['Todos os produtos', '/loja'],
+      ['Peças para PC', '/pecas'],
+      ['Notebooks', '/notebooks'],
+      ['Mini computadores', '/loja?categoria=mini-computadores'],
+      ['Monitores', '/loja?grupo=monitores'],
+    ],
+  },
+  {
+    title: 'Celulares e mobilidade',
+    links: [
+      ['Celulares', '/loja?categoria=celulares'],
+      ['Tablets', '/loja?categoria=tablets'],
+      ['Smartwatches', '/loja?categoria=relogios-inteligentes'],
+      ['E-readers', '/loja?categoria=e-readers'],
+      ['Power banks', '/loja?categoria=power-banks'],
+    ],
+  },
+  {
+    title: 'Games',
+    links: [
+      ['Videogames e consoles', '/loja?categoria=videogames-consoles'],
+      ['Jogos', '/loja?categoria=jogos'],
+      ['Controles', '/loja?categoria=controles-videogame'],
+      ['Joysticks', '/loja?categoria=joysticks'],
+      ['Volantes', '/loja?categoria=volantes'],
+    ],
+  },
+  {
+    title: 'TV, áudio, foto e vídeo',
+    links: [
+      ['Smart TVs', '/loja?categoria=smart-tvs'],
+      ['Projetores', '/loja?categoria=projetores'],
+      ['Câmeras e fotografia', '/loja?categoria=cameras'],
+      ['Câmeras de ação', '/loja?categoria=cameras-de-acao'],
+      ['Drones', '/loja?categoria=drones'],
+      ['Caixas de som', '/loja?categoria=caixas-de-som'],
+      ['Soundbars', '/loja?categoria=soundbars'],
+      ['Home theaters', '/loja?categoria=home-theaters'],
+    ],
+  },
+  {
+    title: 'Casa inteligente',
+    links: [
+      ['Robôs aspiradores', '/loja?categoria=robos-aspiradores'],
+      ['Aspiradores de pó', '/loja?categoria=aspiradores-de-po'],
+      ['Smart speakers', '/loja?categoria=smart-speakers'],
+      ['Câmeras de segurança', '/loja?categoria=cameras-de-seguranca'],
+      ['Lâmpadas inteligentes', '/loja?categoria=lampadas-inteligentes'],
+      ['Tomadas inteligentes', '/loja?categoria=tomadas-inteligentes'],
+      ['Fechaduras inteligentes', '/loja?categoria=fechaduras-inteligentes'],
+    ],
+  },
+  {
+    title: 'Eletroportáteis',
+    links: [
+      ['Air fryers', '/loja?categoria=air-fryers'],
+      ['Cafeteiras', '/loja?categoria=cafeteiras'],
+      ['Liquidificadores', '/loja?categoria=liquidificadores'],
+      ['Ventiladores', '/loja?categoria=ventiladores'],
+      ['Climatizadores', '/loja?categoria=climatizadores'],
+    ],
+  },
+  {
+    title: 'Rede, impressão e maker',
+    links: [
+      ['Roteadores', '/loja?categoria=roteadores'],
+      ['Repetidores Wi-Fi', '/loja?categoria=repetidores-wifi'],
+      ['Switches de rede', '/loja?categoria=switches-de-rede'],
+      ['Impressoras e scanners', '/loja?grupo=impressao'],
+      ['Impressoras 3D', '/loja?categoria=impressoras-3d'],
+      ['Arduino e robótica', '/loja?categoria=kits-arduino-robotica'],
+    ],
+  },
+  {
+    title: 'Acessórios e ofertas',
+    links: [
+      ['Carregadores', '/loja?categoria=carregadores'],
+      ['Cabos e adaptadores', '/loja?categoria=cabos-adaptadores'],
+      ['Hubs e docks', '/loja?grupo=acessorios'],
+      ['Armazenamento externo', '/loja?categoria=armazenamento-externo'],
+      ['Periféricos', '/loja?grupo=perifericos'],
+      ['Setup', '/loja?grupo=setup'],
+      ['Ofertas', '/ofertas'],
+    ],
+  },
+]
+
+
 function obterTemaInicial() {
   const salvo = localStorage.getItem(CHAVE_TEMA)
   if (salvo === 'dark' || salvo === 'light') return salvo
@@ -19,10 +163,10 @@ function getStoreSectionLabel(location) {
   if (path.startsWith('/produto')) return 'Produtos'
   if (path === '/loja') {
     const params = new URLSearchParams(location.search)
+    const category = params.get('categoria')
     const group = params.get('grupo')
-    if (group === 'perifericos') return 'Periféricos'
-    if (group === 'monitores') return 'Monitores'
-    if (group === 'setup') return 'Setup'
+    if (category && STORE_CATEGORY_LABELS[category]) return STORE_CATEGORY_LABELS[category]
+    if (group && STORE_GROUP_LABELS[group]) return STORE_GROUP_LABELS[group]
   }
   return 'Loja'
 }
@@ -230,14 +374,17 @@ export default function Header() {
             >
               <span className="store-menu__label">{lojaLabel}</span> <span aria-hidden="true">▾</span>
             </button>
-            <div id="menu-loja" className="store-menu__dropdown">
-              <NavLink to="/loja" onClick={fecharMenus}>Todos os produtos</NavLink>
-              <NavLink to="/pecas" onClick={fecharMenus}>Peças</NavLink>
-              <NavLink to="/loja?grupo=perifericos" onClick={fecharMenus}>Periféricos</NavLink>
-              <NavLink to="/loja?grupo=monitores" onClick={fecharMenus}>Monitores</NavLink>
-              <NavLink to="/notebooks" onClick={fecharMenus}>Notebooks</NavLink>
-              <NavLink to="/loja?grupo=setup" onClick={fecharMenus}>Setup</NavLink>
-              <NavLink to="/ofertas" onClick={fecharMenus}>Ofertas</NavLink>
+            <div id="menu-loja" className="store-menu__dropdown store-menu__mega">
+              {STORE_MENU_SECTIONS.map((section) => (
+                <section className="store-menu__section" key={section.title}>
+                  <strong>{section.title}</strong>
+                  <div>
+                    {section.links.map(([label, to]) => (
+                      <NavLink key={to} to={to} onClick={fecharMenus}>{label}</NavLink>
+                    ))}
+                  </div>
+                </section>
+              ))}
             </div>
           </div>
 
