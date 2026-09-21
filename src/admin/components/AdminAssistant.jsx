@@ -95,7 +95,11 @@ function buildLinkedComponents(preview, hardwares = []) {
         if (candidate?.publicado !== true || candidate?.ativo === false) return false
         if (clean(candidate?.categoria).toUpperCase() !== categoria) return false
         const haystack = hardwareSearchText(candidate)
-        return targetTokens.some((token) => haystack.includes(token) || token.includes(normalizedAnswerKey(candidate?.modelo)))
+        const candidateModel = normalizedAnswerKey(candidate?.modelo)
+        return targetTokens.some((token) => (
+          haystack.includes(token)
+          || (candidateModel.length >= 3 && token.includes(candidateModel))
+        ))
       })
       if (candidates.length === 1) {
         hardware = candidates[0]
