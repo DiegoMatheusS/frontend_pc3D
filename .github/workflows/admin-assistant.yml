@@ -5,6 +5,10 @@ on:
     paths:
       - "src/admin/components/AdminAssistant.jsx"
       - "src/admin/Admin.css"
+      - "src/src/admin/components/AdminAssistant.jsx"
+      - "src/src/admin/Admin.css"
+      - "src/src/admin/components/AdminAssistant.jsx"
+      - "src/src/admin/Admin.css"
       - ".github/workflows/admin-assistant.yml"
   push:
     branches: [main]
@@ -27,6 +31,11 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Lint do Assistente Admin
-        run: npx eslint src/admin/components/AdminAssistant.jsx
-      - name: Build
+        run: npx eslint src/admin/components/AdminAssistant.jsx src/src/admin/components/AdminAssistant.jsx
+      - name: Build da raiz
         run: npm run build
+      - name: Build da raiz configurada como /src
+        working-directory: src
+        run: |
+          npm ci
+          npm run build
