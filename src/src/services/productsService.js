@@ -6,13 +6,31 @@ export function getProductGroups() {
   return Promise.resolve(structuredClone(productGroups))
 }
 
-export function getProducts() {
+async function getProductPage(page) {
   return apiFirst({
-    key: 'catalogo',
-    path: '/api/produtos?pagina=1&limite=100',
-    fallback: () => structuredClone(productsMock),
-    transform: (payload) => extractList(payload, ['produtos']).map(normalizeProduct),
+    key: `catalogo-${page}`,
+    path: `/api/produtos?pagina=${page}&limite=100`,
+    fallback: () => ({
+      products: page === 1 ? structuredClone(productsMock) : [],
+      totalPages: 1,
+    }),
+    transform: (payload) => ({
+      products: extractList(payload, ['produtos']).map(normalizeProduct),
+      totalPages: Math.max(1, Number(payload?.totalPaginas ?? payload?.totalPages ?? 1) || 1),
+    }),
   })
+}
+
+export async function getProducts() {
+  const first = await getProductPage(1)
+  const pageCount = Math.min(first.totalPages, 50)
+  const remaining = pageCount > 1
+    ? await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) => getProductPage(index + 2)))
+    : []
+  return [
+    ...first.products,
+    ...remaining.flatMap((page) => page.products),
+  ]
 }
 
 export function getProductById(id) {
