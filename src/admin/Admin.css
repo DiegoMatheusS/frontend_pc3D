@@ -390,6 +390,54 @@
 .admin-ia-link-form__actions .btn { justify-content: center; }
 .admin-ia-link-form__note { margin: 0; }
 
+
+.admin-ia-registration-price strong { color: var(--admin-primary); font-size: 13px; }
+.admin-ia-collected-description,
+.admin-ia-registration-links,
+.admin-ia-collected-data {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  background: var(--admin-surface);
+}
+.admin-ia-collected-description > span,
+.admin-ia-registration-links > div > span,
+.admin-ia-collected-data > span {
+  color: var(--admin-muted);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.admin-ia-collected-description p { margin: 0; max-height: 90px; overflow: auto; font-size: 11px; line-height: 1.45; }
+.admin-ia-registration-links > div { min-width: 0; display: grid; gap: 3px; }
+.admin-ia-registration-links a,
+.admin-ia-registration-links strong {
+  min-width: 0;
+  color: var(--admin-text);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.admin-ia-registration-links a { color: var(--admin-primary); text-decoration: none; }
+.admin-ia-registration-links a:hover { text-decoration: underline; }
+.admin-ia-collected-data > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
+.admin-ia-collected-data p {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 7px;
+  background: var(--admin-surface-2);
+}
+.admin-ia-collected-data b { color: var(--admin-muted); font-size: 8px; font-weight: 800; }
+.admin-ia-collected-data strong { font-size: 10px; font-weight: 750; overflow-wrap: anywhere; }
+@media (max-width: 430px) { .admin-ia-collected-data > div { grid-template-columns: 1fr; } }
+
 .admin-ia-entrada { flex-shrink: 0; padding: 10px 14px; border-top: 1px solid var(--admin-border); display: flex; gap: 8px; align-items: flex-end; }
 .admin-ia-textarea { flex: 1; min-height: 38px; max-height: 110px; padding: 8px 11px; border: 1px solid var(--admin-border); border-radius: 8px; background: var(--admin-surface-2); color: var(--admin-text); font-size: 13px; resize: none; line-height: 1.45; outline: none; }
 .admin-ia-textarea:focus { border-color: var(--admin-primary); }
