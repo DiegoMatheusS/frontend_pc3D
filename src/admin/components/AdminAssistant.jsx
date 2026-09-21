@@ -295,6 +295,7 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
 
       {technicalEntries.length > 0 && <div className="admin-ia-collected-data"><span>Dados coletados pela IA</span><div>{technicalEntries.map(([key, value]) => <p key={key}><b>{humanizeField(key)}</b><strong>{String(value)}</strong></p>)}</div></div>}
       {flow.action === ACTION_HARDWARE && price && <p className="admin-ia-registration-note">O preço foi encontrado no anúncio apenas para conferência e não será salvo no Hardware.</p>}
+      {flow.action === ACTION_PRODUCT && !price && <p className="admin-ia-registration-note">Os dados do Produto foram preservados, mas o preço não foi identificado. Abra o cadastro para informar somente o preço que faltou.</p>}
       {summary.actions.length > 0 && <div className="admin-ia-registration-plan"><span>Plano do backend</span><strong>{summary.actions.map((item) => String(item).replaceAll('_', ' ')).join(' → ')}</strong></div>}
       {summary.warnings.length > 0 && <div className="admin-ia-registration-warning"><strong>Revisar</strong>{summary.warnings.slice(0, 4).map((item, index) => <span key={index}>{String(item)}</span>)}</div>}
 
@@ -302,7 +303,7 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
 
       <div className="admin-ia-registration-actions">
         <button type="button" className="btn btn-secundario btn-pequeno" onClick={onCancel} disabled={sending}>Cancelar</button>
-        {flow.backendReady && <button type="button" className="btn btn-secundario btn-pequeno" onClick={onOpenForm} disabled={sending}>Corrigir dados</button>}
+        {flow.backendReady && <button type="button" className="btn btn-secundario btn-pequeno" onClick={onOpenForm} disabled={sending}>{flow.action === ACTION_PRODUCT && !price ? 'Abrir cadastro e informar preço' : 'Corrigir dados'}</button>}
         {flow.backendReady
           ? <button type="button" className="btn btn-primario btn-pequeno" onClick={onConfirm} disabled={sending || !flow.preview?.tokenConfirmacao || flow.preview?.podeConfirmar === false || readiness.ready === false || readiness.enabled === false}>{sending ? 'Confirmando...' : 'Confirmar cadastro'}</button>
           : <button type="button" className="btn btn-primario btn-pequeno" onClick={onOpenForm} disabled={sending}>Abrir cadastro</button>}

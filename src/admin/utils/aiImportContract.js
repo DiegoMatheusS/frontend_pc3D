@@ -117,11 +117,19 @@ function normalizeTechnicalAliases(category, spec = {}, context = '') {
 }
 
 export function getAiCategory(response = {}) {
+  const analysis = object(response?.analise || response?.analysis)
+  const analysisHardware = object(analysis?.hardware?.dadosDetectados || analysis?.hardware?.dados || analysis?.hardware?.data)
+  const analysisProduct = object(analysis?.produto?.dadosDetectados || analysis?.produto?.dados || analysis?.produto?.data)
   const cadastroPayload = object(response?.cadastroSugerido?.payload)
-  const partialPayload = object(response?.resultadoProdutoIa?.payloadParcialBackend)
+  const directPartialPayload = object(response?.payloadParcialBackend)
+  const nestedPartialPayload = object(response?.resultadoProdutoIa?.payloadParcialBackend)
   return normalizeCategory(
     cadastroPayload.categoria
-    || partialPayload.categoria
+    || directPartialPayload.categoria
+    || nestedPartialPayload.categoria
+    || analysis?.categoria
+    || analysisHardware.categoria
+    || analysisProduct.categoria
     || response?.categoriaSugerida
     || response?.categoriaDetectada
     || response?.resultadoProdutoIa?.categoriaDetectada,
@@ -129,30 +137,47 @@ export function getAiCategory(response = {}) {
 }
 
 export function getAiPayload(response = {}) {
+  const analysis = object(response?.analise || response?.analysis)
+  const analysisHardware = object(analysis?.hardware?.dadosDetectados || analysis?.hardware?.dados || analysis?.hardware?.data)
+  const analysisProduct = object(analysis?.produto?.dadosDetectados || analysis?.produto?.dados || analysis?.produto?.data)
   const cadastroPayload = object(response?.cadastroSugerido?.payload)
-  const partialPayload = object(response?.resultadoProdutoIa?.payloadParcialBackend)
+  const directPartialPayload = object(response?.payloadParcialBackend)
+  const nestedPartialPayload = object(response?.resultadoProdutoIa?.payloadParcialBackend)
   const actionPayload = object(response?.acaoFrontend?.payloadInicial)
   const confirmationBody = object(response?.confirmacaoSugerida?.body)
   const legacyNormalized = object(response?.normalizacao?.camposNormalizados)
-  const foundSpecs = object(response?.resultadoProdutoIa?.especificacoesEncontradas)
+  const foundSpecs = {
+    ...object(response?.especificacoesEncontradas),
+    ...object(response?.resultadoProdutoIa?.especificacoesEncontradas),
+    ...object(analysis?.produto?.especificacoesEncontradas),
+  }
 
   const category = getAiCategory(response)
   const specKey = SPEC_KEY_BY_CATEGORY[category]
   const primaryPayload = Object.keys(cadastroPayload).length ? cadastroPayload
-    : Object.keys(partialPayload).length ? partialPayload
-      : Object.keys(actionPayload).length ? actionPayload
-        : Object.keys(confirmationBody).length ? confirmationBody
-          : legacyNormalized
+    : Object.keys(analysisProduct).length ? analysisProduct
+      : Object.keys(analysisHardware).length ? analysisHardware
+        : Object.keys(directPartialPayload).length ? directPartialPayload
+          : Object.keys(nestedPartialPayload).length ? nestedPartialPayload
+            : Object.keys(actionPayload).length ? actionPayload
+              : Object.keys(confirmationBody).length ? confirmationBody
+                : legacyNormalized
 
   const merged = {
     ...legacyNormalized,
     ...actionPayload,
     ...confirmationBody,
-    ...partialPayload,
+    ...nestedPartialPayload,
+    ...directPartialPayload,
+    ...analysisHardware,
+    ...analysisProduct,
     ...cadastroPayload,
   }
 
-  const partialSpec = specKey ? object(partialPayload?.[specKey]) : {}
+  const partialSpec = specKey ? object(nestedPartialPayload?.[specKey]) : {}
+  const directPartialSpec = specKey ? object(directPartialPayload?.[specKey]) : {}
+  const analysisHardwareSpec = specKey ? object(analysisHardware?.[specKey]) : {}
+  const analysisProductSpec = specKey ? object(analysisProduct?.[specKey]) : {}
   const cadastroSpec = specKey ? object(cadastroPayload?.[specKey]) : {}
   const primarySpec = specKey ? object(primaryPayload?.[specKey]) : {}
   const technicalContext = [
@@ -167,6 +192,9 @@ export function getAiPayload(response = {}) {
   const normalizedSpec = normalizeTechnicalAliases(category, {
     ...foundSpecs,
     ...partialSpec,
+    ...directPartialSpec,
+    ...analysisHardwareSpec,
+    ...analysisProductSpec,
     ...cadastroSpec,
     ...primarySpec,
   }, technicalContext)
@@ -188,32 +216,36 @@ export function getAiPayload(response = {}) {
 }
 
 export function getAiOffer(response = {}) {
+  const analysis = object(response?.analise || response?.analysis)
+  const analysisOffer = object(analysis?.oferta?.dadosDetectados || analysis?.oferta?.dados || analysis?.oferta?.data)
   const suggested = object(response?.ofertaSugerida)
   const nested = object(response?.resultadoProdutoIa?.ofertaColetada)
   const collected = object(response?.ofertaColetada)
-  const offer = { ...suggested, ...nested, ...collected }
+  const offer = { ...suggested, ...nested, ...collected, ...analysisOffer }
   if (!Object.keys(offer).length) return null
   return {
     ...offer,
     // Preço e disponibilidade têm como fonte principal ofertaColetada.
-    preco: safeValue(collected.preco ?? nested.preco ?? suggested.preco),
-    precoAnterior: safeValue(collected.precoAnterior ?? nested.precoAnterior ?? suggested.precoAnterior),
-    disponivel: collected.disponivel ?? nested.disponivel ?? suggested.disponivel ?? true,
-    parceiroId: collected.parceiroId ?? nested.parceiroId ?? suggested.parceiroId,
-    parceiroNome: collected.parceiroNome ?? nested.parceiroNome ?? suggested.parceiroNome,
-    urlOriginal: safeText(collected.urlOriginal)
+    preco: safeValue(analysisOffer.preco ?? collected.preco ?? nested.preco ?? suggested.preco),
+    precoAnterior: safeValue(analysisOffer.precoAnterior ?? collected.precoAnterior ?? nested.precoAnterior ?? suggested.precoAnterior),
+    disponivel: analysisOffer.disponivel ?? collected.disponivel ?? nested.disponivel ?? suggested.disponivel ?? true,
+    parceiroId: analysisOffer.parceiroId ?? analysis?.oferta?.parceiro?.id ?? collected.parceiroId ?? nested.parceiroId ?? suggested.parceiroId,
+    parceiroNome: analysisOffer.parceiroNome ?? analysis?.oferta?.parceiro?.nome ?? collected.parceiroNome ?? nested.parceiroNome ?? suggested.parceiroNome,
+    urlOriginal: safeText(analysisOffer.urlOriginal)
+      || safeText(collected.urlOriginal)
       || safeText(collected.urlProduto)
       || safeText(nested.urlOriginal)
       || safeText(nested.urlProduto)
       || safeText(suggested.urlOriginal)
       || safeText(suggested.urlProduto),
     // Nunca inventar URL afiliada no frontend; apenas reaproveitar o que o backend enviar.
-    urlAfiliada: safeText(collected.urlAfiliada ?? nested.urlAfiliada ?? suggested.urlAfiliada),
+    urlAfiliada: safeText(analysisOffer.urlAfiliada ?? collected.urlAfiliada ?? nested.urlAfiliada ?? suggested.urlAfiliada),
   }
 }
 
 export function getAiMissingFields(response = {}) {
   const value = response?.cadastroSugerido?.camposObrigatoriosAusentes
+    ?? response?.camposObrigatoriosAusentes
     ?? response?.resultadoProdutoIa?.camposObrigatoriosAusentes
     ?? response?.normalizacao?.ausentes
     ?? []
