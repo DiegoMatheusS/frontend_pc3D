@@ -23,6 +23,62 @@ function formatPrice(value) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(number)
 }
 
+function humanizeField(key) {
+  const labels = {
+    mpn: 'MPN',
+    gtin: 'GTIN / EAN',
+    ean: 'EAN',
+    sku: 'SKU',
+    urlOriginal: 'Link do produto',
+    urlAfiliada: 'Link afiliado',
+    codigoMarketplace: 'Código marketplace',
+    fontePreco: 'Fonte do preço',
+    disponivel: 'Disponibilidade',
+    descricao: 'Descrição',
+    nome: 'Nome',
+    marca: 'Marca',
+    modelo: 'Modelo',
+    imagemUrl: 'Imagem',
+  }
+  if (labels[key]) return labels[key]
+  return String(key || '')
+    .replace(/^especificacao/i, '')
+    .replaceAll('_', ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .trim()
+    .replace(/^./, (letter) => letter.toUpperCase())
+}
+
+function previewValue(value) {
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
+  if (Array.isArray(value)) {
+    const items = value.filter((item) => ['string', 'number', 'boolean'].includes(typeof item))
+    return items.length ? items.map((item) => previewValue(item)).join(', ') : ''
+  }
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : ''
+  if (typeof value === 'string') return value.trim()
+  return ''
+}
+
+function flattenPreviewData(source = {}, depth = 0) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return []
+  const entries = []
+  Object.entries(source).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === '') return
+    const simple = previewValue(value)
+    if (simple) {
+      entries.push([key, simple])
+      return
+    }
+    if (depth < 1 && value && typeof value === 'object' && !Array.isArray(value)) {
+      flattenPreviewData(value, depth + 1).forEach(([childKey, childValue]) => {
+        entries.push([childKey, childValue])
+      })
+    }
+  })
+  return entries
+}
+
 function validPublicUrl(value) {
   try {
     const url = new URL(clean(value))
@@ -75,12 +131,19 @@ function normalizeAutomaticPreview(data = {}) {
     name: clean(productData?.nome || hardwareData?.nome || data?.nome),
     brand: clean(productData?.marca || hardwareData?.marca),
     model: clean(productData?.modelo || hardwareData?.modelo),
-    category: clean(analysis?.categoria || data?.categoria || hardwareData?.categoria || data?.categoriaDetectada),
+    category: clean(analysis?.categoria || data?.categoria || productData?.categoria || hardwareData?.categoria || data?.categoriaDetectada),
     image: clean(productData?.imagemUrl || hardwareData?.imagemUrl),
-    price: offerData?.preco ?? offer?.preco,
-    previousPrice: offerData?.precoAnterior ?? offer?.precoAnterior,
+    description: clean(productData?.descricao || hardwareData?.descricao),
+    mpn: clean(productData?.mpn || hardwareData?.mpn),
+    gtin: clean(productData?.gtin || productData?.ean || hardwareData?.gtin || hardwareData?.ean),
+    price: offerData?.preco ?? offer?.preco ?? data?.preco,
+    previousPrice: offerData?.precoAnterior ?? offer?.precoAnterior ?? data?.precoAnterior,
+    available: offerData?.disponivel ?? offer?.disponivel,
     partner: clean(offerData?.parceiroNome || offer?.parceiroNome || offerData?.parceiro?.nome || offer?.parceiro?.nome),
     affiliateUrl: clean(offerData?.urlAfiliada || offer?.urlAfiliada),
+    originalUrl: clean(offerData?.urlOriginal || offer?.urlOriginal),
+    marketplaceCode: clean(offerData?.codigoMarketplace || offer?.codigoMarketplace),
+    priceSource: clean(offerData?.fontePreco || offer?.fontePreco),
     hardwareExisting: hardware?.existente,
     hardwareId: hardware?.id,
     productExisting: product?.existente ?? Boolean(getAiReconciliation(data)?.produtoExistente),
@@ -93,7 +156,7 @@ function normalizeAutomaticPreview(data = {}) {
       ...missing.map((field) => `Campo para revisão: ${field}`),
       ...conflicts.map((item) => typeof item === 'string' ? item : `Conflito em ${item?.campo || 'campo técnico'}`),
     ],
-    technical: source,
+    technical: { ...hardwareData, ...productData },
   }
 }
 
@@ -107,10 +170,17 @@ function normalizeFallbackPreview(preview = {}) {
     model: clean(source.modelo),
     category: clean(source.categoria || preview?.categoriaDetectada || preview?.categoriaSugerida),
     image: clean(source.imagemUrl),
+    description: clean(source.descricao),
+    mpn: clean(source.mpn),
+    gtin: clean(source.gtin || source.ean),
     price: offer?.preco,
     previousPrice: offer?.precoAnterior,
+    available: offer?.disponivel,
     partner: clean(offer?.parceiroNome || offer?.parceiro?.nome),
     affiliateUrl: clean(offer?.urlAfiliada),
+    originalUrl: clean(offer?.urlOriginal),
+    marketplaceCode: clean(offer?.codigoMarketplace),
+    priceSource: clean(offer?.fontePreco),
     hardwareExisting: reconciliation?.hardwareExistente ? true : undefined,
     hardwareId: reconciliation?.hardwareExistente?.id,
     productExisting: reconciliation?.produtoExistente ? true : undefined,
@@ -190,10 +260,12 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
   const price = formatPrice(summary.price)
   const previousPrice = formatPrice(summary.previousPrice)
   const readiness = getAiReadiness(flow.preview)
-  const identityKeys = new Set(['nome','marca','modelo','descricao','mpn','gtin','ean','imagemUrl','categoria','metadados'])
-  const technicalEntries = Object.entries(summary.technical || {})
-    .filter(([key, value]) => !identityKeys.has(key) && value !== null && value !== '' && typeof value !== 'object')
-    .slice(0, 6)
+  const identityKeys = new Set(['nome','marca','modelo','descricao','mpn','gtin','ean','imagemUrl','categoria','metadados','urlOriginal','urlAfiliada'])
+  const technicalEntries = flattenPreviewData(summary.technical || {})
+    .filter(([key, value]) => !identityKeys.has(key) && value)
+    .slice(0, 12)
+  const originalUrl = summary.originalUrl || clean(flow?.url)
+  const affiliateUrl = summary.affiliateUrl || clean(flow?.affiliateUrl)
 
   return (
     <section className="admin-ia-registration-card" aria-label="Prévia do cadastro por IA">
@@ -210,12 +282,27 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
         <div><span>Hardware</span><strong>{entityStatus(summary.hardwareExisting, summary.hardwareId, 'Será criado se necessário')}</strong></div>
         {flow.action === ACTION_PRODUCT && <div><span>Produto</span><strong>{entityStatus(summary.productExisting, summary.productId, 'Será criado')}</strong></div>}
         {flow.action === ACTION_PRODUCT && <div><span>Oferta</span><strong>{entityStatus(summary.offerExisting, summary.offerId, 'Será criada/atualizada')}</strong></div>}
-        {price && <div><span>{flow.action === ACTION_PRODUCT ? 'Preço' : 'Preço encontrado'}</span><strong>{price}</strong>{previousPrice && previousPrice !== price ? <small>Antes: {previousPrice}</small> : null}</div>}
+        {flow.action === ACTION_PRODUCT && <div className="admin-ia-registration-price"><span>Preço</span><strong>{price || 'Não identificado'}</strong>{previousPrice && previousPrice !== price ? <small>Antes: {previousPrice}</small> : null}</div>}
         {flow.action === ACTION_PRODUCT && summary.partner && <div><span>Parceiro</span><strong>{summary.partner}</strong></div>}
-        {flow.action === ACTION_PRODUCT && summary.affiliateUrl && <div><span>Link afiliado</span><strong>Informado ✓</strong></div>}
+        {summary.brand && <div><span>Marca</span><strong>{summary.brand}</strong></div>}
+        {summary.model && <div><span>Modelo</span><strong>{summary.model}</strong></div>}
+        {summary.mpn && <div><span>MPN</span><strong>{summary.mpn}</strong></div>}
+        {summary.gtin && <div><span>GTIN / EAN</span><strong>{summary.gtin}</strong></div>}
+        {flow.action === ACTION_PRODUCT && summary.available !== undefined && <div><span>Disponibilidade</span><strong>{summary.available ? 'Disponível' : 'Indisponível'}</strong></div>}
       </div>
 
-      {technicalEntries.length > 0 && <div className="admin-ia-registration-plan"><span>Principais dados técnicos</span><strong>{technicalEntries.map(([key, value]) => `${key}: ${String(value)}`).join(' · ')}</strong></div>}
+      {summary.description && <div className="admin-ia-collected-description"><span>Descrição coletada</span><p>{summary.description}</p></div>}
+
+      {flow.action === ACTION_PRODUCT && (
+        <div className="admin-ia-registration-links">
+          {originalUrl && <div><span>Link do produto</span><a href={originalUrl} target="_blank" rel="noreferrer">{originalUrl}</a></div>}
+          {affiliateUrl && <div><span>Link afiliado</span><a href={affiliateUrl} target="_blank" rel="noreferrer">{affiliateUrl}</a></div>}
+          {summary.marketplaceCode && <div><span>Código marketplace</span><strong>{summary.marketplaceCode}</strong></div>}
+          {summary.priceSource && <div><span>Fonte do preço</span><strong>{summary.priceSource}</strong></div>}
+        </div>
+      )}
+
+      {technicalEntries.length > 0 && <div className="admin-ia-collected-data"><span>Dados coletados pela IA</span><div>{technicalEntries.map(([key, value]) => <p key={key}><b>{humanizeField(key)}</b><strong>{String(value)}</strong></p>)}</div></div>}
       {flow.action === ACTION_HARDWARE && price && <p className="admin-ia-registration-note">O preço foi encontrado no anúncio apenas para conferência e não será salvo no Hardware.</p>}
       {summary.actions.length > 0 && <div className="admin-ia-registration-plan"><span>Plano do backend</span><strong>{summary.actions.map((item) => String(item).replaceAll('_', ' ')).join(' → ')}</strong></div>}
       {summary.warnings.length > 0 && <div className="admin-ia-registration-warning"><strong>Revisar</strong>{summary.warnings.slice(0, 4).map((item, index) => <span key={index}>{String(item)}</span>)}</div>}
@@ -226,7 +313,7 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
         <button type="button" className="btn btn-secundario btn-pequeno" onClick={onCancel} disabled={sending}>Cancelar</button>
         {flow.backendReady && <button type="button" className="btn btn-secundario btn-pequeno" onClick={onOpenForm} disabled={sending}>Corrigir dados</button>}
         {flow.backendReady
-          ? <button type="button" className="btn btn-primario btn-pequeno" onClick={onConfirm} disabled={sending || !flow.preview?.tokenConfirmacao || readiness.ready === false || readiness.enabled === false}>{sending ? 'Confirmando...' : 'Confirmar cadastro'}</button>
+          ? <button type="button" className="btn btn-primario btn-pequeno" onClick={onConfirm} disabled={sending || !flow.preview?.tokenConfirmacao || flow.preview?.podeConfirmar === false || readiness.ready === false || readiness.enabled === false}>{sending ? 'Confirmando...' : 'Confirmar cadastro'}</button>
           : <button type="button" className="btn btn-primario btn-pequeno" onClick={onOpenForm} disabled={sending}>Abrir cadastro</button>}
       </div>
     </section>
