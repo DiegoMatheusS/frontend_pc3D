@@ -73,16 +73,39 @@ function buildLinkedComponents(preview, hardwares = []) {
   const hardwareById = new Map((hardwares || []).map((hardware) => [Number(hardware.id), hardware]))
   const raw = [
     ...linked,
-    ...(Array.isArray(detected) ? detected.filter((item) => Number(item?.hardwareId) > 0) : []),
+    ...(Array.isArray(detected) ? detected : []),
   ]
   const seen = new Set()
   return raw.flatMap((item, index) => {
-    const hardwareId = Number(item?.hardwareId)
     const categoria = clean(item?.categoria).toUpperCase()
+    if (!categoria) return []
+
+    let hardwareId = Number(item?.hardwareId)
+    let hardware = Number.isInteger(hardwareId) && hardwareId > 0
+      ? hardwareById.get(hardwareId)
+      : null
+
+    if (!hardware) {
+      const targetTokens = [
+        item?.modelo,
+        item?.nome,
+        item?.marca,
+      ].map(normalizedAnswerKey).filter((value) => value.length >= 3)
+      const candidates = (hardwares || []).filter((candidate) => {
+        if (candidate?.publicado !== true || candidate?.ativo === false) return false
+        if (clean(candidate?.categoria).toUpperCase() !== categoria) return false
+        const haystack = hardwareSearchText(candidate)
+        return targetTokens.some((token) => haystack.includes(token) || token.includes(normalizedAnswerKey(candidate?.modelo)))
+      })
+      if (candidates.length === 1) {
+        hardware = candidates[0]
+        hardwareId = Number(hardware.id)
+      }
+    }
+
     const key = `${categoria}:${hardwareId}`
-    if (!Number.isInteger(hardwareId) || hardwareId < 1 || !categoria || seen.has(key)) return []
-    const hardware = hardwareById.get(hardwareId)
-    if (!hardware || hardware.publicado !== true || hardware.ativo === false) return []
+    if (!hardware || !Number.isInteger(hardwareId) || hardwareId < 1 || seen.has(key)) return []
+    if (hardware.publicado !== true || hardware.ativo === false) return []
     seen.add(key)
     return [{
       hardwareId,
@@ -449,7 +472,7 @@ function entityStatus(value, id, pendingLabel) {
   return 'Será verificado no backend'
 }
 
-function RegistrationLinkForm({ flow, onChange, onSubmit, onCancel, sending }) {
+function RegistrationLinkForm({ flow, onChange, onSubmit, sending }) {
   const isProduct = flow?.action === ACTION_PRODUCT
   const isBuild = flow?.action === ACTION_BUILD
   const productUrl = clean(flow?.url)
@@ -495,7 +518,6 @@ function RegistrationLinkForm({ flow, onChange, onSubmit, onCancel, sending }) {
         </label>
       )}
       <div className="admin-ia-link-form__actions">
-        <button type="button" className="btn btn-secundario btn-pequeno" onClick={onCancel}>Cancelar</button>
         <button type="submit" className="btn btn-primario btn-pequeno" disabled={!ready}>
           {sending ? 'Analisando...' : isProduct ? 'Analisar produto' : isBuild ? 'Analisar PC Montado' : 'Analisar Hardware'}
         </button>
@@ -978,12 +1000,13 @@ export default function AdminAssistant({ open, onClose }) {
     }])
   }
 
-  async function finishRegistration(preview, adjustments = {}) {
+  async function finishRegistration(preview, adjustments = {}, flowId = null) {
     const result = await adminService.chatbot.confirmRegistration({
       tokenConfirmacao: preview.tokenConfirmacao,
       confirmar: true,
       ...(Object.keys(adjustments || {}).length ? { ajustes: adjustments } : {}),
     })
+    if (flowId && activeFlowId.current !== flowId) return result
     const hardware = result?.hardware
     const product = result?.produto
     const offer = result?.oferta
@@ -1088,7 +1111,7 @@ export default function AdminAssistant({ open, onClose }) {
     if (!flowId || activeFlowId.current !== flowId || !flow?.backendReady || !flow?.preview?.tokenConfirmacao || sending || blockedByReadiness) return
     setSending(true)
     try {
-      await finishRegistration(flow.preview, flow.adjustments || {})
+      await finishRegistration(flow.preview, flow.adjustments || {}, flowId)
     } catch (error) {
       if (activeFlowId.current !== flowId) return
       setMessages((current) => [...current, { role: 'assistente', text: error?.message || 'Não foi possível confirmar o cadastro.' }])
@@ -1302,7 +1325,6 @@ export default function AdminAssistant({ open, onClose }) {
             flow={flow}
             onChange={(field, value) => setFlow((current) => current ? { ...current, [field]: value } : current)}
             onSubmit={flow?.action === ACTION_BUILD ? analyzeBuildLink : analyzeRegistration}
-            onCancel={cancelRegistration}
             sending={sending}
           />
           </>
