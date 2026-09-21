@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
 import { adminService } from '../services/adminService'
@@ -54,6 +54,73 @@ function buildCategoryFromPurpose(value) {
   if (/edicao|edição|criacao|criação|render|video|vídeo/.test(normalized)) return 'PC Creator'
   if (/trabalho|office|escritorio|escritório/.test(normalized)) return 'PC Trabalho'
   return 'PC Montado'
+}
+
+function nextBuildComponentIndex(componentes = [], startIndex = 0) {
+  const selected = new Set((Array.isArray(componentes) ? componentes : []).map((item) => item.categoria))
+  for (let index = Math.max(0, startIndex); index < BUILD_COMPONENT_STEPS.length; index += 1) {
+    if (!selected.has(BUILD_COMPONENT_STEPS[index].categoria)) return index
+  }
+  return BUILD_COMPONENT_STEPS.length
+}
+
+function buildLinkedComponents(preview, hardwares = []) {
+  const source = getAiPayload(preview)
+  const linked = Array.isArray(source?.componentes) ? source.componentes : []
+  const detected = preview?.cadastroSugerido?.componentesDetectados
+    || preview?.acaoFrontend?.componentesDetectados
+    || []
+  const hardwareById = new Map((hardwares || []).map((hardware) => [Number(hardware.id), hardware]))
+  const raw = [
+    ...linked,
+    ...(Array.isArray(detected) ? detected : []),
+  ]
+  const seen = new Set()
+  return raw.flatMap((item, index) => {
+    const categoria = clean(item?.categoria).toUpperCase()
+    if (!categoria) return []
+
+    let hardwareId = Number(item?.hardwareId)
+    let hardware = Number.isInteger(hardwareId) && hardwareId > 0
+      ? hardwareById.get(hardwareId)
+      : null
+
+    if (!hardware) {
+      const targetTokens = [
+        item?.modelo,
+        item?.nome,
+        item?.marca,
+      ].map(normalizedAnswerKey).filter((value) => value.length >= 3)
+      const candidates = (hardwares || []).filter((candidate) => {
+        if (candidate?.publicado !== true || candidate?.ativo === false) return false
+        if (clean(candidate?.categoria).toUpperCase() !== categoria) return false
+        const haystack = hardwareSearchText(candidate)
+        const candidateModel = normalizedAnswerKey(candidate?.modelo)
+        return targetTokens.some((token) => (
+          haystack.includes(token)
+          || (candidateModel.length >= 3 && token.includes(candidateModel))
+        ))
+      })
+      if (candidates.length === 1) {
+        hardware = candidates[0]
+        hardwareId = Number(hardware.id)
+      }
+    }
+
+    const key = `${categoria}:${hardwareId}`
+    if (!hardware || !Number.isInteger(hardwareId) || hardwareId < 1 || seen.has(key)) return []
+    if (hardware.publicado !== true || hardware.ativo === false) return []
+    seen.add(key)
+    return [{
+      hardwareId,
+      categoria,
+      quantidade: Number(item?.quantidade || 1),
+      ordem: index,
+      nome: clean(hardware.nome) || clean(item?.hardwareNome) || `Hardware #${hardwareId}`,
+      marca: clean(hardware.marca),
+      modelo: clean(hardware.modelo),
+    }]
+  })
 }
 
 function responseText(data) {
@@ -409,8 +476,9 @@ function entityStatus(value, id, pendingLabel) {
   return 'Será verificado no backend'
 }
 
-function RegistrationLinkForm({ flow, onChange, onSubmit, onCancel, sending }) {
+function RegistrationLinkForm({ flow, onChange, onSubmit, sending }) {
   const isProduct = flow?.action === ACTION_PRODUCT
+  const isBuild = flow?.action === ACTION_BUILD
   const productUrl = clean(flow?.url)
   const affiliateUrl = clean(flow?.affiliateUrl)
   const productValid = validPublicUrl(productUrl)
@@ -420,8 +488,12 @@ function RegistrationLinkForm({ flow, onChange, onSubmit, onCancel, sending }) {
   return (
     <form className="admin-ia-link-form" onSubmit={(event) => { event.preventDefault(); if (ready) onSubmit(productUrl, affiliateUrl) }}>
       <div className="admin-ia-link-form__head">
-        <strong>{isProduct ? 'Analisar produto para cadastro' : 'Analisar Hardware por link'}</strong>
-        <small>{isProduct ? 'Mercado Livre e Shopee usam API oficial quando disponível; Magazine Luiza/Magalu usa o extrator específico do ProjetoIA.' : 'A IA pesquisa a ficha técnica antes de cadastrar.'}</small>
+        <strong>{isProduct ? 'Analisar produto para cadastro' : isBuild ? 'Analisar PC Montado por link' : 'Analisar Hardware por link'}</strong>
+        <small>{isProduct
+          ? 'Mercado Livre e Shopee usam API oficial quando disponível; Magazine Luiza/Magalu usa o extrator específico do ProjetoIA.'
+          : isBuild
+            ? 'A IA identifica o PC e tenta vincular automaticamente as peças aos Hardwares já publicados.'
+            : 'A IA pesquisa a ficha técnica antes de cadastrar.'}</small>
       </div>
       <label>
         <span>Link do produto</span>
@@ -450,9 +522,8 @@ function RegistrationLinkForm({ flow, onChange, onSubmit, onCancel, sending }) {
         </label>
       )}
       <div className="admin-ia-link-form__actions">
-        <button type="button" className="btn btn-secundario btn-pequeno" onClick={onCancel} disabled={sending}>Cancelar</button>
         <button type="submit" className="btn btn-primario btn-pequeno" disabled={!ready}>
-          {sending ? 'Analisando...' : isProduct ? 'Analisar produto' : 'Analisar Hardware'}
+          {sending ? 'Analisando...' : isProduct ? 'Analisar produto' : isBuild ? 'Analisar PC Montado' : 'Analisar Hardware'}
         </button>
       </div>
       {isProduct && <small className="admin-ia-link-form__note">A IA sempre mostra uma prévia com os dados encontrados antes de qualquer cadastro.</small>}
@@ -576,13 +647,17 @@ export default function AdminAssistant({ open, onClose }) {
   const [sending, setSending] = useState(false)
   const [messages, setMessages] = useState([{ role: 'assistente', text: 'Posso ajudar a revisar cadastros, organizar dados e explicar o estado do painel.' }])
   const [flow, setFlow] = useState(null)
+  const activeFlowId = useRef(0)
   const context = useMemo(() => ({ rota: location.pathname, area: 'admin' }), [location.pathname])
 
   async function startBuildRegistration() {
+    const flowId = activeFlowId.current + 1
+    activeFlowId.current = flowId
     setSending(true)
     setDraft('')
     try {
       const items = await adminService.hardwares.listForBuild()
+      if (activeFlowId.current !== flowId) return
       const hardwares = (Array.isArray(items) ? items : []).filter(
         (hardware) => hardware?.ativo !== false && hardware?.publicado === true,
       )
@@ -594,10 +669,10 @@ export default function AdminAssistant({ open, onClose }) {
         return
       }
       setFlow({
+        flowId,
         action: ACTION_BUILD,
-        step: 'BUILD_INFO',
-        infoIndex: 0,
-        componentIndex: 0,
+        step: 'BUILD_URL',
+        url: '',
         hardwares,
         buildCandidates: [],
         build: {
@@ -612,15 +687,101 @@ export default function AdminAssistant({ open, onClose }) {
       })
       setMessages((current) => [...current, {
         role: 'assistente',
-        text: `Vamos montar o cadastro pelo chat. ${BUILD_INFO_QUESTIONS[0].prompt}`,
+        text: 'Cole o link do PC montado. Vou extrair a configuração e vincular automaticamente as peças que já existirem em Hardwares. Depois pergunto somente o que faltar.',
       }])
     } catch (error) {
+      if (activeFlowId.current !== flowId) return
       setMessages((current) => [...current, {
         role: 'assistente',
         text: error?.message || 'Não consegui carregar os Hardwares para montar o PC.',
       }])
     } finally {
-      setSending(false)
+      if (activeFlowId.current === flowId) setSending(false)
+    }
+  }
+
+  async function analyzeBuildLink(url) {
+    const flowId = flow?.flowId
+    if (!flowId || activeFlowId.current !== flowId) return
+    setSending(true)
+    try {
+      const preview = await adminService.ai.importLink(url, 'PC_MONTADO')
+      if (activeFlowId.current !== flowId) return
+
+      const source = getAiPayload(preview)
+      const componentes = buildLinkedComponents(preview, flow.hardwares || [])
+      const build = {
+        ...(flow.build || {}),
+        nome: clean(source?.nome),
+        finalidade: clean(source?.finalidade),
+        resolucaoRecomendada: clean(source?.resolucaoRecomendada || source?.resolucao),
+        categoria: clean(source?.categoria) || buildCategoryFromPurpose(source?.finalidade),
+        descricao: clean(source?.descricao),
+        imagemUrl: clean(source?.imagemUrl),
+        publicado: true,
+        ativo: true,
+        componentes,
+      }
+
+      const infoQuestions = BUILD_INFO_QUESTIONS.filter((question) => !clean(build[question.field]))
+      if (infoQuestions.length > 0) {
+        setFlow((current) => current && current.flowId === flowId ? {
+          ...current,
+          step: 'BUILD_INFO',
+          url,
+          preview,
+          build,
+          buildInfoQuestions: infoQuestions,
+          infoIndex: 0,
+          componentIndex: nextBuildComponentIndex(componentes, 0),
+        } : current)
+        setMessages((current) => [...current, {
+          role: 'assistente',
+          text: `A IA analisou o link e vinculou ${componentes.length} peça(s). ${infoQuestions[0].prompt}`,
+        }])
+        return
+      }
+
+      const nextIndex = nextBuildComponentIndex(componentes, 0)
+      if (nextIndex >= BUILD_COMPONENT_STEPS.length) {
+        setFlow((current) => current && current.flowId === flowId ? {
+          ...current,
+          step: 'BUILD_PREVIEW',
+          url,
+          preview,
+          build,
+          componentIndex: nextIndex,
+          buildCandidates: [],
+        } : current)
+        setMessages((current) => [...current, {
+          role: 'assistente',
+          text: `A IA conseguiu vincular ${componentes.length} peça(s) do anúncio ao catálogo. Confira a prévia e confirme para validar/publicar.`,
+        }])
+        return
+      }
+
+      const nextStep = BUILD_COMPONENT_STEPS[nextIndex]
+      setFlow((current) => current && current.flowId === flowId ? {
+        ...current,
+        step: 'BUILD_COMPONENT',
+        url,
+        preview,
+        build,
+        componentIndex: nextIndex,
+        buildCandidates: [],
+      } : current)
+      setMessages((current) => [...current, {
+        role: 'assistente',
+        text: `A IA vinculou ${componentes.length} peça(s). Não consegui vincular a ${nextStep.label}. ${buildComponentPrompt(nextStep)}`,
+      }])
+    } catch (error) {
+      if (activeFlowId.current !== flowId) return
+      setMessages((current) => [...current, {
+        role: 'assistente',
+        text: error?.message || 'Não consegui analisar esse PC montado pelo link.',
+      }])
+    } finally {
+      if (activeFlowId.current === flowId) setSending(false)
     }
   }
 
@@ -643,7 +804,7 @@ export default function AdminAssistant({ open, onClose }) {
       ),
       component,
     ].sort((a, b) => a.ordem - b.ordem)
-    const nextIndex = stepIndex + 1
+    const nextIndex = nextBuildComponentIndex(componentes, stepIndex + 1)
 
     if (nextIndex >= BUILD_COMPONENT_STEPS.length) {
       const finalidade = clean(flow?.build?.finalidade)
@@ -686,7 +847,7 @@ export default function AdminAssistant({ open, onClose }) {
       setMessages((current) => [...current, { role: 'assistente', text: `${step?.label || 'Esse componente'} é obrigatório para publicar o PC.` }])
       return
     }
-    const nextIndex = index + 1
+    const nextIndex = nextBuildComponentIndex(flow?.build?.componentes || [], index + 1)
     if (nextIndex >= BUILD_COMPONENT_STEPS.length) {
       setFlow((current) => ({ ...current, step: 'BUILD_PREVIEW', componentIndex: nextIndex, buildCandidates: [] }))
       setMessages((current) => [...current, { role: 'assistente', text: 'Configuração concluída. Confira a prévia e confirme para validar/publicar.' }])
@@ -699,8 +860,11 @@ export default function AdminAssistant({ open, onClose }) {
 
   async function answerBuildFlow(text) {
     if (flow?.step === 'BUILD_INFO') {
+      const questions = Array.isArray(flow?.buildInfoQuestions) && flow.buildInfoQuestions.length
+        ? flow.buildInfoQuestions
+        : BUILD_INFO_QUESTIONS
       const index = Number(flow?.infoIndex || 0)
-      const question = BUILD_INFO_QUESTIONS[index]
+      const question = questions[index]
       if (!question) return
       const skipped = question.field !== 'nome' && isSkipAnswer(text)
       const value = skipped ? '' : clean(text)
@@ -714,13 +878,19 @@ export default function AdminAssistant({ open, onClose }) {
         [question.field]: value,
         ...(question.field === 'finalidade' ? { categoria: buildCategoryFromPurpose(value) } : {}),
       }
-      if (nextIndex < BUILD_INFO_QUESTIONS.length) {
+      if (nextIndex < questions.length) {
         setFlow((current) => ({ ...current, infoIndex: nextIndex, build: nextBuild }))
-        setMessages((current) => [...current, { role: 'assistente', text: BUILD_INFO_QUESTIONS[nextIndex].prompt }])
+        setMessages((current) => [...current, { role: 'assistente', text: questions[nextIndex].prompt }])
         return
       }
-      setFlow((current) => ({ ...current, step: 'BUILD_COMPONENT', componentIndex: 0, build: nextBuild, buildCandidates: [] }))
-      setMessages((current) => [...current, { role: 'assistente', text: buildComponentPrompt(BUILD_COMPONENT_STEPS[0]) }])
+      const componentIndex = nextBuildComponentIndex(nextBuild.componentes || [], 0)
+      if (componentIndex >= BUILD_COMPONENT_STEPS.length) {
+        setFlow((current) => ({ ...current, step: 'BUILD_PREVIEW', componentIndex, build: nextBuild, buildCandidates: [] }))
+        setMessages((current) => [...current, { role: 'assistente', text: 'Os dados do link ficaram completos. Confira a prévia e confirme para validar/publicar.' }])
+        return
+      }
+      setFlow((current) => ({ ...current, step: 'BUILD_COMPONENT', componentIndex, build: nextBuild, buildCandidates: [] }))
+      setMessages((current) => [...current, { role: 'assistente', text: buildComponentPrompt(BUILD_COMPONENT_STEPS[componentIndex]) }])
       return
     }
 
@@ -764,6 +934,7 @@ export default function AdminAssistant({ open, onClose }) {
 
   async function confirmBuildRegistration() {
     if (flow?.action !== ACTION_BUILD || flow?.step !== 'BUILD_PREVIEW' || sending) return
+    const flowId = flow?.flowId
     const build = flow.build || {}
     const componentes = (Array.isArray(build.componentes) ? build.componentes : []).map((item, index) => ({
       hardwareId: Number(item.hardwareId),
@@ -788,24 +959,28 @@ export default function AdminAssistant({ open, onClose }) {
     setSending(true)
     try {
       const saved = await adminService.builds.create(body)
+      if (activeFlowId.current !== flowId) return
       setMessages((current) => [...current, {
         role: 'assistente',
         text: `PC montado publicado com sucesso: #${saved?.id || '?'} · ${saved?.produto?.nome || build.nome}.`,
       }])
       setFlow(null)
     } catch (error) {
+      if (activeFlowId.current !== flowId) return
       setMessages((current) => [...current, {
         role: 'assistente',
         text: error?.message || 'Não foi possível publicar o PC montado. Revise a compatibilidade dos componentes.',
       }])
     } finally {
-      setSending(false)
+      if (activeFlowId.current === flowId) setSending(false)
     }
   }
 
   function startRegistration(action) {
     const label = action === ACTION_PRODUCT ? 'Produto' : 'Hardware'
-    setFlow({ action, step: 'URL', url: '', affiliateUrl: '', preview: null, backendReady: false })
+    const flowId = activeFlowId.current + 1
+    activeFlowId.current = flowId
+    setFlow({ flowId, action, step: 'URL', url: '', affiliateUrl: '', preview: null, backendReady: false })
     setDraft('')
     setMessages((current) => [...current, {
       role: 'assistente',
@@ -817,17 +992,25 @@ export default function AdminAssistant({ open, onClose }) {
 
   function cancelRegistration() {
     const wasBuild = flow?.action === ACTION_BUILD
+    activeFlowId.current += 1
+    setSending(false)
     setFlow(null)
     setDraft('')
-    setMessages((current) => [...current, { role: 'assistente', text: wasBuild ? 'Cadastro do PC montado cancelado. Nenhum registro foi criado.' : 'Cadastro por URL cancelado. Nenhum registro foi criado.' }])
+    setMessages((current) => [...current, {
+      role: 'assistente',
+      text: wasBuild
+        ? 'Cadastro do PC montado cancelado. Nenhum registro foi criado.'
+        : 'Cadastro cancelado. Nenhum registro foi criado.',
+    }])
   }
 
-  async function finishRegistration(preview, adjustments = {}) {
+  async function finishRegistration(preview, adjustments = {}, flowId = null) {
     const result = await adminService.chatbot.confirmRegistration({
       tokenConfirmacao: preview.tokenConfirmacao,
       confirmar: true,
       ...(Object.keys(adjustments || {}).length ? { ajustes: adjustments } : {}),
     })
+    if (flowId && activeFlowId.current !== flowId) return result
     const hardware = result?.hardware
     const product = result?.produto
     const offer = result?.oferta
@@ -843,6 +1026,8 @@ export default function AdminAssistant({ open, onClose }) {
   }
 
   async function analyzeRegistration(url, affiliateUrl = '') {
+    const flowId = flow?.flowId
+    if (!flowId || activeFlowId.current !== flowId) return
     setSending(true)
     try {
       try {
@@ -852,6 +1037,7 @@ export default function AdminAssistant({ open, onClose }) {
           ...(flow.action === ACTION_PRODUCT && affiliateUrl ? { urlAfiliada: affiliateUrl } : {}),
         }
         const result = await adminService.chatbot.analyzeRegistration(body)
+        if (activeFlowId.current !== flowId) return
         const readiness = getAiReadiness(result)
         const warnings = Array.isArray(result?.avisos) ? result.avisos : []
         const safePreview = Boolean(
@@ -896,6 +1082,7 @@ export default function AdminAssistant({ open, onClose }) {
       }
 
       const preview = await adminService.ai.importLink(url)
+      if (activeFlowId.current !== flowId) return
       const previewWithAffiliate = flow.action === ACTION_PRODUCT && affiliateUrl
         ? {
             ...preview,
@@ -909,28 +1096,31 @@ export default function AdminAssistant({ open, onClose }) {
       setFlow((current) => ({ ...current, step: 'PREVIEW', url, affiliateUrl, preview: previewWithAffiliate, backendReady: false }))
       setMessages((current) => [...current, { role: 'assistente', text: 'A IA analisou o link. O backend de confirmação automática ainda não está disponível, então deixei a prévia pronta para abrir no formulário.' }])
     } catch (error) {
-      setFlow((current) => current ? { ...current, step: 'URL', preview: null } : current)
+      if (activeFlowId.current !== flowId) return
+      setFlow((current) => current && current.flowId === flowId ? { ...current, step: 'URL', preview: null } : current)
       setMessages((current) => [...current, { role: 'assistente', text: error?.message || 'Não foi possível analisar esse link.' }])
     } finally {
-      setSending(false)
+      if (activeFlowId.current === flowId) setSending(false)
     }
   }
 
   async function confirmRegistration() {
+    const flowId = flow?.flowId
     const readiness = getAiReadiness(flow?.preview || {})
     const blockedByReadiness = !flow?.manualComplete && (
       flow?.preview?.podeConfirmar === false
       || readiness.ready === false
       || readiness.enabled === false
     )
-    if (!flow?.backendReady || !flow?.preview?.tokenConfirmacao || sending || blockedByReadiness) return
+    if (!flowId || activeFlowId.current !== flowId || !flow?.backendReady || !flow?.preview?.tokenConfirmacao || sending || blockedByReadiness) return
     setSending(true)
     try {
-      await finishRegistration(flow.preview, flow.adjustments || {})
+      await finishRegistration(flow.preview, flow.adjustments || {}, flowId)
     } catch (error) {
+      if (activeFlowId.current !== flowId) return
       setMessages((current) => [...current, { role: 'assistente', text: error?.message || 'Não foi possível confirmar o cadastro.' }])
     } finally {
-      setSending(false)
+      if (activeFlowId.current === flowId) setSending(false)
     }
   }
 
@@ -966,8 +1156,9 @@ export default function AdminAssistant({ open, onClose }) {
   }
 
   async function answerRegistrationQuestion(text) {
+    const flowId = flow?.flowId
     const question = flow?.questions?.[flow?.questionIndex || 0]
-    if (!question) return
+    if (!flowId || activeFlowId.current !== flowId || !question) return
     setSending(true)
     try {
       const field = question.field
@@ -993,6 +1184,7 @@ export default function AdminAssistant({ open, onClose }) {
           categoriaEsperada: value,
         }
         preview = await adminService.chatbot.analyzeRegistration(body)
+        if (activeFlowId.current !== flowId) return
       } else if (field === 'preco' || field === 'precoAnterior') {
         adjustments[field] = value
       } else {
@@ -1041,12 +1233,13 @@ export default function AdminAssistant({ open, onClose }) {
       }))
       setMessages((current) => [...current, { role: 'assistente', text: remaining[0].prompt }])
     } catch (error) {
+      if (activeFlowId.current !== flowId) return
       setMessages((current) => [...current, {
         role: 'assistente',
         text: error?.message || 'Não consegui aplicar essa resposta. Tente novamente.',
       }])
     } finally {
-      setSending(false)
+      if (activeFlowId.current === flowId) setSending(false)
     }
   }
 
@@ -1082,8 +1275,11 @@ export default function AdminAssistant({ open, onClose }) {
   }
 
   const buildStep = flow?.action === ACTION_BUILD ? BUILD_COMPONENT_STEPS[Number(flow?.componentIndex || 0)] : null
+  const buildInfoQuestions = Array.isArray(flow?.buildInfoQuestions) && flow.buildInfoQuestions.length
+    ? flow.buildInfoQuestions
+    : BUILD_INFO_QUESTIONS
   const inputPlaceholder = flow?.action === ACTION_BUILD && flow?.step === 'BUILD_INFO'
-    ? (BUILD_INFO_QUESTIONS[Number(flow?.infoIndex || 0)]?.prompt || 'Responda para continuar...')
+    ? (buildInfoQuestions[Number(flow?.infoIndex || 0)]?.prompt || 'Responda para continuar...')
     : flow?.action === ACTION_BUILD && ['BUILD_COMPONENT', 'BUILD_CANDIDATE'].includes(flow?.step)
       ? buildComponentPrompt(buildStep)
       : flow?.step === 'QUESTIONS'
@@ -1116,26 +1312,35 @@ export default function AdminAssistant({ open, onClose }) {
         {!flow && (canCreateProduct || canCreateHardware || canCreateBuild) && <div className="admin-ia-quick-actions" aria-label="Ações rápidas do assistente">
           {canCreateProduct && <button type="button" onClick={() => startRegistration(ACTION_PRODUCT)}><span aria-hidden="true">＋</span><strong>Cadastrar Produto</strong><small>2 links → IA → cadastro</small></button>}
           {canCreateHardware && <button type="button" onClick={() => startRegistration(ACTION_HARDWARE)}><span aria-hidden="true">◇</span><strong>Cadastrar Hardware</strong><small>Link → ficha técnica</small></button>}
-          {canCreateBuild && <button type="button" onClick={startBuildRegistration}><span aria-hidden="true">PC</span><strong>Cadastrar PC Montado</strong><small>Chat guiado → peças → publicar</small></button>}
+          {canCreateBuild && <button type="button" onClick={startBuildRegistration}><span aria-hidden="true">PC</span><strong>Cadastrar PC Montado</strong><small>Link → IA → peças → publicar</small></button>}
         </div>}
         {messages.map((message,index)=><div key={`${message.role}-${index}`} className={`admin-ia-chat-msg admin-ia-chat-msg--${message.role}`}>{message.text}</div>)}
         {flow?.step === 'PREVIEW' && <RegistrationPreview flow={flow} onConfirm={confirmRegistration} onCancel={cancelRegistration} onOpenForm={openFallbackForm} sending={sending} />}
         {flow?.step === 'BUILD_PREVIEW' && <BuildRegistrationPreview flow={flow} onConfirm={confirmBuildRegistration} onCancel={cancelRegistration} sending={sending} />}
         {sending&&<div className="admin-ia-chat-digitando"><span/><span/><span/></div>}
       </div>
-      {flow?.step === 'URL'
-        ? <RegistrationLinkForm
+      {['URL', 'BUILD_URL'].includes(flow?.step)
+        ? <>
+            {flow && <div className="admin-ia-flow-cancel" aria-label="Cancelar cadastro em andamento">
+              <span><strong>Cadastro em andamento</strong><small>Você pode cancelar a qualquer momento.</small></span>
+              <button type="button" className="btn btn-secundario btn-pequeno" onClick={cancelRegistration}>Cancelar cadastro</button>
+            </div>}
+            <RegistrationLinkForm
             flow={flow}
             onChange={(field, value) => setFlow((current) => current ? { ...current, [field]: value } : current)}
-            onSubmit={analyzeRegistration}
-            onCancel={cancelRegistration}
+            onSubmit={flow?.action === ACTION_BUILD ? analyzeBuildLink : analyzeRegistration}
             sending={sending}
           />
+          </>
         : <>
+            {flow && <div className="admin-ia-flow-cancel" aria-label="Cancelar cadastro em andamento">
+              <span><strong>Cadastro em andamento</strong><small>Você pode cancelar a qualquer momento.</small></span>
+              <button type="button" className="btn btn-secundario btn-pequeno" onClick={cancelRegistration}>Cancelar cadastro</button>
+            </div>}
             {!flow && (canCreateProduct || canCreateHardware || canCreateBuild) && <div className="admin-ia-quick-actions admin-ia-quick-actions--bottom" aria-label="Ações de cadastro junto da caixa de mensagem">
               {canCreateProduct && <button type="button" onClick={() => startRegistration(ACTION_PRODUCT)}><span aria-hidden="true">＋</span><strong>Cadastrar Produto</strong><small>2 links → IA → cadastro</small></button>}
               {canCreateHardware && <button type="button" onClick={() => startRegistration(ACTION_HARDWARE)}><span aria-hidden="true">◇</span><strong>Cadastrar Hardware</strong><small>Link → ficha técnica</small></button>}
-              {canCreateBuild && <button type="button" onClick={startBuildRegistration}><span aria-hidden="true">PC</span><strong>Cadastrar PC Montado</strong><small>Chat guiado → peças → publicar</small></button>}
+              {canCreateBuild && <button type="button" onClick={startBuildRegistration}><span aria-hidden="true">PC</span><strong>Cadastrar PC Montado</strong><small>Link → IA → peças → publicar</small></button>}
             </div>}
             {flow?.action === ACTION_BUILD && flow?.step === 'BUILD_CANDIDATE' && Array.isArray(flow?.buildCandidates) && flow.buildCandidates.length > 0 && <div className="admin-ia-build-candidates" aria-label="Opções de Hardware">
               {flow.buildCandidates.map((hardware) => <button key={hardware.id} type="button" onClick={() => appendBuildComponent(hardware)} disabled={sending}>
