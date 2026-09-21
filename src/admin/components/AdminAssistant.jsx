@@ -152,6 +152,148 @@ const SPEC_FIELD_BY_CATEGORY = {
   NOTEBOOK: 'especificacaoNotebook',
 }
 
+const PRODUCT_TYPE_VALUES = [
+  "PROCESSADOR",
+  "PLACA_MAE",
+  "MEMORIA_RAM",
+  "PLACA_VIDEO",
+  "ARMAZENAMENTO",
+  "FONTE",
+  "GABINETE",
+  "COOLER",
+  "VENTOINHA",
+  "NOTEBOOK",
+  "PC_MONTADO",
+  "CELULAR",
+  "TABLET",
+  "MONITOR",
+  "MOUSE",
+  "TECLADO",
+  "HEADSET",
+  "FONE",
+  "MICROFONE",
+  "WEBCAM",
+  "CONTROLE",
+  "CONTROLE_VIDEO_GAME",
+  "JOYSTICK",
+  "VOLANTE",
+  "VIDEOGAME",
+  "JOGO",
+  "MOUSEPAD",
+  "CADEIRA",
+  "MESA",
+  "SUPORTE_MONITOR",
+  "ILUMINACAO",
+  "ORGANIZADOR_CABOS",
+  "ACESSORIO",
+  "PROJETOR",
+  "CALCULADORA",
+  "TELEFONE",
+  "IMPRESSORA",
+  "SCANNER",
+  "CAIXA_DE_SOM",
+  "ROTEADOR",
+  "REPETIDOR_WIFI",
+  "SWITCH_REDE",
+  "ADAPTADOR_WIFI_BLUETOOTH",
+  "NOBREAK",
+  "ESTABILIZADOR",
+  "FILTRO_DE_LINHA",
+  "MICROCONTROLADOR",
+  "KIT_ARDUINO_ROBOTICA",
+  "MINI_COMPUTADOR",
+  "RELOGIO_INTELIGENTE",
+  "SMART_TV",
+  "TV",
+  "CAMERA",
+  "CAMERA_SEGURANCA",
+  "CAMERA_ACAO",
+  "CARREGADOR",
+  "POWER_BANK",
+  "CABO_ADAPTADOR",
+  "HUB_USB",
+  "DOCK_STATION",
+  "PEN_DRIVE",
+  "CARTAO_MEMORIA",
+  "LEITOR_CARTAO",
+  "ARMAZENAMENTO_EXTERNO",
+  "IMPRESSORA_3D",
+  "ACESSORIO_IMPRESSAO_3D",
+  "ASPIRADOR_PO",
+  "ROBO_ASPIRADOR",
+  "SMART_SPEAKER",
+  "LAMPADA_INTELIGENTE",
+  "TOMADA_INTELIGENTE",
+  "FECHADURA_INTELIGENTE",
+  "E_READER",
+  "DRONE",
+  "SOUNDBAR",
+  "HOME_THEATER",
+  "AIR_FRYER",
+  "CAFETEIRA",
+  "LIQUIDIFICADOR",
+  "VENTILADOR",
+  "CLIMATIZADOR"
+]
+
+const PRODUCT_TYPE_LABELS = {
+  PROCESSADOR: 'Processador',
+  PLACA_MAE: 'Placa-mãe',
+  MEMORIA_RAM: 'Memória RAM',
+  PLACA_VIDEO: 'Placa de vídeo',
+  ARMAZENAMENTO: 'Armazenamento / SSD / HD',
+  FONTE: 'Fonte',
+  GABINETE: 'Gabinete',
+  COOLER: 'Cooler',
+  VENTOINHA: 'Ventoinha',
+  PC_MONTADO: 'PC montado',
+  CELULAR: 'Celular / Smartphone',
+  CAIXA_DE_SOM: 'Caixa de som',
+  REPETIDOR_WIFI: 'Repetidor Wi-Fi',
+  SWITCH_REDE: 'Switch de rede',
+  ADAPTADOR_WIFI_BLUETOOTH: 'Adaptador Wi-Fi / Bluetooth',
+  FILTRO_DE_LINHA: 'Filtro de linha',
+  KIT_ARDUINO_ROBOTICA: 'Kit Arduino / Robótica',
+  MINI_COMPUTADOR: 'Mini computador',
+  RELOGIO_INTELIGENTE: 'Relógio inteligente',
+  CONTROLE_VIDEO_GAME: 'Controle de videogame',
+  SMART_TV: 'Smart TV',
+  CAMERA: 'Câmera',
+  CAMERA_SEGURANCA: 'Câmera de segurança',
+  CAMERA_ACAO: 'Câmera de ação',
+  POWER_BANK: 'Power bank',
+  CABO_ADAPTADOR: 'Cabo / Adaptador',
+  HUB_USB: 'Hub USB',
+  DOCK_STATION: 'Dock station',
+  PEN_DRIVE: 'Pen drive',
+  CARTAO_MEMORIA: 'Cartão de memória',
+  LEITOR_CARTAO: 'Leitor de cartão',
+  ARMAZENAMENTO_EXTERNO: 'Armazenamento externo',
+  IMPRESSORA_3D: 'Impressora 3D',
+  ACESSORIO_IMPRESSAO_3D: 'Acessório de impressão 3D',
+  ASPIRADOR_PO: 'Aspirador de pó',
+  ROBO_ASPIRADOR: 'Robô aspirador',
+  SMART_SPEAKER: 'Smart speaker',
+  LAMPADA_INTELIGENTE: 'Lâmpada inteligente',
+  TOMADA_INTELIGENTE: 'Tomada inteligente',
+  FECHADURA_INTELIGENTE: 'Fechadura inteligente',
+  E_READER: 'E-reader',
+  HOME_THEATER: 'Home theater',
+  AIR_FRYER: 'Air fryer',
+}
+
+const PRODUCT_TYPE_SET = new Set(PRODUCT_TYPE_VALUES)
+
+function productTypeLabel(value) {
+  const normalized = clean(value).toUpperCase()
+  if (!normalized) return ''
+  if (PRODUCT_TYPE_LABELS[normalized]) return PRODUCT_TYPE_LABELS[normalized]
+  return normalized
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .replace(/(^|\s)\S/g, (letter) => letter.toUpperCase())
+}
+
 const CATEGORY_ANSWER_ALIASES = {
   celular: 'CELULAR',
   smartphone: 'CELULAR',
@@ -206,7 +348,9 @@ function normalizedAnswerKey(value) {
 
 function normalizeCategoryAnswer(value) {
   const key = normalizedAnswerKey(value)
-  return CATEGORY_ANSWER_ALIASES[key] || key.toUpperCase().replaceAll(' ', '_')
+  const byLabel = PRODUCT_TYPE_VALUES.find((item) => normalizedAnswerKey(productTypeLabel(item)) === key)
+  const normalized = CATEGORY_ANSWER_ALIASES[key] || byLabel || key.toUpperCase().replaceAll(' ', '_')
+  return PRODUCT_TYPE_SET.has(normalized) ? normalized : null
 }
 
 function parseBrazilianNumber(value) {
@@ -531,6 +675,26 @@ function RegistrationLinkForm({ flow, onChange, onSubmit, sending }) {
   )
 }
 
+function ProductTypeSelector({ value = '', onSelect, sending = false }) {
+  return (
+    <div className="admin-ia-product-type-selector">
+      <div>
+        <strong>Tipo do produto</strong>
+        <small>Se a IA não identificar, selecione aqui ou escreva o tipo no chat.</small>
+      </div>
+      <select
+        className="admin-select"
+        value={PRODUCT_TYPE_SET.has(value) ? value : ''}
+        disabled={sending}
+        onChange={(event) => event.target.value && onSelect?.(event.target.value)}
+      >
+        <option value="">Selecione o tipo...</option>
+        {PRODUCT_TYPE_VALUES.map((type) => <option key={type} value={type}>{productTypeLabel(type)}</option>)}
+      </select>
+    </div>
+  )
+}
+
 function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending }) {
   if (!flow?.preview) return null
   const baseSummary = flow.backendReady ? normalizeAutomaticPreview(flow.preview) : normalizeFallbackPreview(flow.preview)
@@ -557,6 +721,7 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
       </div>
 
       <div className="admin-ia-registration-grid">
+        <div className={summary.category ? '' : 'admin-ia-registration-missing'}><span>Tipo do produto</span><strong>{summary.category ? productTypeLabel(summary.category) : 'Não identificado'}</strong>{!summary.category && <small>Informe antes de confirmar</small>}</div>
         {summary.registrationType !== 'PRODUTO_OFERTA' && <div><span>Hardware</span><strong>{entityStatus(summary.hardwareExisting, summary.hardwareId, 'Será criado se necessário')}</strong></div>}
         {summary.registrationType === 'PRODUTO_OFERTA' && <div><span>Cadastro</span><strong>Produto comum + Oferta</strong><small>Não será criado Hardware de PC</small></div>}
         {flow.action === ACTION_PRODUCT && <div><span>Produto</span><strong>{entityStatus(summary.productExisting, summary.productId, 'Será criado')}</strong></div>}
@@ -1164,7 +1329,12 @@ export default function AdminAssistant({ open, onClose }) {
       const field = question.field
       let value = field === 'categoria' ? normalizeCategoryAnswer(text) : parseQuestionValue(field, text)
       if (value === null || value === '') {
-        setMessages((current) => [...current, { role: 'assistente', text: `Não consegui entender esse valor. ${question.prompt}` }])
+        setMessages((current) => [...current, {
+          role: 'assistente',
+          text: field === 'categoria'
+            ? 'Não reconheci esse tipo de produto. Selecione uma opção na lista acima da caixa de mensagem ou escreva, por exemplo: memória RAM, placa de vídeo, celular ou notebook.'
+            : `Não consegui entender esse valor. ${question.prompt}`,
+        }])
         return
       }
 
@@ -1287,6 +1457,11 @@ export default function AdminAssistant({ open, onClose }) {
         : 'Pergunte sobre o catálogo...'
 
   const stickyReadiness = getAiReadiness(flow?.preview || {})
+  const currentRegistrationQuestion = flow?.step === 'QUESTIONS'
+    ? flow?.questions?.[flow?.questionIndex || 0]
+    : null
+  const showProductTypeSelector = currentRegistrationQuestion?.field === 'categoria'
+
   const showStickyConfirm = Boolean(
     flow?.step === 'PREVIEW'
     && flow?.backendReady
@@ -1342,6 +1517,11 @@ export default function AdminAssistant({ open, onClose }) {
               {canCreateHardware && <button type="button" onClick={() => startRegistration(ACTION_HARDWARE)}><span aria-hidden="true">◇</span><strong>Cadastrar Hardware</strong><small>Link → ficha técnica</small></button>}
               {canCreateBuild && <button type="button" onClick={startBuildRegistration}><span aria-hidden="true">PC</span><strong>Cadastrar PC Montado</strong><small>Link → IA → peças → publicar</small></button>}
             </div>}
+            {showProductTypeSelector && <ProductTypeSelector
+              value={flow?.adjustments?.categoria || ''}
+              sending={sending}
+              onSelect={(value) => answerRegistrationQuestion(value)}
+            />}
             {flow?.action === ACTION_BUILD && flow?.step === 'BUILD_CANDIDATE' && Array.isArray(flow?.buildCandidates) && flow.buildCandidates.length > 0 && <div className="admin-ia-build-candidates" aria-label="Opções de Hardware">
               {flow.buildCandidates.map((hardware) => <button key={hardware.id} type="button" onClick={() => appendBuildComponent(hardware)} disabled={sending}>
                 <strong>{hardware.nome || `Hardware #${hardware.id}`}</strong>
