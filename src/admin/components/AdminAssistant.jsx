@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
 import { adminService } from '../services/adminService'
@@ -54,6 +54,46 @@ function buildCategoryFromPurpose(value) {
   if (/edicao|edição|criacao|criação|render|video|vídeo/.test(normalized)) return 'PC Creator'
   if (/trabalho|office|escritorio|escritório/.test(normalized)) return 'PC Trabalho'
   return 'PC Montado'
+}
+
+function nextBuildComponentIndex(componentes = [], startIndex = 0) {
+  const selected = new Set((Array.isArray(componentes) ? componentes : []).map((item) => item.categoria))
+  for (let index = Math.max(0, startIndex); index < BUILD_COMPONENT_STEPS.length; index += 1) {
+    if (!selected.has(BUILD_COMPONENT_STEPS[index].categoria)) return index
+  }
+  return BUILD_COMPONENT_STEPS.length
+}
+
+function buildLinkedComponents(preview, hardwares = []) {
+  const source = getAiPayload(preview)
+  const linked = Array.isArray(source?.componentes) ? source.componentes : []
+  const detected = preview?.cadastroSugerido?.componentesDetectados
+    || preview?.acaoFrontend?.componentesDetectados
+    || []
+  const hardwareById = new Map((hardwares || []).map((hardware) => [Number(hardware.id), hardware]))
+  const raw = [
+    ...linked,
+    ...(Array.isArray(detected) ? detected.filter((item) => Number(item?.hardwareId) > 0) : []),
+  ]
+  const seen = new Set()
+  return raw.flatMap((item, index) => {
+    const hardwareId = Number(item?.hardwareId)
+    const categoria = clean(item?.categoria).toUpperCase()
+    const key = `${categoria}:${hardwareId}`
+    if (!Number.isInteger(hardwareId) || hardwareId < 1 || !categoria || seen.has(key)) return []
+    const hardware = hardwareById.get(hardwareId)
+    if (!hardware || hardware.publicado !== true || hardware.ativo === false) return []
+    seen.add(key)
+    return [{
+      hardwareId,
+      categoria,
+      quantidade: Number(item?.quantidade || 1),
+      ordem: index,
+      nome: clean(hardware.nome) || clean(item?.hardwareNome) || `Hardware #${hardwareId}`,
+      marca: clean(hardware.marca),
+      modelo: clean(hardware.modelo),
+    }]
+  })
 }
 
 function responseText(data) {
@@ -411,6 +451,7 @@ function entityStatus(value, id, pendingLabel) {
 
 function RegistrationLinkForm({ flow, onChange, onSubmit, onCancel, sending }) {
   const isProduct = flow?.action === ACTION_PRODUCT
+  const isBuild = flow?.action === ACTION_BUILD
   const productUrl = clean(flow?.url)
   const affiliateUrl = clean(flow?.affiliateUrl)
   const productValid = validPublicUrl(productUrl)
@@ -420,8 +461,12 @@ function RegistrationLinkForm({ flow, onChange, onSubmit, onCancel, sending }) {
   return (
     <form className="admin-ia-link-form" onSubmit={(event) => { event.preventDefault(); if (ready) onSubmit(productUrl, affiliateUrl) }}>
       <div className="admin-ia-link-form__head">
-        <strong>{isProduct ? 'Analisar produto para cadastro' : 'Analisar Hardware por link'}</strong>
-        <small>{isProduct ? 'Mercado Livre e Shopee usam API oficial quando disponível; Magazine Luiza/Magalu usa o extrator específico do ProjetoIA.' : 'A IA pesquisa a ficha técnica antes de cadastrar.'}</small>
+        <strong>{isProduct ? 'Analisar produto para cadastro' : isBuild ? 'Analisar PC Montado por link' : 'Analisar Hardware por link'}</strong>
+        <small>{isProduct
+          ? 'Mercado Livre e Shopee usam API oficial quando disponível; Magazine Luiza/Magalu usa o extrator específico do ProjetoIA.'
+          : isBuild
+            ? 'A IA identifica o PC e tenta vincular automaticamente as peças aos Hardwares já publicados.'
+            : 'A IA pesquisa a ficha técnica antes de cadastrar.'}</small>
       </div>
       <label>
         <span>Link do produto</span>
@@ -450,9 +495,9 @@ function RegistrationLinkForm({ flow, onChange, onSubmit, onCancel, sending }) {
         </label>
       )}
       <div className="admin-ia-link-form__actions">
-        <button type="button" className="btn btn-secundario btn-pequeno" onClick={onCancel} disabled={sending}>Cancelar</button>
+        <button type="button" className="btn btn-secundario btn-pequeno" onClick={onCancel}>Cancelar</button>
         <button type="submit" className="btn btn-primario btn-pequeno" disabled={!ready}>
-          {sending ? 'Analisando...' : isProduct ? 'Analisar produto' : 'Analisar Hardware'}
+          {sending ? 'Analisando...' : isProduct ? 'Analisar produto' : isBuild ? 'Analisar PC Montado' : 'Analisar Hardware'}
         </button>
       </div>
       {isProduct && <small className="admin-ia-link-form__note">A IA sempre mostra uma prévia com os dados encontrados antes de qualquer cadastro.</small>}
@@ -576,13 +621,17 @@ export default function AdminAssistant({ open, onClose }) {
   const [sending, setSending] = useState(false)
   const [messages, setMessages] = useState([{ role: 'assistente', text: 'Posso ajudar a revisar cadastros, organizar dados e explicar o estado do painel.' }])
   const [flow, setFlow] = useState(null)
+  const activeFlowId = useRef(0)
   const context = useMemo(() => ({ rota: location.pathname, area: 'admin' }), [location.pathname])
 
   async function startBuildRegistration() {
+    const flowId = activeFlowId.current + 1
+    activeFlowId.current = flowId
     setSending(true)
     setDraft('')
     try {
       const items = await adminService.hardwares.listForBuild()
+      if (activeFlowId.current !== flowId) return
       const hardwares = (Array.isArray(items) ? items : []).filter(
         (hardware) => hardware?.ativo !== false && hardware?.publicado === true,
       )
@@ -594,10 +643,10 @@ export default function AdminAssistant({ open, onClose }) {
         return
       }
       setFlow({
+        flowId,
         action: ACTION_BUILD,
-        step: 'BUILD_INFO',
-        infoIndex: 0,
-        componentIndex: 0,
+        step: 'BUILD_URL',
+        url: '',
         hardwares,
         buildCandidates: [],
         build: {
@@ -612,15 +661,101 @@ export default function AdminAssistant({ open, onClose }) {
       })
       setMessages((current) => [...current, {
         role: 'assistente',
-        text: `Vamos montar o cadastro pelo chat. ${BUILD_INFO_QUESTIONS[0].prompt}`,
+        text: 'Cole o link do PC montado. Vou extrair a configuração e vincular automaticamente as peças que já existirem em Hardwares. Depois pergunto somente o que faltar.',
       }])
     } catch (error) {
+      if (activeFlowId.current !== flowId) return
       setMessages((current) => [...current, {
         role: 'assistente',
         text: error?.message || 'Não consegui carregar os Hardwares para montar o PC.',
       }])
     } finally {
-      setSending(false)
+      if (activeFlowId.current === flowId) setSending(false)
+    }
+  }
+
+  async function analyzeBuildLink(url) {
+    const flowId = flow?.flowId
+    if (!flowId || activeFlowId.current !== flowId) return
+    setSending(true)
+    try {
+      const preview = await adminService.ai.importLink(url, 'PC_MONTADO')
+      if (activeFlowId.current !== flowId) return
+
+      const source = getAiPayload(preview)
+      const componentes = buildLinkedComponents(preview, flow.hardwares || [])
+      const build = {
+        ...(flow.build || {}),
+        nome: clean(source?.nome),
+        finalidade: clean(source?.finalidade),
+        resolucaoRecomendada: clean(source?.resolucaoRecomendada || source?.resolucao),
+        categoria: clean(source?.categoria) || buildCategoryFromPurpose(source?.finalidade),
+        descricao: clean(source?.descricao),
+        imagemUrl: clean(source?.imagemUrl),
+        publicado: true,
+        ativo: true,
+        componentes,
+      }
+
+      const infoQuestions = BUILD_INFO_QUESTIONS.filter((question) => !clean(build[question.field]))
+      if (infoQuestions.length > 0) {
+        setFlow((current) => current && current.flowId === flowId ? {
+          ...current,
+          step: 'BUILD_INFO',
+          url,
+          preview,
+          build,
+          buildInfoQuestions: infoQuestions,
+          infoIndex: 0,
+          componentIndex: nextBuildComponentIndex(componentes, 0),
+        } : current)
+        setMessages((current) => [...current, {
+          role: 'assistente',
+          text: `A IA analisou o link e vinculou ${componentes.length} peça(s). ${infoQuestions[0].prompt}`,
+        }])
+        return
+      }
+
+      const nextIndex = nextBuildComponentIndex(componentes, 0)
+      if (nextIndex >= BUILD_COMPONENT_STEPS.length) {
+        setFlow((current) => current && current.flowId === flowId ? {
+          ...current,
+          step: 'BUILD_PREVIEW',
+          url,
+          preview,
+          build,
+          componentIndex: nextIndex,
+          buildCandidates: [],
+        } : current)
+        setMessages((current) => [...current, {
+          role: 'assistente',
+          text: `A IA conseguiu vincular ${componentes.length} peça(s) do anúncio ao catálogo. Confira a prévia e confirme para validar/publicar.`,
+        }])
+        return
+      }
+
+      const nextStep = BUILD_COMPONENT_STEPS[nextIndex]
+      setFlow((current) => current && current.flowId === flowId ? {
+        ...current,
+        step: 'BUILD_COMPONENT',
+        url,
+        preview,
+        build,
+        componentIndex: nextIndex,
+        buildCandidates: [],
+      } : current)
+      setMessages((current) => [...current, {
+        role: 'assistente',
+        text: `A IA vinculou ${componentes.length} peça(s). Não consegui vincular a ${nextStep.label}. ${buildComponentPrompt(nextStep)}`,
+      }])
+    } catch (error) {
+      if (activeFlowId.current !== flowId) return
+      setMessages((current) => [...current, {
+        role: 'assistente',
+        text: error?.message || 'Não consegui analisar esse PC montado pelo link.',
+      }])
+    } finally {
+      if (activeFlowId.current === flowId) setSending(false)
     }
   }
 
