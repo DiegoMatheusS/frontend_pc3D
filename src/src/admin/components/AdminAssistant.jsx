@@ -23,6 +23,170 @@ function formatPrice(value) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(number)
 }
 
+
+const SPEC_FIELD_BY_CATEGORY = {
+  PROCESSADOR: 'especificacaoProcessador',
+  PLACA_VIDEO: 'especificacaoPlacaVideo',
+  PLACA_MAE: 'especificacaoPlacaMae',
+  MEMORIA_RAM: 'especificacaoMemoriaRam',
+  ARMAZENAMENTO: 'especificacaoArmazenamento',
+  FONTE: 'especificacaoFonte',
+  COOLER: 'especificacaoCooler',
+  VENTOINHA: 'especificacaoVentoinha',
+  GABINETE: 'especificacaoGabinete',
+  NOTEBOOK: 'especificacaoNotebook',
+}
+
+const CATEGORY_ANSWER_ALIASES = {
+  celular: 'CELULAR',
+  smartphone: 'CELULAR',
+  telefone: 'TELEFONE',
+  tablet: 'TABLET',
+  notebook: 'NOTEBOOK',
+  monitor: 'MONITOR',
+  processador: 'PROCESSADOR',
+  cpu: 'PROCESSADOR',
+  'placa de video': 'PLACA_VIDEO',
+  gpu: 'PLACA_VIDEO',
+  'placa mae': 'PLACA_MAE',
+  memoria: 'MEMORIA_RAM',
+  'memoria ram': 'MEMORIA_RAM',
+  armazenamento: 'ARMAZENAMENTO',
+  ssd: 'ARMAZENAMENTO',
+  hd: 'ARMAZENAMENTO',
+  fonte: 'FONTE',
+  gabinete: 'GABINETE',
+  cooler: 'COOLER',
+  ventoinha: 'VENTOINHA',
+  mouse: 'MOUSE',
+  teclado: 'TECLADO',
+  fone: 'FONE',
+  headset: 'FONE',
+  microfone: 'MICROFONE',
+  videogame: 'VIDEOGAME',
+  console: 'VIDEOGAME',
+  camera: 'CAMERA',
+  'maquina fotografica': 'CAMERA',
+  'smart tv': 'SMART_TV',
+  tv: 'TV',
+  'aspirador de po': 'ASPIRADOR_PO',
+  aspirador: 'ASPIRADOR_PO',
+  'robo aspirador': 'ROBO_ASPIRADOR',
+  drone: 'DRONE',
+  'air fryer': 'AIR_FRYER',
+  cafeteira: 'CAFETEIRA',
+  liquidificador: 'LIQUIDIFICADOR',
+  ventilador: 'VENTILADOR',
+  climatizador: 'CLIMATIZADOR',
+}
+
+function normalizedAnswerKey(value) {
+  return clean(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+}
+
+function normalizeCategoryAnswer(value) {
+  const key = normalizedAnswerKey(value)
+  return CATEGORY_ANSWER_ALIASES[key] || key.toUpperCase().replaceAll(' ', '_')
+}
+
+function parseBrazilianNumber(value) {
+  const raw = clean(value).replace(/R\$/gi, '').replace(/\s+/g, '')
+  if (!raw) return null
+  const normalized = raw.includes(',')
+    ? raw.replace(/\./g, '').replace(',', '.')
+    : raw
+  const number = Number(normalized.replace(/[^0-9.-]/g, ''))
+  return Number.isFinite(number) ? number : null
+}
+
+function parseQuestionValue(field, value) {
+  const text = clean(value)
+  if (!text) return null
+  if (field === 'preco' || field === 'precoAnterior') return parseBrazilianNumber(text)
+
+  const normalized = normalizedAnswerKey(text)
+  if (/^(sim|s|true|yes)$/.test(normalized)) return true
+  if (/^(nao|n|false|no)$/.test(normalized)) return false
+
+  if (/(?:mhz|ghz|watts?|gb|mb|nucleos|threads|quantidade|capacidade|largura|altura|comprimento|rpm|mm|litros|minutos|metros|polegadas|hz|pa)$/i.test(field)) {
+    const number = parseBrazilianNumber(text)
+    if (number !== null) return number
+  }
+  if (/^(tipos|formatos|conectores|frequencias)/i.test(field) && /[,;|]/.test(text)) {
+    return text.split(/[,;|]/).map((item) => item.trim()).filter(Boolean)
+  }
+  return text
+}
+
+function questionPrompt(field) {
+  const custom = {
+    categoria: 'Qual é a categoria desse produto? Ex.: celular, tablet, processador, videogame, câmera ou aspirador.',
+    nome: 'Qual é o nome completo do produto?',
+    marca: 'Qual é a marca?',
+    modelo: 'Qual é o modelo?',
+    preco: 'Qual é o preço atual? Pode responder, por exemplo, 918 ou 918,00.',
+    precoAnterior: 'Qual era o preço anterior?',
+  }
+  return custom[field] || `Não consegui obter ${humanizeField(field)}. Qual é o valor correto?`
+}
+
+function buildRegistrationQuestions(preview, action, answered = {}) {
+  const summary = normalizeAutomaticPreview(preview)
+  const questions = []
+  const added = new Set()
+  const add = (field) => {
+    if (!field || answered[field] !== undefined || added.has(field)) return
+    added.add(field)
+    questions.push({ field, prompt: questionPrompt(field) })
+  }
+
+  if (!summary.category) add('categoria')
+  if (!summary.name) add('nome')
+  if (!summary.brand) add('marca')
+  if (!summary.model) add('modelo')
+  if (action === ACTION_PRODUCT && !Number.isFinite(Number(summary.price))) add('preco')
+
+  const technical = summary.technical || {}
+  for (const field of getAiMissingFields(preview)) {
+    if (['categoria', 'nome', 'marca', 'modelo', 'preco'].includes(field)) {
+      add(field)
+      continue
+    }
+    const hasValue = technical[field] !== undefined && technical[field] !== null && technical[field] !== ''
+    if (!hasValue) add(field)
+  }
+  return questions
+}
+
+function mergeManualPreview(summary, flow) {
+  const adjustments = flow?.adjustments || {}
+  const corrected = adjustments?.dadosCorrigidos || {}
+  const category = adjustments?.categoria || summary.category
+  const specKey = SPEC_FIELD_BY_CATEGORY[category]
+  const specCorrected = specKey && corrected?.[specKey] && typeof corrected[specKey] === 'object'
+    ? corrected[specKey]
+    : {}
+
+  return {
+    ...summary,
+    category,
+    name: clean(corrected.nome) || summary.name,
+    brand: clean(corrected.marca) || summary.brand,
+    model: clean(corrected.modelo) || summary.model,
+    description: clean(corrected.descricao) || summary.description,
+    mpn: clean(corrected.mpn) || summary.mpn,
+    gtin: clean(corrected.gtin) || summary.gtin,
+    price: adjustments.preco ?? summary.price,
+    previousPrice: adjustments.precoAnterior ?? summary.previousPrice,
+    technical: { ...(summary.technical || {}), ...corrected, ...specCorrected },
+  }
+}
+
 function humanizeField(key) {
   const labels = {
     mpn: 'MPN',
@@ -246,7 +410,8 @@ function RegistrationLinkForm({ flow, onChange, onSubmit, onCancel, sending }) {
 
 function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending }) {
   if (!flow?.preview) return null
-  const summary = flow.backendReady ? normalizeAutomaticPreview(flow.preview) : normalizeFallbackPreview(flow.preview)
+  const baseSummary = flow.backendReady ? normalizeAutomaticPreview(flow.preview) : normalizeFallbackPreview(flow.preview)
+  const summary = mergeManualPreview(baseSummary, flow)
   const price = formatPrice(summary.price)
   const previousPrice = formatPrice(summary.previousPrice)
   const readiness = getAiReadiness(flow.preview)
@@ -305,7 +470,7 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
         <button type="button" className="btn btn-secundario btn-pequeno" onClick={onCancel} disabled={sending}>Cancelar</button>
         {flow.backendReady && <button type="button" className="btn btn-secundario btn-pequeno" onClick={onOpenForm} disabled={sending}>{flow.action === ACTION_PRODUCT && !price ? 'Abrir cadastro e informar preço' : 'Corrigir dados'}</button>}
         {flow.backendReady
-          ? <button type="button" className="btn btn-primario btn-pequeno" onClick={onConfirm} disabled={sending || !flow.preview?.tokenConfirmacao || flow.preview?.podeConfirmar === false || readiness.ready === false || readiness.enabled === false}>{sending ? 'Confirmando...' : 'Confirmar cadastro'}</button>
+          ? <button type="button" className="btn btn-primario btn-pequeno" onClick={onConfirm} disabled={sending || !flow.preview?.tokenConfirmacao || ((!flow.manualComplete) && (flow.preview?.podeConfirmar === false || readiness.ready === false || readiness.enabled === false))}>{sending ? 'Confirmando...' : 'Confirmar cadastro'}</button>
           : <button type="button" className="btn btn-primario btn-pequeno" onClick={onOpenForm} disabled={sending}>Abrir cadastro</button>}
       </div>
     </section>
@@ -343,8 +508,12 @@ export default function AdminAssistant({ open, onClose }) {
     setMessages((current) => [...current, { role: 'assistente', text: 'Cadastro por URL cancelado. Nenhum registro foi criado.' }])
   }
 
-  async function finishRegistration(preview) {
-    const result = await adminService.chatbot.confirmRegistration({ tokenConfirmacao: preview.tokenConfirmacao, confirmar: true })
+  async function finishRegistration(preview, adjustments = {}) {
+    const result = await adminService.chatbot.confirmRegistration({
+      tokenConfirmacao: preview.tokenConfirmacao,
+      confirmar: true,
+      ...(Object.keys(adjustments || {}).length ? { ajustes: adjustments } : {}),
+    })
     const hardware = result?.hardware
     const product = result?.produto
     const offer = result?.oferta
@@ -379,7 +548,28 @@ export default function AdminAssistant({ open, onClose }) {
           && getAiMissingFields(result).length === 0
           && getAiConflicts(result).length === 0
         )
-        setFlow((current) => ({ ...current, step: 'PREVIEW', url, affiliateUrl, preview: result, backendReady: true }))
+        const questions = buildRegistrationQuestions(result, flow.action)
+        if (questions.length > 0) {
+          setFlow((current) => ({
+            ...current,
+            step: 'QUESTIONS',
+            url,
+            affiliateUrl,
+            preview: result,
+            backendReady: true,
+            questions,
+            questionIndex: 0,
+            answers: {},
+            adjustments: {},
+            manualComplete: false,
+          }))
+          setMessages((current) => [...current, {
+            role: 'assistente',
+            text: `A análise ficou incompleta. Vou pedir só o que faltou. ${questions[0].prompt}`,
+          }])
+          return
+        }
+        setFlow((current) => ({ ...current, step: 'PREVIEW', url, affiliateUrl, preview: result, backendReady: true, questions: [], adjustments: {}, manualComplete: false }))
         setMessages((current) => [...current, {
           role: 'assistente',
           text: safePreview
@@ -417,7 +607,7 @@ export default function AdminAssistant({ open, onClose }) {
     if (!flow?.backendReady || !flow?.preview?.tokenConfirmacao || sending || readiness.ready === false || readiness.enabled === false) return
     setSending(true)
     try {
-      await finishRegistration(flow.preview)
+      await finishRegistration(flow.preview, flow.adjustments || {})
     } catch (error) {
       setMessages((current) => [...current, { role: 'assistente', text: error?.message || 'Não foi possível confirmar o cadastro.' }])
     } finally {
@@ -456,6 +646,91 @@ export default function AdminAssistant({ open, onClose }) {
     onClose?.()
   }
 
+  async function answerRegistrationQuestion(text) {
+    const question = flow?.questions?.[flow?.questionIndex || 0]
+    if (!question) return
+    setSending(true)
+    try {
+      const field = question.field
+      let value = field === 'categoria' ? normalizeCategoryAnswer(text) : parseQuestionValue(field, text)
+      if (value === null || value === '') {
+        setMessages((current) => [...current, { role: 'assistente', text: `Não consegui entender esse valor. ${question.prompt}` }])
+        return
+      }
+
+      const answers = { ...(flow.answers || {}), [field]: value }
+      let preview = flow.preview
+      let adjustments = {
+        ...(flow.adjustments || {}),
+        dadosCorrigidos: { ...(flow.adjustments?.dadosCorrigidos || {}) },
+      }
+
+      if (field === 'categoria') {
+        adjustments.categoria = value
+        const body = {
+          acao: flow.action,
+          url: flow.url,
+          ...(flow.action === ACTION_PRODUCT && flow.affiliateUrl ? { urlAfiliada: flow.affiliateUrl } : {}),
+          categoriaEsperada: value,
+        }
+        preview = await adminService.chatbot.analyzeRegistration(body)
+      } else if (field === 'preco' || field === 'precoAnterior') {
+        adjustments[field] = value
+      } else {
+        const category = adjustments.categoria || normalizeAutomaticPreview(preview).category
+        const specKey = SPEC_FIELD_BY_CATEGORY[category]
+        const technicalMissing = getAiMissingFields(preview).includes(field)
+        if (technicalMissing && specKey) {
+          adjustments.dadosCorrigidos[specKey] = {
+            ...(adjustments.dadosCorrigidos[specKey] || {}),
+            [field]: value,
+          }
+        } else {
+          adjustments.dadosCorrigidos[field] = value
+        }
+      }
+
+      const remaining = buildRegistrationQuestions(preview, flow.action, answers)
+      if (remaining.length === 0) {
+        setFlow((current) => ({
+          ...current,
+          step: 'PREVIEW',
+          preview,
+          answers,
+          questions: [],
+          questionIndex: 0,
+          adjustments,
+          manualComplete: true,
+          backendReady: true,
+        }))
+        setMessages((current) => [...current, {
+          role: 'assistente',
+          text: 'Pronto. Completei a prévia com as suas respostas. Confira tudo abaixo; o cadastro só será gravado quando você clicar em Confirmar cadastro.',
+        }])
+        return
+      }
+
+      setFlow((current) => ({
+        ...current,
+        step: 'QUESTIONS',
+        preview,
+        answers,
+        questions: remaining,
+        questionIndex: 0,
+        adjustments,
+        backendReady: true,
+      }))
+      setMessages((current) => [...current, { role: 'assistente', text: remaining[0].prompt }])
+    } catch (error) {
+      setMessages((current) => [...current, {
+        role: 'assistente',
+        text: error?.message || 'Não consegui aplicar essa resposta. Tente novamente.',
+      }])
+    } finally {
+      setSending(false)
+    }
+  }
+
   async function send(event) {
     event?.preventDefault()
     const text = draft.trim()
@@ -464,6 +739,12 @@ export default function AdminAssistant({ open, onClose }) {
     const next = [...messages, { role: 'usuario', text }]
     setMessages(next)
     setDraft('')
+
+    if (flow?.step === 'QUESTIONS') {
+      await answerRegistrationQuestion(text)
+      return
+    }
+
     setSending(true)
     try {
       const historico = next.slice(-8).map((item) => ({ papel: item.role === 'usuario' ? 'usuario' : 'assistente', conteudo: item.text }))
@@ -476,7 +757,9 @@ export default function AdminAssistant({ open, onClose }) {
     }
   }
 
-  const inputPlaceholder = 'Pergunte sobre o catálogo...'
+  const inputPlaceholder = flow?.step === 'QUESTIONS'
+    ? (flow?.questions?.[flow?.questionIndex || 0]?.prompt || 'Responda o campo que falta...')
+    : 'Pergunte sobre o catálogo...'
 
   return (
     <aside className="admin-ia-painel" data-aberto={open ? 'true' : 'false'} aria-hidden={!open}>
