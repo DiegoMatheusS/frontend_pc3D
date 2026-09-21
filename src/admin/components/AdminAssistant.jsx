@@ -149,7 +149,11 @@ function buildRegistrationQuestions(preview, action, answered = {}) {
   if (!summary.name) add('nome')
   if (!summary.brand) add('marca')
   if (!summary.model) add('modelo')
-  if (action === ACTION_PRODUCT && !Number.isFinite(Number(summary.price))) add('preco')
+  const priceNumber = Number(summary.price)
+  if (
+    action === ACTION_PRODUCT
+    && (summary.price === null || summary.price === undefined || summary.price === '' || !Number.isFinite(priceNumber) || priceNumber <= 0)
+  ) add('preco')
 
   const technical = summary.technical || {}
   for (const field of getAiMissingFields(preview)) {
