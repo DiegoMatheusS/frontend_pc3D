@@ -13,12 +13,14 @@ const hardwareLinks = [
 ]
 
 const storeLinks = [
-  ['Monitores', '/loja?grupo=monitores'],
-  ['Mouses', '/loja?grupo=perifericos&categoria=mouse'],
-  ['Teclados', '/loja?grupo=perifericos&categoria=teclado'],
-  ['Headsets e fones', '/loja?grupo=perifericos'],
-  ['Mousepads', '/loja?grupo=setup&categoria=mousepad'],
-  ['Cadeiras e setup', '/loja?grupo=setup'],
+  ['Celulares', '/loja?grupo=celulares'],
+  ['Tablets', '/loja?grupo=tablets'],
+  ['Games', '/loja?grupo=games'],
+  ['TV e Áudio', '/loja?grupo=tv-audio'],
+  ['Foto e Vídeo', '/loja?grupo=fotografia'],
+  ['Casa Inteligente', '/loja?grupo=casa-inteligente'],
+  ['Eletroportáteis', '/loja?grupo=eletroportateis'],
+  ['Rede e Internet', '/loja?grupo=rede'],
 ]
 
 export default function Footer() {
@@ -28,7 +30,7 @@ export default function Footer() {
         <div className="site-footer__columns">
           <section className="site-footer__intro">
             <Link className="site-footer__logo" to="/">CRIA<span>BYTE</span></Link>
-            <p>Monte, compare e compartilhe configurações de PC com informações técnicas, ofertas e comunidade.</p>
+            <p>Compare eletrônicos, encontre ofertas e monte seu PC com informações técnicas e comunidade.</p>
             <Link className="site-footer__primary-link" to="/montar">Monte seu PC em 3D →</Link>
           </section>
 
@@ -52,8 +54,8 @@ export default function Footer() {
           </section>
 
           <section className="site-footer__column">
-            <h2>Periféricos e setup</h2>
-            <nav aria-label="Periféricos no rodapé">
+            <h2>Loja de eletrônicos</h2>
+            <nav aria-label="Loja de eletrônicos no rodapé">
               {storeLinks.map(([label, to]) => <Link key={to} to={to}>{label}</Link>)}
             </nav>
           </section>
