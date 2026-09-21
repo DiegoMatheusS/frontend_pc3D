@@ -359,6 +359,85 @@
 .admin-ia-chat-digitando span:nth-child(3) { animation-delay: .36s; }
 @keyframes adminIaPulso { 0%,100% { opacity:.3; transform:scale(.85); } 50% { opacity:1; transform:scale(1); } }
 
+.admin-ia-link-form {
+  flex-shrink: 0;
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+}
+.admin-ia-link-form__head { display: grid; gap: 2px; }
+.admin-ia-link-form__head strong { font-size: 12px; }
+.admin-ia-link-form__head small,
+.admin-ia-link-form__note { color: var(--admin-muted); font-size: 10px; line-height: 1.4; }
+.admin-ia-link-form label { display: grid; gap: 5px; }
+.admin-ia-link-form label > span { color: var(--admin-muted); font-size: 10px; font-weight: 800; }
+.admin-ia-link-form input {
+  width: 100%;
+  min-height: 39px;
+  padding: 8px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface-2);
+  color: var(--admin-text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.admin-ia-link-form input:focus { border-color: var(--admin-primary); box-shadow: 0 0 0 2px color-mix(in srgb,var(--admin-primary) 14%,transparent); }
+.admin-ia-link-form__actions { display: grid; grid-template-columns: auto 1fr; gap: 8px; }
+.admin-ia-link-form__actions .btn { justify-content: center; }
+.admin-ia-link-form__note { margin: 0; }
+
+
+.admin-ia-registration-price strong { color: var(--admin-primary); font-size: 13px; }
+.admin-ia-collected-description,
+.admin-ia-registration-links,
+.admin-ia-collected-data {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  background: var(--admin-surface);
+}
+.admin-ia-collected-description > span,
+.admin-ia-registration-links > div > span,
+.admin-ia-collected-data > span {
+  color: var(--admin-muted);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.admin-ia-collected-description p { margin: 0; max-height: 90px; overflow: auto; font-size: 11px; line-height: 1.45; }
+.admin-ia-registration-links > div { min-width: 0; display: grid; gap: 3px; }
+.admin-ia-registration-links a,
+.admin-ia-registration-links strong {
+  min-width: 0;
+  color: var(--admin-text);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.admin-ia-registration-links a { color: var(--admin-primary); text-decoration: none; }
+.admin-ia-registration-links a:hover { text-decoration: underline; }
+.admin-ia-collected-data > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
+.admin-ia-collected-data p {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 7px;
+  background: var(--admin-surface-2);
+}
+.admin-ia-collected-data b { color: var(--admin-muted); font-size: 8px; font-weight: 800; }
+.admin-ia-collected-data strong { font-size: 10px; font-weight: 750; overflow-wrap: anywhere; }
+@media (max-width: 430px) { .admin-ia-collected-data > div { grid-template-columns: 1fr; } }
+
 .admin-ia-entrada { flex-shrink: 0; padding: 10px 14px; border-top: 1px solid var(--admin-border); display: flex; gap: 8px; align-items: flex-end; }
 .admin-ia-textarea { flex: 1; min-height: 38px; max-height: 110px; padding: 8px 11px; border: 1px solid var(--admin-border); border-radius: 8px; background: var(--admin-surface-2); color: var(--admin-text); font-size: 13px; resize: none; line-height: 1.45; outline: none; }
 .admin-ia-textarea:focus { border-color: var(--admin-primary); }
