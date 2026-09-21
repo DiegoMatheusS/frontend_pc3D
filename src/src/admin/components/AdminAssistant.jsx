@@ -92,20 +92,6 @@ function unsupportedChatbotRoute(error) {
   return [404, 405].includes(Number(error?.status))
 }
 
-function canAutoConfirm(preview = {}) {
-  const readiness = getAiReadiness(preview)
-  const warnings = Array.isArray(preview?.avisos) ? preview.avisos : []
-  return Boolean(
-    preview?.tokenConfirmacao
-    && preview?.podeConfirmar === true
-    && readiness.ready !== false
-    && readiness.enabled !== false
-    && warnings.length === 0
-    && getAiMissingFields(preview).length === 0
-    && getAiConflicts(preview).length === 0
-  )
-}
-
 function previewSource(preview = {}) {
   return getAiPayload(preview)
 }
@@ -218,7 +204,7 @@ function RegistrationLinkForm({ flow, onChange, onSubmit, onCancel, sending }) {
   return (
     <form className="admin-ia-link-form" onSubmit={(event) => { event.preventDefault(); if (ready) onSubmit(productUrl, affiliateUrl) }}>
       <div className="admin-ia-link-form__head">
-        <strong>{isProduct ? 'Cadastro automático de produto' : 'Analisar Hardware por link'}</strong>
+        <strong>{isProduct ? 'Analisar produto para cadastro' : 'Analisar Hardware por link'}</strong>
         <small>{isProduct ? 'Mercado Livre e Shopee usam API oficial quando disponível; Magazine Luiza/Magalu usa o extrator específico do ProjetoIA.' : 'A IA pesquisa a ficha técnica antes de cadastrar.'}</small>
       </div>
       <label>
@@ -250,10 +236,10 @@ function RegistrationLinkForm({ flow, onChange, onSubmit, onCancel, sending }) {
       <div className="admin-ia-link-form__actions">
         <button type="button" className="btn btn-secundario btn-pequeno" onClick={onCancel} disabled={sending}>Cancelar</button>
         <button type="submit" className="btn btn-primario btn-pequeno" disabled={!ready}>
-          {sending ? 'Analisando...' : isProduct ? 'Cadastrar produto com IA' : 'Analisar Hardware'}
+          {sending ? 'Analisando...' : isProduct ? 'Analisar produto' : 'Analisar Hardware'}
         </button>
       </div>
-      {isProduct && <small className="admin-ia-link-form__note">Se a IA encontrar conflito, duplicidade ambígua ou dado obrigatório ausente, ela para na prévia para você revisar.</small>}
+      {isProduct && <small className="admin-ia-link-form__note">A IA sempre mostra uma prévia com os dados encontrados antes de qualquer cadastro.</small>}
     </form>
   )
 }
@@ -345,7 +331,7 @@ export default function AdminAssistant({ open, onClose }) {
     setMessages((current) => [...current, {
       role: 'assistente',
       text: action === ACTION_PRODUCT
-        ? 'Cole o link do produto e o seu link afiliado nos campos abaixo. Funciona com Mercado Livre, Shopee e Magazine Luiza/Magalu. Se a análise estiver segura, eu cadastro automaticamente; se houver dúvida, mostro a prévia.'
+        ? 'Cole o link do produto e o seu link afiliado nos campos abaixo. Funciona com Mercado Livre, Shopee e Magazine Luiza/Magalu. Primeiro eu analiso e sempre mostro a prévia; o cadastro só acontece depois que você confirmar.'
         : `Cadastrar ${label}: cole o link abaixo. Vou analisar a ficha técnica antes de qualquer cadastro.`,
     }])
   }
@@ -356,7 +342,7 @@ export default function AdminAssistant({ open, onClose }) {
     setMessages((current) => [...current, { role: 'assistente', text: 'Cadastro por URL cancelado. Nenhum registro foi criado.' }])
   }
 
-  async function finishRegistration(preview, automatic = false) {
+  async function finishRegistration(preview) {
     const result = await adminService.chatbot.confirmRegistration({ tokenConfirmacao: preview.tokenConfirmacao, confirmar: true })
     const hardware = result?.hardware
     const product = result?.produto
@@ -366,7 +352,7 @@ export default function AdminAssistant({ open, onClose }) {
       product?.id ? `Produto #${product.id} ${String(product.acao || '').toLowerCase()}` : '',
       offer?.id ? `Oferta #${offer.id} ${String(offer.acao || '').toLowerCase()}` : '',
     ].filter(Boolean)
-    const prefix = automatic ? 'Cadastro automático concluído.' : 'Cadastro concluído.'
+    const prefix = 'Cadastro concluído.'
     setMessages((current) => [...current, { role: 'assistente', text: parts.length ? `${prefix} ${parts.join(' · ')}` : responseText(result) }])
     setFlow(null)
     return result
@@ -382,13 +368,23 @@ export default function AdminAssistant({ open, onClose }) {
           ...(flow.action === ACTION_PRODUCT && affiliateUrl ? { urlAfiliada: affiliateUrl } : {}),
         }
         const result = await adminService.chatbot.analyzeRegistration(body)
-        if (flow.action === ACTION_PRODUCT && affiliateUrl && canAutoConfirm(result)) {
-          setMessages((current) => [...current, { role: 'assistente', text: 'Análise segura e sem conflitos. Cadastrando Produto e Oferta...' }])
-          await finishRegistration(result, true)
-          return
-        }
+        const readiness = getAiReadiness(result)
+        const warnings = Array.isArray(result?.avisos) ? result.avisos : []
+        const safePreview = Boolean(
+          result?.podeConfirmar === true
+          && readiness.ready !== false
+          && readiness.enabled !== false
+          && warnings.length === 0
+          && getAiMissingFields(result).length === 0
+          && getAiConflicts(result).length === 0
+        )
         setFlow((current) => ({ ...current, step: 'PREVIEW', url, affiliateUrl, preview: result, backendReady: true }))
-        setMessages((current) => [...current, { role: 'assistente', text: 'Encontrei dados que precisam de conferência. Revise a prévia abaixo antes de confirmar.' }])
+        setMessages((current) => [...current, {
+          role: 'assistente',
+          text: safePreview
+            ? 'Análise concluída e sem conflitos. Confira a prévia abaixo e clique em Confirmar cadastro para gravar.'
+            : 'Análise concluída. Revise a prévia abaixo, especialmente os avisos, antes de confirmar.',
+        }])
         return
       } catch (error) {
         if (!unsupportedChatbotRoute(error)) throw error
@@ -420,7 +416,7 @@ export default function AdminAssistant({ open, onClose }) {
     if (!flow?.backendReady || !flow?.preview?.tokenConfirmacao || sending || readiness.ready === false || readiness.enabled === false) return
     setSending(true)
     try {
-      await finishRegistration(flow.preview, false)
+      await finishRegistration(flow.preview)
     } catch (error) {
       setMessages((current) => [...current, { role: 'assistente', text: error?.message || 'Não foi possível confirmar o cadastro.' }])
     } finally {
