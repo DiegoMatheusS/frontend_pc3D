@@ -150,7 +150,7 @@ export const adminService = {
       try {
         const adminItems = await list('/api/admin/hardwares')
         if (adminItems.length) return adminItems
-      } catch { }
+      } catch { /* fallback público abaixo */ }
       return list('/api/hardwares')
     },
     get: (id) => one(`/api/admin/hardwares/${id}`),
@@ -268,7 +268,7 @@ export const adminService = {
   },
 
   chatbot: {
-    analyzeRegistration: (body) => oneRequest('/api/admin/chatbot/analisar-cadastro', 'POST', body),
+    analyzeRegistration: (body) => oneRequestWithNetworkRetry('/api/admin/chatbot/analisar-cadastro', 'POST', body),
     confirmRegistration: (body) => oneRequest('/api/admin/chatbot/confirmar-cadastro', 'POST', body),
     cancelRegistration: (body) => oneRequest('/api/admin/chatbot/cancelar-cadastro', 'POST', body),
   },
@@ -289,6 +289,23 @@ export const adminService = {
 
 async function oneRequest(path, method, body, options = {}) {
   return unwrapOne(await apiRequest(path, { ...options, method, body }))
+}
+
+async function oneRequestWithNetworkRetry(path, method, body, { retries = 1, delayMs = 800 } = {}) {
+  try {
+    return await oneRequest(path, method, body)
+  } catch (error) {
+    const networkFailure = Number(error?.status || 0) === 0
+      && !['REQUEST_ABORTED', 'IA_TIMEOUT'].includes(String(error?.code || ''))
+
+    if (!networkFailure || retries <= 0) throw error
+
+    await new Promise((resolve) => window.setTimeout(resolve, delayMs))
+    return oneRequestWithNetworkRetry(path, method, body, {
+      retries: retries - 1,
+      delayMs: Math.min(delayMs * 2, 2000),
+    })
+  }
 }
 
 async function oneRequestWithTimeout(path, method, body, { signal, timeoutMs = 90000 } = {}) {
