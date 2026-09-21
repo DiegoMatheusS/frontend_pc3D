@@ -124,6 +124,9 @@ function normalizeAutomaticPreview(data = {}) {
   const hardwareData = { ...source, ...(hardware?.dadosDetectados || hardware?.dados || hardware?.data || {}) }
   const productData = { ...source, ...(product?.dadosDetectados || product?.dados || product?.data || {}) }
   const offerData = { ...structuredOffer, ...(offer?.dadosDetectados || offer?.dados || offer?.data || {}) }
+  const collectedSpecs = product?.especificacoesEncontradas && typeof product.especificacoesEncontradas === 'object'
+    ? product.especificacoesEncontradas
+    : {}
   const missing = getAiMissingFields(data)
   const conflicts = getAiConflicts(data)
 
@@ -150,13 +153,14 @@ function normalizeAutomaticPreview(data = {}) {
     productId: product?.id ?? getAiReconciliation(data)?.produtoExistente?.id,
     offerExisting: offer?.existente ?? Boolean(getAiReconciliation(data)?.ofertaExistente),
     offerId: offer?.id ?? getAiReconciliation(data)?.ofertaExistente?.id,
+    registrationType: clean(analysis?.tipoCadastro),
     actions: Array.isArray(data?.acoesPrevistas) ? data.acoesPrevistas : [],
     warnings: [
       ...(Array.isArray(data?.avisos) ? data.avisos : []),
       ...missing.map((field) => `Campo para revisão: ${field}`),
       ...conflicts.map((item) => typeof item === 'string' ? item : `Conflito em ${item?.campo || 'campo técnico'}`),
     ],
-    technical: { ...hardwareData, ...productData },
+    technical: { ...collectedSpecs, ...hardwareData, ...productData },
   }
 }
 
@@ -279,7 +283,8 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
       </div>
 
       <div className="admin-ia-registration-grid">
-        <div><span>Hardware</span><strong>{entityStatus(summary.hardwareExisting, summary.hardwareId, 'Será criado se necessário')}</strong></div>
+        {summary.registrationType !== 'PRODUTO_OFERTA' && <div><span>Hardware</span><strong>{entityStatus(summary.hardwareExisting, summary.hardwareId, 'Será criado se necessário')}</strong></div>}
+        {summary.registrationType === 'PRODUTO_OFERTA' && <div><span>Cadastro</span><strong>Produto comum + Oferta</strong><small>Não será criado Hardware de PC</small></div>}
         {flow.action === ACTION_PRODUCT && <div><span>Produto</span><strong>{entityStatus(summary.productExisting, summary.productId, 'Será criado')}</strong></div>}
         {flow.action === ACTION_PRODUCT && <div><span>Oferta</span><strong>{entityStatus(summary.offerExisting, summary.offerId, 'Será criada/atualizada')}</strong></div>}
         {flow.action === ACTION_PRODUCT && <div className="admin-ia-registration-price"><span>Preço</span><strong>{price || 'Não identificado'}</strong>{previousPrice && previousPrice !== price ? <small>Antes: {previousPrice}</small> : null}</div>}
