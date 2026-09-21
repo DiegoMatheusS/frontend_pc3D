@@ -474,7 +474,7 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
         <button type="button" className="btn btn-secundario btn-pequeno" onClick={onCancel} disabled={sending}>Cancelar</button>
         {flow.backendReady && <button type="button" className="btn btn-secundario btn-pequeno" onClick={onOpenForm} disabled={sending}>{flow.action === ACTION_PRODUCT && !price ? 'Abrir cadastro e informar preço' : 'Corrigir dados'}</button>}
         {flow.backendReady
-          ? <button type="button" className="btn btn-primario btn-pequeno" onClick={onConfirm} disabled={sending || !flow.preview?.tokenConfirmacao || ((!flow.manualComplete) && (flow.preview?.podeConfirmar === false || readiness.ready === false || readiness.enabled === false))}>{sending ? 'Confirmando...' : 'Confirmar cadastro'}</button>
+          ? <button type="button" className="btn btn-primario btn-pequeno" onClick={onConfirm} disabled={sending || !flow.preview?.tokenConfirmacao || ((!flow.manualComplete) && (flow.preview?.podeConfirmar === false || readiness.ready === false || readiness.enabled === false))}>{sending ? 'Confirmando...' : 'Confirmar e publicar'}</button>
           : <button type="button" className="btn btn-primario btn-pequeno" onClick={onOpenForm} disabled={sending}>Abrir cadastro</button>}
       </div>
     </section>
