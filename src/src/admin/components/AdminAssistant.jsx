@@ -7,6 +7,54 @@ import { getAiConflicts, getAiMissingFields, getAiOffer, getAiPayload, getAiRead
 
 const ACTION_PRODUCT = 'CADASTRAR_PRODUTO'
 const ACTION_HARDWARE = 'CADASTRAR_HARDWARE'
+const ACTION_BUILD = 'CADASTRAR_PC_MONTADO'
+
+const BUILD_INFO_QUESTIONS = [
+  { field: 'nome', prompt: 'Qual é o nome do PC montado? Ex.: PC Gamer Ryzen 7 + RTX 4070.' },
+  { field: 'finalidade', prompt: 'Qual é a finalidade principal? Ex.: jogos, trabalho, edição. Digite "pular" se não quiser informar.' },
+  { field: 'resolucaoRecomendada', prompt: 'Qual resolução você recomenda para esse PC? Ex.: 1080p, 1440p ou 4K. Digite "pular" para deixar em branco.' },
+]
+
+const BUILD_COMPONENT_STEPS = [
+  { categoria: 'PROCESSADOR', label: 'processador', optional: false },
+  { categoria: 'PLACA_MAE', label: 'placa-mãe', optional: false },
+  { categoria: 'MEMORIA_RAM', label: 'memória RAM', optional: false },
+  { categoria: 'ARMAZENAMENTO', label: 'armazenamento', optional: false },
+  { categoria: 'FONTE', label: 'fonte', optional: false },
+  { categoria: 'GABINETE', label: 'gabinete', optional: false },
+  { categoria: 'PLACA_VIDEO', label: 'placa de vídeo', optional: true },
+  { categoria: 'COOLER', label: 'cooler', optional: true },
+]
+
+function isSkipAnswer(value) {
+  return /^(pular|skip|nao|não|nenhum|sem)$/i.test(clean(value))
+}
+
+function hardwareSearchText(hardware = {}) {
+  return normalizedAnswerKey([
+    hardware.id,
+    hardware.nome,
+    hardware.marca,
+    hardware.modelo,
+    hardware.mpn,
+    hardware.gtin,
+  ].filter(Boolean).join(' '))
+}
+
+function buildComponentPrompt(step) {
+  if (!step) return ''
+  return step.optional
+    ? `Digite parte do nome/modelo da ${step.label} para pesquisar no catálogo ou "pular".`
+    : `Digite parte do nome/modelo da ${step.label} para pesquisar no catálogo.`
+}
+
+function buildCategoryFromPurpose(value) {
+  const normalized = normalizedAnswerKey(value)
+  if (/jogo|gamer|game/.test(normalized)) return 'PC Gamer'
+  if (/edicao|edição|criacao|criação|render|video|vídeo/.test(normalized)) return 'PC Creator'
+  if (/trabalho|office|escritorio|escritório/.test(normalized)) return 'PC Trabalho'
+  return 'PC Montado'
+}
 
 function responseText(data) {
   if (typeof data === 'string') return data
@@ -481,6 +529,41 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
   )
 }
 
+function BuildRegistrationPreview({ flow, onConfirm, onCancel, sending }) {
+  const build = flow?.build || {}
+  const components = Array.isArray(build.componentes) ? build.componentes : []
+  return (
+    <section className="admin-ia-registration-card" aria-label="Prévia do PC Montado">
+      <div className="admin-ia-registration-head">
+        <span className="admin-ia-registration-placeholder" aria-hidden="true">PC</span>
+        <div>
+          <small>{build.categoria || 'PC Montado'}</small>
+          <strong>{build.nome || 'PC Montado'}</strong>
+          <span>{[build.finalidade, build.resolucaoRecomendada].filter(Boolean).join(' · ') || 'Configuração completa'}</span>
+        </div>
+      </div>
+      <div className="admin-ia-build-summary">
+        {components.map((component) => (
+          <div key={`${component.categoria}-${component.hardwareId}`}>
+            <span>{component.categoria.replaceAll('_', ' ')}</span>
+            <strong>{component.nome || `Hardware #${component.hardwareId}`}</strong>
+            <small>{[component.marca, component.modelo].filter(Boolean).join(' · ') || `ID ${component.hardwareId}`}</small>
+          </div>
+        ))}
+      </div>
+      <p className="admin-ia-registration-note">
+        O backend vai validar compatibilidade, consumo e componentes obrigatórios antes de publicar.
+      </p>
+      <div className="admin-ia-registration-actions">
+        <button type="button" className="btn btn-secundario btn-pequeno" onClick={onCancel} disabled={sending}>Cancelar</button>
+        <button type="button" className="btn btn-primario btn-pequeno" onClick={onConfirm} disabled={sending}>
+          {sending ? 'Publicando...' : 'Confirmar e publicar PC'}
+        </button>
+      </div>
+    </section>
+  )
+}
+
 export default function AdminAssistant({ open, onClose }) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -488,11 +571,237 @@ export default function AdminAssistant({ open, onClose }) {
   const role = String(user?.papel || '').toUpperCase()
   const canCreateHardware = role === 'ADMIN'
   const canCreateProduct = role === 'ADMIN'
+  const canCreateBuild = role === 'ADMIN'
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [messages, setMessages] = useState([{ role: 'assistente', text: 'Posso ajudar a revisar cadastros, organizar dados e explicar o estado do painel.' }])
   const [flow, setFlow] = useState(null)
   const context = useMemo(() => ({ rota: location.pathname, area: 'admin' }), [location.pathname])
+
+  async function startBuildRegistration() {
+    setSending(true)
+    setDraft('')
+    try {
+      const items = await adminService.hardwares.listForBuild()
+      const hardwares = (Array.isArray(items) ? items : []).filter(
+        (hardware) => hardware?.ativo !== false && hardware?.publicado === true,
+      )
+      if (!hardwares.length) {
+        setMessages((current) => [...current, {
+          role: 'assistente',
+          text: 'Não encontrei Hardwares ativos e publicados para montar o PC. Cadastre/publique as peças primeiro.',
+        }])
+        return
+      }
+      setFlow({
+        action: ACTION_BUILD,
+        step: 'BUILD_INFO',
+        infoIndex: 0,
+        componentIndex: 0,
+        hardwares,
+        buildCandidates: [],
+        build: {
+          nome: '',
+          finalidade: '',
+          resolucaoRecomendada: '',
+          categoria: 'PC Montado',
+          publicado: true,
+          ativo: true,
+          componentes: [],
+        },
+      })
+      setMessages((current) => [...current, {
+        role: 'assistente',
+        text: `Vamos montar o cadastro pelo chat. ${BUILD_INFO_QUESTIONS[0].prompt}`,
+      }])
+    } catch (error) {
+      setMessages((current) => [...current, {
+        role: 'assistente',
+        text: error?.message || 'Não consegui carregar os Hardwares para montar o PC.',
+      }])
+    } finally {
+      setSending(false)
+    }
+  }
+
+  function appendBuildComponent(hardware) {
+    const stepIndex = Number(flow?.componentIndex || 0)
+    const step = BUILD_COMPONENT_STEPS[stepIndex]
+    if (!step || !hardware) return
+    const component = {
+      hardwareId: Number(hardware.id),
+      categoria: step.categoria,
+      quantidade: 1,
+      ordem: stepIndex,
+      nome: clean(hardware.nome) || `Hardware #${hardware.id}`,
+      marca: clean(hardware.marca),
+      modelo: clean(hardware.modelo),
+    }
+    const componentes = [
+      ...(Array.isArray(flow?.build?.componentes) ? flow.build.componentes : []).filter(
+        (item) => item.categoria !== step.categoria,
+      ),
+      component,
+    ].sort((a, b) => a.ordem - b.ordem)
+    const nextIndex = stepIndex + 1
+
+    if (nextIndex >= BUILD_COMPONENT_STEPS.length) {
+      const finalidade = clean(flow?.build?.finalidade)
+      setFlow((current) => ({
+        ...current,
+        step: 'BUILD_PREVIEW',
+        componentIndex: nextIndex,
+        buildCandidates: [],
+        build: {
+          ...current.build,
+          categoria: current.build?.categoria || buildCategoryFromPurpose(finalidade),
+          componentes,
+        },
+      }))
+      setMessages((current) => [...current, {
+        role: 'assistente',
+        text: 'Configuração concluída. Confira a prévia abaixo. Ao confirmar, o backend valida compatibilidade e publica o PC.',
+      }])
+      return
+    }
+
+    const nextStep = BUILD_COMPONENT_STEPS[nextIndex]
+    setFlow((current) => ({
+      ...current,
+      step: 'BUILD_COMPONENT',
+      componentIndex: nextIndex,
+      buildCandidates: [],
+      build: { ...current.build, componentes },
+    }))
+    setMessages((current) => [...current, {
+      role: 'assistente',
+      text: `${component.nome} selecionado. ${buildComponentPrompt(nextStep)}`,
+    }])
+  }
+
+  function skipBuildComponent() {
+    const index = Number(flow?.componentIndex || 0)
+    const step = BUILD_COMPONENT_STEPS[index]
+    if (!step?.optional) {
+      setMessages((current) => [...current, { role: 'assistente', text: `${step?.label || 'Esse componente'} é obrigatório para publicar o PC.` }])
+      return
+    }
+    const nextIndex = index + 1
+    if (nextIndex >= BUILD_COMPONENT_STEPS.length) {
+      setFlow((current) => ({ ...current, step: 'BUILD_PREVIEW', componentIndex: nextIndex, buildCandidates: [] }))
+      setMessages((current) => [...current, { role: 'assistente', text: 'Configuração concluída. Confira a prévia e confirme para validar/publicar.' }])
+      return
+    }
+    const nextStep = BUILD_COMPONENT_STEPS[nextIndex]
+    setFlow((current) => ({ ...current, step: 'BUILD_COMPONENT', componentIndex: nextIndex, buildCandidates: [] }))
+    setMessages((current) => [...current, { role: 'assistente', text: buildComponentPrompt(nextStep) }])
+  }
+
+  async function answerBuildFlow(text) {
+    if (flow?.step === 'BUILD_INFO') {
+      const index = Number(flow?.infoIndex || 0)
+      const question = BUILD_INFO_QUESTIONS[index]
+      if (!question) return
+      const skipped = question.field !== 'nome' && isSkipAnswer(text)
+      const value = skipped ? '' : clean(text)
+      if (question.field === 'nome' && value.length < 2) {
+        setMessages((current) => [...current, { role: 'assistente', text: 'Informe um nome com pelo menos 2 caracteres.' }])
+        return
+      }
+      const nextIndex = index + 1
+      const nextBuild = {
+        ...(flow.build || {}),
+        [question.field]: value,
+        ...(question.field === 'finalidade' ? { categoria: buildCategoryFromPurpose(value) } : {}),
+      }
+      if (nextIndex < BUILD_INFO_QUESTIONS.length) {
+        setFlow((current) => ({ ...current, infoIndex: nextIndex, build: nextBuild }))
+        setMessages((current) => [...current, { role: 'assistente', text: BUILD_INFO_QUESTIONS[nextIndex].prompt }])
+        return
+      }
+      setFlow((current) => ({ ...current, step: 'BUILD_COMPONENT', componentIndex: 0, build: nextBuild, buildCandidates: [] }))
+      setMessages((current) => [...current, { role: 'assistente', text: buildComponentPrompt(BUILD_COMPONENT_STEPS[0]) }])
+      return
+    }
+
+    if (flow?.step === 'BUILD_COMPONENT' || flow?.step === 'BUILD_CANDIDATE') {
+      const index = Number(flow?.componentIndex || 0)
+      const step = BUILD_COMPONENT_STEPS[index]
+      if (!step) return
+      if (step.optional && isSkipAnswer(text)) {
+        skipBuildComponent()
+        return
+      }
+      const term = normalizedAnswerKey(text)
+      const candidates = (flow.hardwares || [])
+        .filter((hardware) => String(hardware?.categoria || '').toUpperCase() === step.categoria)
+        .filter((hardware) => {
+          if (!term) return false
+          if (/^\d+$/.test(term) && Number(hardware.id) === Number(term)) return true
+          return hardwareSearchText(hardware).includes(term)
+        })
+        .slice(0, 8)
+
+      if (!candidates.length) {
+        setMessages((current) => [...current, {
+          role: 'assistente',
+          text: `Não encontrei ${step.label} publicado com "${text}". Tente outro nome/modelo ou ID.${step.optional ? ' Você também pode digitar "pular".' : ''}`,
+        }])
+        return
+      }
+      if (candidates.length === 1) {
+        appendBuildComponent(candidates[0])
+        return
+      }
+
+      setFlow((current) => ({ ...current, step: 'BUILD_CANDIDATE', buildCandidates: candidates }))
+      setMessages((current) => [...current, {
+        role: 'assistente',
+        text: `Encontrei ${candidates.length} opções de ${step.label}. Escolha uma nos botões logo acima da caixa de mensagem.`,
+      }])
+    }
+  }
+
+  async function confirmBuildRegistration() {
+    if (flow?.action !== ACTION_BUILD || flow?.step !== 'BUILD_PREVIEW' || sending) return
+    const build = flow.build || {}
+    const componentes = (Array.isArray(build.componentes) ? build.componentes : []).map((item, index) => ({
+      hardwareId: Number(item.hardwareId),
+      categoria: item.categoria,
+      quantidade: Number(item.quantidade || 1),
+      ordem: index,
+    }))
+    const componentNames = (build.componentes || []).map((item) => item.nome).filter(Boolean)
+    const finalidade = clean(build.finalidade)
+    const body = {
+      nome: clean(build.nome),
+      categoria: clean(build.categoria) || buildCategoryFromPurpose(finalidade),
+      ...(finalidade ? { finalidade } : {}),
+      ...(clean(build.resolucaoRecomendada) ? { resolucaoRecomendada: clean(build.resolucaoRecomendada) } : {}),
+      descricao: `PC montado${finalidade ? ` para ${finalidade}` : ''} com ${componentNames.join(', ')}.`,
+      publicado: true,
+      ativo: true,
+      componentes,
+      configuracao3D: {},
+    }
+
+    setSending(true)
+    try {
+      const saved = await adminService.builds.create(body)
+      setMessages((current) => [...current, {
+        role: 'assistente',
+        text: `PC montado publicado com sucesso: #${saved?.id || '?'} · ${saved?.produto?.nome || build.nome}.`,
+      }])
+      setFlow(null)
+    } catch (error) {
+      setMessages((current) => [...current, {
+        role: 'assistente',
+        text: error?.message || 'Não foi possível publicar o PC montado. Revise a compatibilidade dos componentes.',
+      }])
+    } finally {
+      setSending(false)
+    }
+  }
 
   function startRegistration(action) {
     const label = action === ACTION_PRODUCT ? 'Produto' : 'Hardware'
@@ -507,9 +816,10 @@ export default function AdminAssistant({ open, onClose }) {
   }
 
   function cancelRegistration() {
+    const wasBuild = flow?.action === ACTION_BUILD
     setFlow(null)
     setDraft('')
-    setMessages((current) => [...current, { role: 'assistente', text: 'Cadastro por URL cancelado. Nenhum registro foi criado.' }])
+    setMessages((current) => [...current, { role: 'assistente', text: wasBuild ? 'Cadastro do PC montado cancelado. Nenhum registro foi criado.' : 'Cadastro por URL cancelado. Nenhum registro foi criado.' }])
   }
 
   async function finishRegistration(preview, adjustments = {}) {
@@ -749,6 +1059,11 @@ export default function AdminAssistant({ open, onClose }) {
     setMessages(next)
     setDraft('')
 
+    if (flow?.action === ACTION_BUILD && ['BUILD_INFO', 'BUILD_COMPONENT', 'BUILD_CANDIDATE'].includes(flow?.step)) {
+      await answerBuildFlow(text)
+      return
+    }
+
     if (flow?.step === 'QUESTIONS') {
       await answerRegistrationQuestion(text)
       return
@@ -766,9 +1081,14 @@ export default function AdminAssistant({ open, onClose }) {
     }
   }
 
-  const inputPlaceholder = flow?.step === 'QUESTIONS'
-    ? (flow?.questions?.[flow?.questionIndex || 0]?.prompt || 'Responda o campo que falta...')
-    : 'Pergunte sobre o catálogo...'
+  const buildStep = flow?.action === ACTION_BUILD ? BUILD_COMPONENT_STEPS[Number(flow?.componentIndex || 0)] : null
+  const inputPlaceholder = flow?.action === ACTION_BUILD && flow?.step === 'BUILD_INFO'
+    ? (BUILD_INFO_QUESTIONS[Number(flow?.infoIndex || 0)]?.prompt || 'Responda para continuar...')
+    : flow?.action === ACTION_BUILD && ['BUILD_COMPONENT', 'BUILD_CANDIDATE'].includes(flow?.step)
+      ? buildComponentPrompt(buildStep)
+      : flow?.step === 'QUESTIONS'
+        ? (flow?.questions?.[flow?.questionIndex || 0]?.prompt || 'Responda o campo que falta...')
+        : 'Pergunte sobre o catálogo...'
 
   const stickyReadiness = getAiReadiness(flow?.preview || {})
   const showStickyConfirm = Boolean(
@@ -776,6 +1096,7 @@ export default function AdminAssistant({ open, onClose }) {
     && flow?.backendReady
     && flow?.preview?.tokenConfirmacao
   )
+  const showStickyBuildConfirm = flow?.action === ACTION_BUILD && flow?.step === 'BUILD_PREVIEW'
   const stickyConfirmDisabled = Boolean(
     sending
     || (
@@ -792,12 +1113,14 @@ export default function AdminAssistant({ open, onClose }) {
     <aside className="admin-ia-painel" data-aberto={open ? 'true' : 'false'} aria-hidden={!open}>
       <header className="admin-ia-cabecalho"><div className="admin-ia-cabecalho-info"><span className="admin-ia-cabecalho-icone">✦</span><div><strong>Assistente Admin</strong><small>Backend / catálogo</small></div></div><button className="admin-ia-fechar" type="button" onClick={onClose} aria-label="Fechar">×</button></header>
       <div className="admin-ia-msgs" aria-live="polite">
-        {!flow && (canCreateProduct || canCreateHardware) && <div className="admin-ia-quick-actions" aria-label="Ações rápidas do assistente">
+        {!flow && (canCreateProduct || canCreateHardware || canCreateBuild) && <div className="admin-ia-quick-actions" aria-label="Ações rápidas do assistente">
           {canCreateProduct && <button type="button" onClick={() => startRegistration(ACTION_PRODUCT)}><span aria-hidden="true">＋</span><strong>Cadastrar Produto</strong><small>2 links → IA → cadastro</small></button>}
           {canCreateHardware && <button type="button" onClick={() => startRegistration(ACTION_HARDWARE)}><span aria-hidden="true">◇</span><strong>Cadastrar Hardware</strong><small>Link → ficha técnica</small></button>}
+          {canCreateBuild && <button type="button" onClick={startBuildRegistration}><span aria-hidden="true">PC</span><strong>Cadastrar PC Montado</strong><small>Chat guiado → peças → publicar</small></button>}
         </div>}
         {messages.map((message,index)=><div key={`${message.role}-${index}`} className={`admin-ia-chat-msg admin-ia-chat-msg--${message.role}`}>{message.text}</div>)}
         {flow?.step === 'PREVIEW' && <RegistrationPreview flow={flow} onConfirm={confirmRegistration} onCancel={cancelRegistration} onOpenForm={openFallbackForm} sending={sending} />}
+        {flow?.step === 'BUILD_PREVIEW' && <BuildRegistrationPreview flow={flow} onConfirm={confirmBuildRegistration} onCancel={cancelRegistration} sending={sending} />}
         {sending&&<div className="admin-ia-chat-digitando"><span/><span/><span/></div>}
       </div>
       {flow?.step === 'URL'
@@ -809,9 +1132,22 @@ export default function AdminAssistant({ open, onClose }) {
             sending={sending}
           />
         : <>
-            {!flow && (canCreateProduct || canCreateHardware) && <div className="admin-ia-quick-actions admin-ia-quick-actions--bottom" aria-label="Ações de cadastro junto da caixa de mensagem">
+            {!flow && (canCreateProduct || canCreateHardware || canCreateBuild) && <div className="admin-ia-quick-actions admin-ia-quick-actions--bottom" aria-label="Ações de cadastro junto da caixa de mensagem">
               {canCreateProduct && <button type="button" onClick={() => startRegistration(ACTION_PRODUCT)}><span aria-hidden="true">＋</span><strong>Cadastrar Produto</strong><small>2 links → IA → cadastro</small></button>}
               {canCreateHardware && <button type="button" onClick={() => startRegistration(ACTION_HARDWARE)}><span aria-hidden="true">◇</span><strong>Cadastrar Hardware</strong><small>Link → ficha técnica</small></button>}
+              {canCreateBuild && <button type="button" onClick={startBuildRegistration}><span aria-hidden="true">PC</span><strong>Cadastrar PC Montado</strong><small>Chat guiado → peças → publicar</small></button>}
+            </div>}
+            {flow?.action === ACTION_BUILD && flow?.step === 'BUILD_CANDIDATE' && Array.isArray(flow?.buildCandidates) && flow.buildCandidates.length > 0 && <div className="admin-ia-build-candidates" aria-label="Opções de Hardware">
+              {flow.buildCandidates.map((hardware) => <button key={hardware.id} type="button" onClick={() => appendBuildComponent(hardware)} disabled={sending}>
+                <strong>{hardware.nome || `Hardware #${hardware.id}`}</strong>
+                <small>{[hardware.marca, hardware.modelo].filter(Boolean).join(' · ') || `ID ${hardware.id}`}</small>
+              </button>)}
+            </div>}
+            {showStickyBuildConfirm && <div className="admin-ia-bottom-action" aria-label="Confirmar PC Montado">
+              <span><strong>PC pronto para validação</strong><small>O backend confere compatibilidade antes de publicar.</small></span>
+              <button type="button" className="btn btn-primario btn-pequeno" onClick={confirmBuildRegistration} disabled={sending}>
+                {sending ? 'Publicando...' : 'Confirmar e publicar PC'}
+              </button>
             </div>}
             {showStickyConfirm && <div className="admin-ia-bottom-action" aria-label="Ação rápida da prévia">
               <span><strong>Prévia pronta</strong><small>Revise acima se quiser; não precisa subir para confirmar.</small></span>
