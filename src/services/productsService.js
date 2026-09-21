@@ -46,15 +46,38 @@ export async function unlikeProduct(id) {
   })
 }
 
-export async function getProducts() {
-  const products = await apiFirst({
-    key: 'catalogo',
-    path: '/api/produtos?pagina=1&limite=100',
-    fallback: () => structuredClone(productsMock),
-    transform: (payload) => extractList(payload, ['produtos']).map(normalizeProduct),
+async function getProductPage(page) {
+  return apiFirst({
+    key: `catalogo-${page}`,
+    path: `/api/produtos?pagina=${page}&limite=100`,
+    fallback: () => ({
+      products: page === 1 ? structuredClone(productsMock) : [],
+      totalPages: 1,
+    }),
+    transform: (payload) => ({
+      products: extractList(payload, ['produtos']).map(normalizeProduct),
+      totalPages: Math.max(1, Number(payload?.totalPaginas ?? payload?.totalPages ?? 1) || 1),
+    }),
   })
+}
 
-  const likes = await getProductLikeSummary(products.map((product) => product.id)).catch(() => [])
+export async function getProducts() {
+  const first = await getProductPage(1)
+  const pageCount = Math.min(first.totalPages, 50)
+  const remaining = pageCount > 1
+    ? await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) => getProductPage(index + 2)))
+    : []
+  const products = [
+    ...first.products,
+    ...remaining.flatMap((page) => page.products),
+  ]
+
+  const ids = products.map((product) => product.id)
+  const likeBatches = []
+  for (let index = 0; index < ids.length; index += 100) {
+    likeBatches.push(getProductLikeSummary(ids.slice(index, index + 100)).catch(() => []))
+  }
+  const likes = (await Promise.all(likeBatches)).flat()
   if (!likes.length) return products
 
   const likesByProduct = new Map(likes.map((item) => [String(item.produtoId), item]))
