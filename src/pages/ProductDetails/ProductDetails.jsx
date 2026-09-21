@@ -12,6 +12,19 @@ const groupNavigation = {
   monitores: { label: 'Monitores', to: '/loja?grupo=monitores' },
   setup: { label: 'Setup', to: '/loja?grupo=setup' },
   notebooks: { label: 'Notebooks', to: '/notebooks' },
+  computadores: { label: 'Computadores', to: '/loja?grupo=computadores' },
+  celulares: { label: 'Celulares', to: '/loja?grupo=celulares' },
+  tablets: { label: 'Tablets e leitura', to: '/loja?grupo=tablets' },
+  games: { label: 'Games', to: '/loja?grupo=games' },
+  'tv-audio': { label: 'TV e Áudio', to: '/loja?grupo=tv-audio' },
+  fotografia: { label: 'Foto e Vídeo', to: '/loja?grupo=fotografia' },
+  'casa-inteligente': { label: 'Casa Inteligente', to: '/loja?grupo=casa-inteligente' },
+  eletroportateis: { label: 'Eletroportáteis', to: '/loja?grupo=eletroportateis' },
+  rede: { label: 'Rede e Internet', to: '/loja?grupo=rede' },
+  impressao: { label: 'Impressão', to: '/loja?grupo=impressao' },
+  wearables: { label: 'Wearables', to: '/loja?grupo=wearables' },
+  maker: { label: 'Eletrônica e Maker', to: '/loja?grupo=maker' },
+  acessorios: { label: 'Acessórios', to: '/loja?grupo=acessorios' },
 }
 
 const builderCategory = {
