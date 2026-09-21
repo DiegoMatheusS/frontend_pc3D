@@ -778,7 +778,7 @@ export default function AdminAssistant({ open, onClose }) {
       ),
       component,
     ].sort((a, b) => a.ordem - b.ordem)
-    const nextIndex = stepIndex + 1
+    const nextIndex = nextBuildComponentIndex(componentes, stepIndex + 1)
 
     if (nextIndex >= BUILD_COMPONENT_STEPS.length) {
       const finalidade = clean(flow?.build?.finalidade)
@@ -821,7 +821,7 @@ export default function AdminAssistant({ open, onClose }) {
       setMessages((current) => [...current, { role: 'assistente', text: `${step?.label || 'Esse componente'} é obrigatório para publicar o PC.` }])
       return
     }
-    const nextIndex = index + 1
+    const nextIndex = nextBuildComponentIndex(flow?.build?.componentes || [], index + 1)
     if (nextIndex >= BUILD_COMPONENT_STEPS.length) {
       setFlow((current) => ({ ...current, step: 'BUILD_PREVIEW', componentIndex: nextIndex, buildCandidates: [] }))
       setMessages((current) => [...current, { role: 'assistente', text: 'Configuração concluída. Confira a prévia e confirme para validar/publicar.' }])
@@ -834,8 +834,11 @@ export default function AdminAssistant({ open, onClose }) {
 
   async function answerBuildFlow(text) {
     if (flow?.step === 'BUILD_INFO') {
+      const questions = Array.isArray(flow?.buildInfoQuestions) && flow.buildInfoQuestions.length
+        ? flow.buildInfoQuestions
+        : BUILD_INFO_QUESTIONS
       const index = Number(flow?.infoIndex || 0)
-      const question = BUILD_INFO_QUESTIONS[index]
+      const question = questions[index]
       if (!question) return
       const skipped = question.field !== 'nome' && isSkipAnswer(text)
       const value = skipped ? '' : clean(text)
@@ -849,13 +852,19 @@ export default function AdminAssistant({ open, onClose }) {
         [question.field]: value,
         ...(question.field === 'finalidade' ? { categoria: buildCategoryFromPurpose(value) } : {}),
       }
-      if (nextIndex < BUILD_INFO_QUESTIONS.length) {
+      if (nextIndex < questions.length) {
         setFlow((current) => ({ ...current, infoIndex: nextIndex, build: nextBuild }))
-        setMessages((current) => [...current, { role: 'assistente', text: BUILD_INFO_QUESTIONS[nextIndex].prompt }])
+        setMessages((current) => [...current, { role: 'assistente', text: questions[nextIndex].prompt }])
         return
       }
-      setFlow((current) => ({ ...current, step: 'BUILD_COMPONENT', componentIndex: 0, build: nextBuild, buildCandidates: [] }))
-      setMessages((current) => [...current, { role: 'assistente', text: buildComponentPrompt(BUILD_COMPONENT_STEPS[0]) }])
+      const componentIndex = nextBuildComponentIndex(nextBuild.componentes || [], 0)
+      if (componentIndex >= BUILD_COMPONENT_STEPS.length) {
+        setFlow((current) => ({ ...current, step: 'BUILD_PREVIEW', componentIndex, build: nextBuild, buildCandidates: [] }))
+        setMessages((current) => [...current, { role: 'assistente', text: 'Os dados do link ficaram completos. Confira a prévia e confirme para validar/publicar.' }])
+        return
+      }
+      setFlow((current) => ({ ...current, step: 'BUILD_COMPONENT', componentIndex, build: nextBuild, buildCandidates: [] }))
+      setMessages((current) => [...current, { role: 'assistente', text: buildComponentPrompt(BUILD_COMPONENT_STEPS[componentIndex]) }])
       return
     }
 
@@ -899,6 +908,7 @@ export default function AdminAssistant({ open, onClose }) {
 
   async function confirmBuildRegistration() {
     if (flow?.action !== ACTION_BUILD || flow?.step !== 'BUILD_PREVIEW' || sending) return
+    const flowId = flow?.flowId
     const build = flow.build || {}
     const componentes = (Array.isArray(build.componentes) ? build.componentes : []).map((item, index) => ({
       hardwareId: Number(item.hardwareId),
@@ -923,24 +933,28 @@ export default function AdminAssistant({ open, onClose }) {
     setSending(true)
     try {
       const saved = await adminService.builds.create(body)
+      if (activeFlowId.current !== flowId) return
       setMessages((current) => [...current, {
         role: 'assistente',
         text: `PC montado publicado com sucesso: #${saved?.id || '?'} · ${saved?.produto?.nome || build.nome}.`,
       }])
       setFlow(null)
     } catch (error) {
+      if (activeFlowId.current !== flowId) return
       setMessages((current) => [...current, {
         role: 'assistente',
         text: error?.message || 'Não foi possível publicar o PC montado. Revise a compatibilidade dos componentes.',
       }])
     } finally {
-      setSending(false)
+      if (activeFlowId.current === flowId) setSending(false)
     }
   }
 
   function startRegistration(action) {
     const label = action === ACTION_PRODUCT ? 'Produto' : 'Hardware'
-    setFlow({ action, step: 'URL', url: '', affiliateUrl: '', preview: null, backendReady: false })
+    const flowId = activeFlowId.current + 1
+    activeFlowId.current = flowId
+    setFlow({ flowId, action, step: 'URL', url: '', affiliateUrl: '', preview: null, backendReady: false })
     setDraft('')
     setMessages((current) => [...current, {
       role: 'assistente',
@@ -952,9 +966,16 @@ export default function AdminAssistant({ open, onClose }) {
 
   function cancelRegistration() {
     const wasBuild = flow?.action === ACTION_BUILD
+    activeFlowId.current += 1
+    setSending(false)
     setFlow(null)
     setDraft('')
-    setMessages((current) => [...current, { role: 'assistente', text: wasBuild ? 'Cadastro do PC montado cancelado. Nenhum registro foi criado.' : 'Cadastro por URL cancelado. Nenhum registro foi criado.' }])
+    setMessages((current) => [...current, {
+      role: 'assistente',
+      text: wasBuild
+        ? 'Cadastro do PC montado cancelado. Nenhum registro foi criado.'
+        : 'Cadastro cancelado. Nenhum registro foi criado.',
+    }])
   }
 
   async function finishRegistration(preview, adjustments = {}) {
