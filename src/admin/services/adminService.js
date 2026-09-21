@@ -150,7 +150,7 @@ export const adminService = {
       try {
         const adminItems = await list('/api/admin/hardwares')
         if (adminItems.length) return adminItems
-      } catch { }
+      } catch { /* fallback público abaixo */ }
       return list('/api/hardwares')
     },
     get: (id) => one(`/api/admin/hardwares/${id}`),
