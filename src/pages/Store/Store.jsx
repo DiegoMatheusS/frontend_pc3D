@@ -484,7 +484,7 @@ export default function Store({ defaultGroup = 'todos' }) {
   const pageDescription = defaultGroup === 'hardwares'
     ? 'Encontre componentes para montar ou atualizar o computador e compare especificações antes de escolher.'
     : group === 'todos'
-      ? 'Explore hardwares, periféricos, monitores, notebooks e itens de setup em um catálogo único.'
+      ? 'Explore computadores, peças, celulares, tablets, games, TVs, áudio, fotografia, casa inteligente, eletroportáteis, rede e acessórios em um catálogo único.'
       : `Explore ${String(activeGroupLabel || 'produtos').toLowerCase()} com especificações, comparação e ofertas disponíveis.`
 
   const activeComparison = comparisonItems.length === 2 ? comparisonItems : compare
@@ -505,7 +505,7 @@ export default function Store({ defaultGroup = 'todos' }) {
     <div className="store-page">
       <section className="store-page__hero">
         <div className="page-container">
-          <span className="eyebrow">Catálogo técnico</span>
+          <span className="eyebrow">Loja de eletrônicos</span>
           <h1>{pageTitle}</h1>
           <p>{pageDescription}</p>
         </div>
