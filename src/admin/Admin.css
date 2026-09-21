@@ -359,6 +359,37 @@
 .admin-ia-chat-digitando span:nth-child(3) { animation-delay: .36s; }
 @keyframes adminIaPulso { 0%,100% { opacity:.3; transform:scale(.85); } 50% { opacity:1; transform:scale(1); } }
 
+.admin-ia-link-form {
+  flex-shrink: 0;
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+}
+.admin-ia-link-form__head { display: grid; gap: 2px; }
+.admin-ia-link-form__head strong { font-size: 12px; }
+.admin-ia-link-form__head small,
+.admin-ia-link-form__note { color: var(--admin-muted); font-size: 10px; line-height: 1.4; }
+.admin-ia-link-form label { display: grid; gap: 5px; }
+.admin-ia-link-form label > span { color: var(--admin-muted); font-size: 10px; font-weight: 800; }
+.admin-ia-link-form input {
+  width: 100%;
+  min-height: 39px;
+  padding: 8px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface-2);
+  color: var(--admin-text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.admin-ia-link-form input:focus { border-color: var(--admin-primary); box-shadow: 0 0 0 2px color-mix(in srgb,var(--admin-primary) 14%,transparent); }
+.admin-ia-link-form__actions { display: grid; grid-template-columns: auto 1fr; gap: 8px; }
+.admin-ia-link-form__actions .btn { justify-content: center; }
+.admin-ia-link-form__note { margin: 0; }
+
 .admin-ia-entrada { flex-shrink: 0; padding: 10px 14px; border-top: 1px solid var(--admin-border); display: flex; gap: 8px; align-items: flex-end; }
 .admin-ia-textarea { flex: 1; min-height: 38px; max-height: 110px; padding: 8px 11px; border: 1px solid var(--admin-border); border-radius: 8px; background: var(--admin-surface-2); color: var(--admin-text); font-size: 13px; resize: none; line-height: 1.45; outline: none; }
 .admin-ia-textarea:focus { border-color: var(--admin-primary); }

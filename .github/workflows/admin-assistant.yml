@@ -1,0 +1,32 @@
+name: Admin Assistant
+
+on:
+  pull_request:
+    paths:
+      - "src/admin/components/AdminAssistant.jsx"
+      - "src/admin/Admin.css"
+      - ".github/workflows/admin-assistant.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/admin/components/AdminAssistant.jsx"
+      - "src/admin/Admin.css"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Lint do Assistente Admin
+        run: npx eslint src/admin/components/AdminAssistant.jsx
+      - name: Build
+        run: npm run build
