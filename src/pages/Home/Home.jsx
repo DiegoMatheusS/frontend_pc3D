@@ -4,6 +4,7 @@ import MountedPcCard from '../../components/MountedPcCard/MountedPcCard'
 import OfferCard from '../../components/OfferCard/OfferCard'
 import HomeHero3D from '../../components/HomeHero3D/HomeHero3D'
 import { getFeaturedMountedPcs, getFeaturedOfferGroups } from '../../services/homeService'
+import { setDocumentMeta } from '../../utils/pageMeta'
 import './Home.css'
 
 export default function Home() {
@@ -12,6 +13,27 @@ export default function Home() {
   const [activeOfferGroup, setActiveOfferGroup] = useState('hardwares')
   const [loadingHighlights, setLoadingHighlights] = useState(true)
   const previewRef = useRef(null)
+
+  useEffect(() => setDocumentMeta({
+    title: 'CriaByte | Compare hardware, preços e monte seu PC',
+    description: 'Compare preços e especificações de hardware, notebooks e PCs. Monte seu computador em 3D, confira compatibilidade e encontre onde comprar.',
+    canonical: '/',
+    structuredData: [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        name: 'CriaByte',
+        url: 'https://criabyte.com.br/',
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: 'CriaByte',
+        url: 'https://criabyte.com.br/',
+        inLanguage: 'pt-BR',
+      },
+    ],
+  }), [])
 
   useEffect(() => {
     let active = true
