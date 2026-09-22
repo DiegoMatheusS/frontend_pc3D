@@ -121,6 +121,7 @@ export const adminService = {
     update: (id, body) => oneRequest(`/api/admin/produtos/${id}`, 'PATCH', body),
     remove: (id) => apiRequest(`/api/admin/produtos/${id}`, { method: 'DELETE' }),
     import: (urlOriginal) => oneRequest('/api/admin/produtos/importar', 'POST', { urlOriginal }),
+    findAndRegisterIdenticalOffers: (id) => oneRequest(`/api/admin/busca-ofertas/produto/${id}/encontrar-e-cadastrar`, 'POST'),
   },
 
   hardwares: {

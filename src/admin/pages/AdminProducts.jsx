@@ -71,6 +71,7 @@ export default function AdminProducts() {
   const [status, setStatus] = useState('')
   const [category, setCategory] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [findingOffersFor, setFindingOffersFor] = useState(null)
 
   async function fetchProductsWithPrices() {
     const [productsResult, offersResult] = await Promise.allSettled([
@@ -117,6 +118,36 @@ export default function AdminProducts() {
     }
   }
 
+  async function findIdenticalOffers(item) {
+    if (findingOffersFor) return
+    const identity = [item.gtin, item.mpn, item.modelo].filter((value) => String(value || '').trim())
+    if (!identity.length) {
+      toast.show('Este Produto precisa ter GTIN/EAN, MPN ou modelo para confirmar que o item encontrado é idêntico.', 'erro')
+      return
+    }
+
+    setFindingOffersFor(item.id)
+    try {
+      const result = await adminService.products.findAndRegisterIdenticalOffers(item.id)
+      const found = Number(result?.quantidadeEncontrada || 0)
+      const created = Number(result?.quantidadeCadastrada || 0)
+      const skipped = Number(result?.quantidadeIgnorada || 0)
+
+      if (created > 0) {
+        toast.show(`${created} nova(s) oferta(s) cadastrada(s) para “${item.nome}”. ${skipped ? `${skipped} já existia(m) ou foi(ram) ignorada(s).` : ''}`)
+        await load()
+      } else if (found > 0) {
+        toast.show('As ofertas idênticas encontradas já estavam cadastradas para este Produto.')
+      } else {
+        toast.show('Nenhum produto idêntico foi confirmado no Mercado Livre, Magazine Luiza ou Shopee.')
+      }
+    } catch (err) {
+      toast.show(err?.message || 'Não foi possível buscar ofertas idênticas.', 'erro')
+    } finally {
+      setFindingOffersFor(null)
+    }
+  }
+
   async function reactivate(item) {
     const specialized = getSpecializedProductTarget(item)
     const label = specialized?.label || 'Produto'
@@ -155,7 +186,16 @@ export default function AdminProducts() {
               const specialized = getSpecializedProductTarget(item)
               return <>
                 {canWriteCatalog && <Link className="admin-action-button" to={specialized?.route || `/admin/produtos/${item.id}`}>{specialized ? `Editar ${specialized.label}` : 'Editar'}</Link>}
-                {canWriteCatalog && <Link className="admin-action-button admin-action-button--success" to={`/admin/ofertas/novo?produtoId=${encodeURIComponent(item.id)}`}>+ Oferta</Link>}
+                {canWriteCatalog && <button
+                  className="admin-action-button admin-action-button--success"
+                  type="button"
+                  disabled={Boolean(findingOffersFor)}
+                  onClick={() => findIdenticalOffers(item)}
+                  title="Procura o mesmo Produto no Mercado Livre, Magazine Luiza e Shopee e cadastra somente novas ofertas"
+                >
+                  {findingOffersFor === item.id ? 'Buscando lojas...' : 'Buscar em outras lojas'}
+                </button>}
+                {canWriteCatalog && <Link className="admin-action-button" to={`/admin/ofertas/novo?produtoId=${encodeURIComponent(item.id)}`}>+ Oferta manual</Link>}
                 {item.ativo === false
                   ? canWriteCatalog && <button className="admin-action-button admin-action-button--success" type="button" onClick={() => reactivate(item)}>Reativar</button>
                   : canDeleteCatalog && <button className="admin-action-button" type="button" onClick={() => remove(item)}>{specialized ? `Arquivar ${specialized.label}` : 'Arquivar'}</button>}
