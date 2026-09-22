@@ -177,9 +177,48 @@ export default function AIAssistant() {
   }
 
   function applyGuidedFlow(flow) {
-    if (!flow || flow.tipo !== 'MONTAGEM_GUIADA') return false
+    if (!flow || flow.tipo !== 'MONTAGEM_GUIADA' || typeof flow.etapa !== 'string') return false
+
+    const safeOptions = Array.isArray(flow.opcoes)
+      ? flow.opcoes
+          .filter((option) => option && typeof option === 'object')
+          .slice(0, 24)
+          .map((option) => ({
+            ...option,
+            id: String(option.id || `option-${option.hardwareId || option.titulo || 'item'}`),
+            titulo: String(option.titulo || option.nome || 'Peça'),
+            subtitulo: option.subtitulo == null ? '' : String(option.subtitulo),
+            imagemUrl: typeof option.imagemUrl === 'string' && /^https?:\/\//i.test(option.imagemUrl)
+              ? option.imagemUrl
+              : null,
+            compatibilidade: typeof option.compatibilidade === 'string'
+              ? option.compatibilidade
+              : 'DADOS_INSUFICIENTES',
+          }))
+      : []
+
+    const safeComponents = Array.isArray(flow.componentes)
+      ? flow.componentes.filter((component) => component && typeof component === 'object').slice(0, 64)
+      : []
+
     setAutoBuild(null)
-    setGuidedFlow(flow)
+    setGuidedFlow({
+      ...flow,
+      mensagem: typeof flow.mensagem === 'string' ? flow.mensagem : 'Continue a montagem escolhendo a próxima peça.',
+      opcoes: safeOptions,
+      componentes: safeComponents,
+      compatibilidade: flow.compatibilidade && typeof flow.compatibilidade === 'object'
+        ? {
+            ...flow.compatibilidade,
+            erros: Array.isArray(flow.compatibilidade.erros)
+              ? flow.compatibilidade.erros.map(String).slice(0, 20)
+              : [],
+            alertas: Array.isArray(flow.compatibilidade.alertas)
+              ? flow.compatibilidade.alertas.map(String).slice(0, 20)
+              : [],
+          }
+        : null,
+    })
     setSetupStep('FLOW')
     scrollMessages()
     return true
@@ -259,7 +298,7 @@ export default function AIAssistant() {
       }
       const result = await aiService.guidedBuild(payload)
       if (!applyGuidedFlow(result)) {
-        addAssistantMessage('Não foi possível avançar para a próxima etapa.', true)
+        addAssistantMessage('A resposta da próxima etapa veio em um formato inválido. Tente novamente sem precisar reiniciar a montagem.', true)
       }
     } catch (error) {
       addAssistantMessage(responseError(error), true)
