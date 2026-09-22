@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import OfferCard from '../../components/OfferCard/OfferCard'
 import CatalogState from '../../components/CatalogState/CatalogState'
 import { getOfferGroups, getOffers } from '../../services/offersService'
+import { setDocumentMeta } from '../../utils/pageMeta'
 import './Offers.css'
 
 function normalize(value = '') {
@@ -28,6 +29,12 @@ export default function Offers() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => setDocumentMeta({
+    title: 'Ofertas de hardware e tecnologia | Compare preços | CriaByte',
+    description: 'Compare preços e ofertas de hardware e tecnologia em várias lojas. Encontre o melhor valor disponível para o mesmo produto.',
+    canonical: '/ofertas',
+  }), [])
 
   useEffect(() => {
     let active = true
