@@ -52,7 +52,6 @@ const BUDGET_OPTIONS = [
   { value: 5000, label: 'Até R$ 5.000' },
   { value: 7000, label: 'Até R$ 7.000' },
   { value: 10000, label: 'Até R$ 10.000' },
-  { value: null, label: 'Sem orçamento definido' },
 ]
 
 function contextLabel(pathname) {
@@ -149,6 +148,7 @@ export default function AIAssistant() {
   const [guidedFlow, setGuidedFlow] = useState(null)
   const [autoBuild, setAutoBuild] = useState(null)
   const [guidedMeta, setGuidedMeta] = useState({ uso: null, orcamento: null })
+  const [setupMode, setSetupMode] = useState(null)
   const [setupStep, setSetupStep] = useState('MENU')
 
   const context = contextLabel(location.pathname)
@@ -171,6 +171,7 @@ export default function AIAssistant() {
     setGuidedFlow(null)
     setAutoBuild(null)
     setGuidedMeta({ uso: null, orcamento: null })
+    setSetupMode(null)
     setSetupStep('MENU')
     setMessages([])
   }
@@ -223,15 +224,15 @@ export default function AIAssistant() {
     }
   }
 
-  async function startManualGuidedBuild() {
-    if (!guidedMeta.uso || sending) return
+  async function startManualGuidedBuild(uso = guidedMeta.uso, orcamento = guidedMeta.orcamento) {
+    if (!uso || sending) return
     setSending(true)
     try {
       const result = await aiService.guidedBuild({
         acao: 'INICIAR',
         componentes: [],
-        uso: guidedMeta.uso,
-        ...(guidedMeta.orcamento ? { orcamento: guidedMeta.orcamento } : {}),
+        uso,
+        ...(orcamento ? { orcamento } : {}),
       })
       if (!applyGuidedFlow(result)) {
         addAssistantMessage('Não foi possível abrir a seleção peça por peça.', true)
@@ -353,7 +354,25 @@ export default function AIAssistant() {
               <div className="ai-guided__heading"><div><small>Assistente</small><strong>O que você quer fazer?</strong></div></div>
               <p className="ai-guided__message">Escolha uma opção. O assistente vai avançar somente pelos botões.</p>
               <div className="ai-guided__actions">
-                <button type="button" className="is-primary" onClick={() => setSetupStep('USO')}>Montar um PC</button>
+                <button
+                  type="button"
+                  className="is-primary"
+                  onClick={() => {
+                    setSetupMode('GUIDED')
+                    setSetupStep('USO')
+                  }}
+                >
+                  Montagem guiada
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSetupMode('BUDGET')
+                    setSetupStep('USO')
+                  }}
+                >
+                  Montar por valor limitado
+                </button>
                 <button type="button" onClick={() => { setOpen(false); navigate('/montar') }}>Abrir montagem no 3D</button>
                 <button type="button" onClick={() => { setOpen(false); navigate('/ofertas') }}>Ver ofertas</button>
               </div>
@@ -363,22 +382,31 @@ export default function AIAssistant() {
           {!guidedFlow && setupStep === 'USO' && (
             <section className="ai-guided" aria-label="Escolher uso do PC">
               <div className="ai-guided__heading"><div><small>Etapa 1</small><strong>Qual será o uso principal?</strong></div></div>
-              <p className="ai-guided__message">Isso ajuda o sistema a priorizar as peças certas para a montagem.</p>
+              <p className="ai-guided__message">
+                {setupMode === 'GUIDED'
+                  ? 'Depois disso começa a montagem guiada, escolhendo as peças compatíveis uma por uma.'
+                  : 'Depois você escolhe o valor máximo e recebe a prévia completa da configuração.'}
+              </p>
               <div className="ai-guided__actions">
                 {USAGE_OPTIONS.map((option) => (
                   <button
                     type="button"
                     key={option.value}
                     className={option.value === 'jogos' ? 'is-primary' : ''}
+                    disabled={sending}
                     onClick={() => {
                       setGuidedMeta({ uso: option.value, orcamento: null })
-                      setSetupStep('ORCAMENTO')
+                      if (setupMode === 'GUIDED') {
+                        startManualGuidedBuild(option.value, null)
+                      } else {
+                        setSetupStep('ORCAMENTO')
+                      }
                     }}
                   >
                     {option.label}
                   </button>
                 ))}
-                <button type="button" onClick={() => setSetupStep('MENU')}>Voltar</button>
+                <button type="button" disabled={sending} onClick={() => setSetupStep('MENU')}>Voltar</button>
               </div>
             </section>
           )}
