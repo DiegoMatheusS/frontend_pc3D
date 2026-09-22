@@ -147,6 +147,7 @@ export default function AIAssistant() {
   const [sending, setSending] = useState(false)
   const [messages, setMessages] = useState([])
   const [guidedFlow, setGuidedFlow] = useState(null)
+  const [autoBuild, setAutoBuild] = useState(null)
   const [guidedMeta, setGuidedMeta] = useState({ uso: null, orcamento: null })
   const [setupStep, setSetupStep] = useState('MENU')
 
@@ -168,6 +169,7 @@ export default function AIAssistant() {
 
   function resetFlow() {
     setGuidedFlow(null)
+    setAutoBuild(null)
     setGuidedMeta({ uso: null, orcamento: null })
     setSetupStep('MENU')
     setMessages([])
@@ -175,6 +177,7 @@ export default function AIAssistant() {
 
   function applyGuidedFlow(flow) {
     if (!flow || flow.tipo !== 'MONTAGEM_GUIADA') return false
+    setAutoBuild(null)
     setGuidedFlow(flow)
     setSetupStep('FLOW')
     scrollMessages()
@@ -187,14 +190,51 @@ export default function AIAssistant() {
     const meta = { ...guidedMeta, orcamento: budget }
     setGuidedMeta(meta)
     try {
+      if (budget) {
+        const result = await aiService.buildPc({
+          orcamento: budget,
+          uso: meta.uso,
+        })
+        const components = Array.isArray(result?.componentes) ? result.componentes : []
+        if (components.length > 0) {
+          setGuidedFlow(null)
+          setAutoBuild(result)
+          setSetupStep('AUTO')
+          scrollMessages()
+          return
+        }
+        if (result?.fluxoGuiado && applyGuidedFlow(result.fluxoGuiado)) return
+        addAssistantMessage(result?.resposta || 'Não foi possível montar uma configuração completa para este orçamento.', true)
+        return
+      }
+
       const result = await aiService.guidedBuild({
         acao: 'INICIAR',
         componentes: [],
         uso: meta.uso,
-        ...(budget ? { orcamento: budget } : {}),
       })
       if (!applyGuidedFlow(result)) {
         addAssistantMessage('Não foi possível iniciar a montagem guiada.', true)
+      }
+    } catch (error) {
+      addAssistantMessage(responseError(error), true)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function startManualGuidedBuild() {
+    if (!guidedMeta.uso || sending) return
+    setSending(true)
+    try {
+      const result = await aiService.guidedBuild({
+        acao: 'INICIAR',
+        componentes: [],
+        uso: guidedMeta.uso,
+        ...(guidedMeta.orcamento ? { orcamento: guidedMeta.orcamento } : {}),
+      })
+      if (!applyGuidedFlow(result)) {
+        addAssistantMessage('Não foi possível abrir a seleção peça por peça.', true)
       }
     } catch (error) {
       addAssistantMessage(responseError(error), true)
@@ -278,6 +318,8 @@ export default function AIAssistant() {
   const guidedStatus = guidedFlow?.compatibilidade?.status
   const unpricedCount = countUnpriced(guidedFlow)
   const price = formatMoney(guidedFlow?.compra?.valorTotal)
+  const autoComponents = Array.isArray(autoBuild?.componentes) ? autoBuild.componentes : []
+  const autoPrice = formatMoney(autoBuild?.valorTotal)
 
   return (
     <>
@@ -344,13 +386,72 @@ export default function AIAssistant() {
           {!guidedFlow && setupStep === 'ORCAMENTO' && (
             <section className="ai-guided" aria-label="Escolher orçamento">
               <div className="ai-guided__heading"><div><small>Etapa 2</small><strong>Qual é o orçamento?</strong></div></div>
-              <p className="ai-guided__message">Escolha uma faixa. Depois disso o backend começa a sugerir as peças uma a uma.</p>
+              <p className="ai-guided__message">Escolha uma faixa. O sistema monta uma configuração completa dentro do orçamento e mostra a prévia das peças antes de abrir o 3D.</p>
               <div className="ai-guided__actions">
                 {BUDGET_OPTIONS.map((option) => (
                   <button type="button" key={option.label} disabled={sending} onClick={() => startGuidedBuild(option.value)}>{option.label}</button>
                 ))}
                 <button type="button" disabled={sending} onClick={() => setSetupStep('USO')}>Voltar</button>
               </div>
+            </section>
+          )}
+
+          {autoBuild && setupStep === 'AUTO' && (
+            <section className="ai-guided" aria-label="Configuração sugerida por orçamento">
+              <div className="ai-guided__heading">
+                <div>
+                  <small>Configuração pronta</small>
+                  <strong>{guidedMeta.orcamento ? `PC até ${formatMoney(guidedMeta.orcamento)}` : 'PC sugerido'}</strong>
+                </div>
+              </div>
+
+              <p className="ai-guided__message">{autoBuild.resposta}</p>
+
+              <div className="ai-guided__options">
+                {autoComponents.map((component) => (
+                  <article className="ai-guided-option" key={`${component.categoria}-${component.hardwareId}`}>
+                    {component.imagemUrl
+                      ? <img src={component.imagemUrl} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true }} />
+                      : <div className="ai-guided-option__placeholder" aria-hidden="true">PC</div>}
+                    <div className="ai-guided-option__body">
+                      <small>{STEP_LABELS[component.categoria] || component.categoria}</small>
+                      <strong>{component.nome}</strong>
+                      <div className="ai-guided-option__meta">
+                        <span>{[component.marca, component.modelo].filter(Boolean).join(' ')}</span>
+                        <b>{component.preco != null ? formatMoney(component.preco) : 'Preço indisponível'}</b>
+                      </div>
+                      {component.linkCompra ? (
+                        <a
+                          className="ai-guided-option__store"
+                          href={component.linkCompra}
+                          target="_blank"
+                          rel="sponsored noopener noreferrer"
+                        >
+                          Ver na loja{component.loja ? ` · ${component.loja}` : ''}
+                        </a>
+                      ) : (
+                        <button type="button" disabled>Sem oferta disponível</button>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <div className="ai-guided__purchase">
+                <span>
+                  <small>Total da configuração</small>
+                  <strong>{autoPrice || 'Preço parcial'}</strong>
+                </span>
+                {autoBuild.consumoWatts != null && <p>Consumo estimado: {autoBuild.consumoWatts} W</p>}
+              </div>
+
+              <div className="ai-guided__actions">
+                <button type="button" className="is-primary" onClick={() => openBuildIn3D(autoComponents)}>Abrir no 3D</button>
+                <button type="button" onClick={() => { setOpen(false); navigate('/ofertas') }}>Ver ofertas</button>
+                <button type="button" disabled={sending} onClick={startManualGuidedBuild}>Escolher peça por peça</button>
+              </div>
+
+              <button className="ai-guided__cancel" type="button" onClick={resetFlow}>Montar outro PC</button>
             </section>
           )}
 
