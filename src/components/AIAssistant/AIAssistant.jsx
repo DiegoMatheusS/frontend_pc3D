@@ -354,18 +354,6 @@ export default function AIAssistant() {
               <div className="ai-guided__heading"><div><small>Assistente</small><strong>O que você quer fazer?</strong></div></div>
               <p className="ai-guided__message">Escolha uma opção. O assistente vai avançar somente pelos botões.</p>
               <div className="ai-guided__actions">
-                <button type="button" className="is-primary" onClick={() => setSetupStep('MODO')}>Montar um PC</button>
-                <button type="button" onClick={() => { setOpen(false); navigate('/montar') }}>Abrir montagem no 3D</button>
-                <button type="button" onClick={() => { setOpen(false); navigate('/ofertas') }}>Ver ofertas</button>
-              </div>
-            </section>
-          )}
-
-          {!guidedFlow && setupStep === 'MODO' && (
-            <section className="ai-guided" aria-label="Escolher tipo de montagem">
-              <div className="ai-guided__heading"><div><small>Montar PC</small><strong>Como você quer montar?</strong></div></div>
-              <p className="ai-guided__message">Você pode montar peça por peça com ajuda do assistente ou informar um limite de valor para receber uma configuração pronta.</p>
-              <div className="ai-guided__actions">
                 <button
                   type="button"
                   className="is-primary"
@@ -385,7 +373,8 @@ export default function AIAssistant() {
                 >
                   Montar por valor limitado
                 </button>
-                <button type="button" onClick={() => setSetupStep('MENU')}>Voltar</button>
+                <button type="button" onClick={() => { setOpen(false); navigate('/montar') }}>Abrir montagem no 3D</button>
+                <button type="button" onClick={() => { setOpen(false); navigate('/ofertas') }}>Ver ofertas</button>
               </div>
             </section>
           )}
@@ -417,7 +406,7 @@ export default function AIAssistant() {
                     {option.label}
                   </button>
                 ))}
-                <button type="button" disabled={sending} onClick={() => setSetupStep('MODO')}>Voltar</button>
+                <button type="button" disabled={sending} onClick={() => setSetupStep('MENU')}>Voltar</button>
               </div>
             </section>
           )}
