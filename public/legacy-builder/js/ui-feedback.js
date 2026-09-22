@@ -51,7 +51,12 @@ export function definirEstadoContainer(container, estado, mensagem = "") {
       ? "pcbuilder-estado pcbuilder-estado-vazio"
       : "pcbuilder-estado pcbuilder-estado-carregando";
 
-  container.innerHTML = `<p class="${classe}" role="status">${mensagem}</p>`;
+  container.replaceChildren();
+  const paragrafo = document.createElement("p");
+  paragrafo.className = classe;
+  paragrafo.setAttribute("role", "status");
+  paragrafo.textContent = String(mensagem);
+  container.appendChild(paragrafo);
 }
 
 export function definirBotaoCarregando(botao, carregando, texto = "Processando...") {

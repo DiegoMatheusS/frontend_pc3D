@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "prebuild": "node scripts/generate-sitemap.mjs"
+    "prebuild": "node scripts/generate-sitemap.mjs",
+    "security:audit": "npm audit --audit-level=high"
   },
   "dependencies": {
     "react": "^19.2.8",
@@ -25,5 +26,8 @@
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.7.0",
     "vite": "^8.2.0"
+  },
+  "overrides": {
+    "nanoid": "3.3.18"
   }
 }
