@@ -76,6 +76,63 @@ function isInternalSpecKey(key) {
   ].includes(normalized)
 }
 
+function productCanonical(product) {
+  return `/produto/${encodeURIComponent(product.slug || product.id)}`
+}
+
+function productStructuredData(product) {
+  const offers = asArray(product.offers).filter((offer) => Number(offer?.price) > 0)
+  const prices = offers.map((offer) => Number(offer.price)).filter(Number.isFinite)
+  const description = asText(
+    product.description,
+    `Compare preços, especificações e ofertas de ${product.name} no CriaByte.`,
+  )
+
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description,
+    sku: String(product.id),
+    ...(product.image ? { image: [product.image] } : {}),
+    ...(product.brand && product.brand !== '—' ? {
+      brand: { '@type': 'Brand', name: product.brand },
+    } : {}),
+    ...(product.model ? { model: product.model } : {}),
+    ...(product.mpn ? { mpn: product.mpn } : {}),
+  }
+
+  const gtin = String(product.gtin || '').replace(/\D/g, '')
+  if ([8, 12, 13, 14].includes(gtin.length)) {
+    data[`gtin${gtin.length}`] = gtin
+  }
+
+  if (prices.length) {
+    data.offers = {
+      '@type': 'AggregateOffer',
+      priceCurrency: 'BRL',
+      lowPrice: Math.min(...prices).toFixed(2),
+      highPrice: Math.max(...prices).toFixed(2),
+      offerCount: prices.length,
+      url: `https://criabyte.com.br${productCanonical(product)}`,
+    }
+  }
+
+  const rating = Number(product.rating)
+  const reviewCount = Number(product.reviewsCount)
+  if (rating > 0 && reviewCount > 0) {
+    data.aggregateRating = {
+      '@type': 'AggregateRating',
+      ratingValue: Number(rating.toFixed(1)),
+      reviewCount,
+      bestRating: 5,
+      worstRating: 1,
+    }
+  }
+
+  return data
+}
+
 export default function ProductDetails() {
   const { id } = useParams()
   const [product, setProduct] = useState(undefined)
@@ -88,10 +145,19 @@ export default function ProductDetails() {
 
   const specs = useMemo(() => product ? Object.entries(product.specs || {}).filter(([key]) => !isInternalSpecKey(key)) : [], [product])
   useEffect(() => {
-    if (!product) return
-    setDocumentMeta({
-      title: `${product.name} — CriaByte`,
-      description: product.description || `Veja especificações, avaliações e ofertas de ${product.name}.`,
+    if (!product) return undefined
+    const offers = asArray(product.offers)
+    const priceText = Number(product.price) > 0 ? ` a partir de ${formatCurrency(product.price)}` : ''
+    const description = product.description
+      || `Compare ${offers.length || 'as'} oferta${offers.length === 1 ? '' : 's'} de ${product.name}${priceText}. Veja ficha técnica, avaliações e onde comprar.`
+
+    return setDocumentMeta({
+      title: `${product.name}: preços e ficha técnica | CriaByte`,
+      description,
+      canonical: productCanonical(product),
+      image: product.image,
+      type: 'product',
+      structuredData: productStructuredData(product),
     })
   }, [product])
 

@@ -6,6 +6,7 @@ import CatalogState from '../../components/CatalogState/CatalogState'
 import { getProductById, getProductGroups, getProducts } from '../../services/productsService'
 import { getNotebooks } from '../../services/notebooksService'
 import useAccessibleDialog from '../../hooks/useAccessibleDialog'
+import { setDocumentMeta } from '../../utils/pageMeta'
 import './Store.css'
 
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', {
@@ -560,6 +561,12 @@ export default function Store({ defaultGroup = 'todos' }) {
       : group === 'todos'
         ? 'Explore computadores, peças, celulares, tablets, games, TVs, áudio, fotografia, casa inteligente, eletroportáteis, rede e acessórios em um catálogo único.'
         : `Explore ${String(activeGroupLabel || 'produtos').toLowerCase()} com especificações, comparação e ofertas disponíveis.`
+
+  useEffect(() => setDocumentMeta({
+    title: `${pageTitle} | Compare preços e especificações | CriaByte`,
+    description: pageDescription,
+    canonical: defaultGroup === 'hardwares' ? '/pecas' : '/loja',
+  }), [defaultGroup, pageDescription, pageTitle])
 
   const activeComparison = comparisonItems.length === 2 ? comparisonItems : compare
   const activeComparisonCategoryKey = activeComparison.length === 2 ? comparisonCategoryKey(activeComparison[0]) : ''
