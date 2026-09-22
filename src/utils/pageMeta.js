@@ -86,6 +86,9 @@ export function setDocumentMeta({
   if (absoluteImage) {
     setMeta('meta[property="og:image"]', 'property', 'og:image', absoluteImage)
     setMeta('meta[name="twitter:image"]', 'name', 'twitter:image', absoluteImage)
+  } else {
+    document.head.querySelector('meta[property="og:image"]')?.remove()
+    document.head.querySelector('meta[name="twitter:image"]')?.remove()
   }
 
   setStructuredData(structuredData)
