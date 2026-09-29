@@ -52,20 +52,61 @@ const specLabels = {
   cpu: 'Processador', gpu: 'Placa de vídeo', ramGb: 'RAM', storageGb: 'Armazenamento', screenInches: 'Tela', weightKg: 'Peso', upgradeRam: 'Upgrade de RAM', upgradeStorage: 'Upgrade de armazenamento',
   material: 'Material', maxWeightKg: 'Peso máximo', armrest: 'Apoio de braço', reclining: 'Reclinação', lumbarSupport: 'Apoio lombar', headrest: 'Apoio de cabeça',
   widthMm: 'Largura', heightMm: 'Altura', thicknessMm: 'Espessura', surface: 'Superfície', base: 'Base',
+  processadorNome: 'Processador', processadorMarca: 'Marca do processador', processadorGeracao: 'Geração do processador', processadorNucleos: 'Núcleos do processador',
+  armazenamentoGb: 'Armazenamento', tamanhoTelaPolegadas: 'Tela', taxaAtualizacaoHz: 'Taxa de atualização', tipoTela: 'Tipo de tela',
+  cameraPrincipalMp: 'Câmera principal', cameraUltrawideMp: 'Câmera ultrawide', cameraTeleobjetivaMp: 'Câmera teleobjetiva', cameraFrontalMp: 'Câmera frontal',
+  bateriaMah: 'Bateria', carregamentoWatts: 'Carregamento', carregamentoSemFio: 'Carregamento sem fio',
+  cincoG: '5G', nfc: 'NFC', dualSim: 'Dual SIM', esim: 'eSIM', sistemaOperacional: 'Sistema operacional', pesoGramas: 'Peso', cor: 'Cor', resistenciaAgua: 'Resistência',
+  gps: 'GPS', usb: 'USB', biometria: 'Biometria', brilhoNits: 'Brilho', expansaoMemoria: 'Expansão de memória', cartaoMemoria: 'Cartão de memória',
 }
 
 const unitFor = (key) => ({
   baseClockGhz: ' GHz', boostClockGhz: ' GHz', cacheL3Mb: ' MB', tdpWatts: ' W', vramGb: ' GB', memoryBusBits: ' bits', boostClockMhz: ' MHz', tgpWatts: ' W', recommendedPsuWatts: ' W', lengthMm: ' mm', maxRamGb: ' GB', capacityGb: ' GB', frequencyMhz: ' MHz', readMbps: ' MB/s', writeMbps: ' MB/s', powerWatts: ' W', fanMm: ' mm', pollingRateHz: ' Hz', weightGrams: ' g', driverMm: ' mm', sizeInches: '”', refreshRateHz: ' Hz', responseTimeMs: ' ms', ramGb: ' GB', storageGb: ' GB', screenInches: '”', weightKg: ' kg', maxWeightKg: ' kg', widthMm: ' mm', heightMm: ' mm', depthMm: ' mm', thicknessMm: ' mm', thermalCapacityWatts: ' W', radiatorMm: ' mm', noiseDb: ' dB', lifeHours: ' horas', maxRpm: ' RPM',
+  armazenamentoGb: ' GB', tamanhoTelaPolegadas: '”', taxaAtualizacaoHz: ' Hz', cameraPrincipalMp: ' MP', cameraUltrawideMp: ' MP', cameraTeleobjetivaMp: ' MP', cameraFrontalMp: ' MP', bateriaMah: ' mAh', carregamentoWatts: ' W', pesoGramas: ' g', brilhoNits: ' nits',
 }[key] ?? '')
 
+function humanizeSpecLabel(key) {
+  if (specLabels[key]) return specLabels[key]
+  return String(key)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\bNfc\b/gi, 'NFC')
+    .replace(/\bRam\b/gi, 'RAM')
+    .replace(/\bUsb\b/gi, 'USB')
+    .replace(/\bGps\b/gi, 'GPS')
+    .replace(/\bWifi\b/gi, 'Wi-Fi')
+    .replace(/\bMah\b/gi, 'mAh')
+    .replace(/^./, (letter) => letter.toUpperCase())
+}
 
 function formatPublicSpecValue(key, value) {
   if (value === null || value === undefined || value === '') return '—'
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
   if (typeof value === 'number') {
     const fractionDigits = key === 'noiseDb' ? 1 : Number.isInteger(value) ? 0 : 2
     return value.toLocaleString('pt-BR', { maximumFractionDigits: fractionDigits })
   }
-  return String(value)
+  const text = String(value).trim()
+  if (/^(true|yes|sim|1)$/i.test(text)) return 'Sim'
+  if (/^(false|no|nao|não|0)$/i.test(text)) return 'Não'
+  return text
+}
+
+function formatPublicDescription(value) {
+  if (!value) return value
+  let text = String(value)
+    .replace(/\bProcessador\s+Nome\s*:/gi, 'Processador:')
+    .replace(/\bPeso\s+Gramas\s*:/gi, 'Peso(g):')
+    .replace(/\bResist[eê]ncia\s+[Aa]gua\s*:/gi, 'Resistência:')
+    .replace(/\bNfc\s*:/gi, 'NFC:')
+
+  text = text.replace(/\bBateria\s+mAh\s*:\s*(\d{4,6})(?![\d.,]*\s*mAh)/gi, (_match, valueText) => {
+    const numeric = Number(valueText)
+    return `Bateria: ${Number.isFinite(numeric) ? numeric.toLocaleString('pt-BR') : valueText} mAh`
+  })
+  text = text.replace(/\bBateria\s+mAh\s*:/gi, 'Bateria:')
+  text = text.replace(/\bNFC\s*:\s*(true|false)\b/gi, (_match, flag) => `NFC: ${flag.toLowerCase() === 'true' ? 'Sim' : 'Não'}`)
+  return text
 }
 
 function isInternalSpecKey(key) {
@@ -129,7 +170,7 @@ export default function ProductDetails() {
           <div className="product-detail-breadcrumb"><Link to={section.to}>{section.label}</Link><span>/</span><span>{asText(product.category, 'Produto')}</span></div>
           <span className="eyebrow">{asText(product.brand)}</span>
           <h1>{product.name}</h1>
-          <p>{product.description}</p>
+          <p>{formatPublicDescription(product.description)}</p>
           <div className="product-detail-rating"><strong>★ {formatRating(product.rating)}</strong><span>{asNumber(product.reviewsCount, 0)} avaliações</span></div>
           <div className="product-detail-price"><span>{asNumber(product.price, 0) > 0 ? 'A partir de' : 'Preço'}</span><strong>{asNumber(product.price, 0) > 0 ? formatCurrency(product.price) : 'Sem oferta ativa'}</strong><small>{asArray(product.offers).length} oferta{asArray(product.offers).length === 1 ? '' : 's'} ativa{asArray(product.offers).length === 1 ? '' : 's'}</small></div>
           <div className="product-detail-actions">
@@ -145,7 +186,7 @@ export default function ProductDetails() {
       <section className="page-container product-detail-section">
         <div className="product-detail-section__heading"><span className="eyebrow">Ficha técnica</span><h2>Especificações</h2></div>
         <dl className="product-spec-grid">
-          {specs.map(([key, value]) => <div key={key}><dt>{specLabels[key] ?? key}</dt><dd>{formatPublicSpecValue(key, value)}{unitFor(key)}</dd></div>)}
+          {specs.map(([key, value]) => <div key={key}><dt>{humanizeSpecLabel(key)}</dt><dd>{formatPublicSpecValue(key, value)}{unitFor(key)}</dd></div>)}
         </dl>
       </section>
 
