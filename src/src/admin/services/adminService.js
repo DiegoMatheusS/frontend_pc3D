@@ -239,6 +239,7 @@ export const adminService = {
   },
 
   builds: {
+    analyzeListing: (body) => oneRequest('/api/admin/builds/analisar-anuncio', 'POST', body),
     list: async () => (await list('/api/admin/builds')).map(normalizeBuild),
     get: async (id) => normalizeBuild(await one(`/api/admin/builds/${id}`)),
     create: async (body) => normalizeBuild(await oneRequest('/api/admin/builds', 'POST', body)),

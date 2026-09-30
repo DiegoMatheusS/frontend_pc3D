@@ -1,3 +1,4 @@
+import { specLabel, specValue } from '../../utils/productSpecs'
 import { useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
@@ -89,16 +90,14 @@ function buildLinkedComponents(preview, hardwares = []) {
       const targetTokens = [
         item?.modelo,
         item?.nome,
-        item?.marca,
       ].map(normalizedAnswerKey).filter((value) => value.length >= 3)
       const candidates = (hardwares || []).filter((candidate) => {
-        if (candidate?.publicado !== true || candidate?.ativo === false) return false
+        if (candidate?.ativo === false) return false
         if (clean(candidate?.categoria).toUpperCase() !== categoria) return false
-        const haystack = hardwareSearchText(candidate)
         const candidateModel = normalizedAnswerKey(candidate?.modelo)
         return targetTokens.some((token) => (
-          haystack.includes(token)
-          || (candidateModel.length >= 3 && token.includes(candidateModel))
+          normalizedAnswerKey(candidate.nome) === token
+          || (candidateModel.length >= 3 && candidateModel === token)
         ))
       })
       if (candidates.length === 1) {
@@ -109,7 +108,7 @@ function buildLinkedComponents(preview, hardwares = []) {
 
     const key = `${categoria}:${hardwareId}`
     if (!hardware || !Number.isInteger(hardwareId) || hardwareId < 1 || seen.has(key)) return []
-    if (hardware.publicado !== true || hardware.ativo === false) return []
+    if (hardware.ativo === false) return []
     seen.add(key)
     return [{
       hardwareId,
@@ -455,30 +454,9 @@ function mergeManualPreview(summary, flow) {
 }
 
 function humanizeField(key) {
-  const labels = {
-    mpn: 'MPN',
-    gtin: 'GTIN / EAN',
-    ean: 'EAN',
-    sku: 'SKU',
-    urlOriginal: 'Link do produto',
-    urlAfiliada: 'Link afiliado',
-    codigoMarketplace: 'Código marketplace',
-    fontePreco: 'Fonte do preço',
-    disponivel: 'Disponibilidade',
-    descricao: 'Descrição',
-    nome: 'Nome',
-    marca: 'Marca',
-    modelo: 'Modelo',
-    imagemUrl: 'Imagem',
-  }
-  if (labels[key]) return labels[key]
-  return String(key || '')
-    .replace(/^especificacao/i, '')
-    .replaceAll('_', ' ')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .trim()
-    .replace(/^./, (letter) => letter.toUpperCase())
+  return specLabel(key)
 }
+
 
 function previewValue(value) {
   if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
@@ -486,7 +464,7 @@ function previewValue(value) {
     const items = value.filter((item) => ['string', 'number', 'boolean'].includes(typeof item))
     return items.length ? items.map((item) => previewValue(item)).join(', ') : ''
   }
-  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : ''
+  if (typeof value === 'number') return Number.isFinite(value) ? value.toLocaleString('pt-BR') : ''
   if (typeof value === 'string') return value.trim()
   return ''
 }
@@ -498,7 +476,7 @@ function flattenPreviewData(source = {}, depth = 0) {
     if (value === null || value === undefined || value === '') return
     const simple = previewValue(value)
     if (simple) {
-      entries.push([key, simple])
+      entries.push([key, specValue(key, value)])
       return
     }
     if (depth < 1 && value && typeof value === 'object' && !Array.isArray(value)) {
@@ -630,7 +608,7 @@ function RegistrationLinkForm({ flow, onChange, onSubmit, sending }) {
   const productUrl = clean(flow?.url)
   const affiliateUrl = clean(flow?.affiliateUrl)
   const productValid = validPublicUrl(productUrl)
-  const affiliateValid = !isProduct || validPublicUrl(affiliateUrl)
+  const affiliateValid = !(isProduct || isBuild) || validPublicUrl(affiliateUrl)
   const ready = productValid && affiliateValid && !sending
 
   return (
@@ -655,7 +633,7 @@ function RegistrationLinkForm({ flow, onChange, onSubmit, sending }) {
           disabled={sending}
         />
       </label>
-      {isProduct && (
+      {(isProduct || isBuild) && (
         <label>
           <span>Link afiliado</span>
           <input
@@ -709,7 +687,7 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
   const identityKeys = new Set(['nome','marca','modelo','descricao','mpn','gtin','ean','imagemUrl','categoria','metadados','urlOriginal','urlAfiliada'])
   const technicalEntries = flattenPreviewData(summary.technical || {})
     .filter(([key, value]) => !identityKeys.has(key) && value)
-    .slice(0, 12)
+
   const originalUrl = summary.originalUrl || clean(flow?.url)
   const affiliateUrl = summary.affiliateUrl || clean(flow?.affiliateUrl)
 
@@ -769,7 +747,7 @@ function RegistrationPreview({ flow, onConfirm, onCancel, onOpenForm, sending })
   )
 }
 
-function BuildRegistrationPreview({ flow, onConfirm, onCancel, sending }) {
+function BuildRegistrationPreview({ flow, onConfirm, onCancel, onChange, sending }) {
   const build = flow?.build || {}
   const components = Array.isArray(build.componentes) ? build.componentes : []
   return (
@@ -782,6 +760,19 @@ function BuildRegistrationPreview({ flow, onConfirm, onCancel, sending }) {
           <span>{[build.finalidade, build.resolucaoRecomendada].filter(Boolean).join(' · ') || 'Configuração completa'}</span>
         </div>
       </div>
+      <div className="admin-ia-registration-grid">
+        <label>Nome<input value={build.nome || ''} maxLength={200} onChange={e => onChange('nome', e.target.value)} /></label>
+        <label>Tipo<select value={build.categoria || 'PC_MONTADO'} onChange={e => onChange('categoria', e.target.value)}>
+          <option value="PC_MONTADO">PC montado</option><option value="KIT_UPGRADE">Kit de upgrade</option>
+        </select></label>
+      </div>
+      <label>Descrição do anúncio<textarea className="admin-textarea" value={build.descricao || ''} maxLength={4000} onChange={e => onChange('descricao', e.target.value)} /></label>
+      {flow.analysisWarning && <p role="alert">{flow.analysisWarning}</p>}
+      {flow.analysis?.confirmacaoObrigatoria && <p>Confira o tipo: o anúncio não deixa claro se é PC montado ou kit.</p>}
+      {(flow.suggestedComponents || []).map(component => <label key={`${component.categoria}-${component.hardwareId}`}>
+        <input type="checkbox" checked={components.some(c => c.hardwareId === component.hardwareId)} onChange={e => onChange('componentes', e.target.checked ? [...components, component] : components.filter(c => c.hardwareId !== component.hardwareId))} />
+        Vincular {component.nome}
+      </label>)}
       <div className="admin-ia-build-summary">
         {components.map((component) => (
           <div key={`${component.categoria}-${component.hardwareId}`}>
@@ -791,8 +782,17 @@ function BuildRegistrationPreview({ flow, onConfirm, onCancel, sending }) {
           </div>
         ))}
       </div>
+      <div className="admin-ia-registration-grid">
+        <label>Preço do PC completo (R$)<input type="number" min="0.01" step="0.01" value={build.preco ?? ''} onChange={e => onChange('preco', e.target.value)} /></label>
+        <label>Loja<select value={build.parceiroId || ''} onChange={e => onChange('parceiroId', e.target.value)}>
+          <option value="">Selecione a loja</option>
+          {(flow.partners || []).map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+        </select></label>
+      </div>
+      <p>Link do anúncio: {flow.url}</p>
+      <p>Link afiliado: {flow.affiliateUrl}</p>
       <p className="admin-ia-registration-note">
-        O backend vai validar compatibilidade, consumo e componentes obrigatórios antes de publicar.
+        Vínculos são opcionais. A descrição do vendedor é preservada; componentes desconhecidos não comprovam compatibilidade ou consumo.
       </p>
       <div className="admin-ia-registration-actions">
         <button type="button" className="btn btn-secundario btn-pequeno" onClick={onCancel} disabled={sending}>Cancelar</button>
@@ -825,23 +825,20 @@ export default function AdminAssistant({ open, onClose }) {
     setSending(true)
     setDraft('')
     try {
-      const items = await adminService.hardwares.listForBuild()
+      const [items, partners] = await Promise.all([
+        adminService.hardwares.listForBuild(), adminService.offers.partners(),
+      ])
       if (activeFlowId.current !== flowId) return
       const hardwares = (Array.isArray(items) ? items : []).filter(
-        (hardware) => hardware?.ativo !== false && hardware?.publicado === true,
+        (hardware) => hardware?.ativo !== false,
       )
-      if (!hardwares.length) {
-        setMessages((current) => [...current, {
-          role: 'assistente',
-          text: 'Não encontrei Hardwares ativos e publicados para montar o PC. Cadastre/publique as peças primeiro.',
-        }])
-        return
-      }
       setFlow({
         flowId,
         action: ACTION_BUILD,
         step: 'BUILD_URL',
         url: '',
+        affiliateUrl: '',
+        partners: partners.filter(p => p.ativo !== false),
         hardwares,
         buildCandidates: [],
         build: {
@@ -856,7 +853,7 @@ export default function AdminAssistant({ open, onClose }) {
       })
       setMessages((current) => [...current, {
         role: 'assistente',
-        text: 'Cole o link do PC montado. Vou extrair a configuração e vincular automaticamente as peças que já existirem em Hardwares. Depois pergunto somente o que faltar.',
+        text: 'Cole os links do PC ou kit. Vou preservar a descrição, trazer o preço e sugerir vínculos opcionais para você conferir.',
       }])
     } catch (error) {
       if (activeFlowId.current !== flowId) return
@@ -869,7 +866,7 @@ export default function AdminAssistant({ open, onClose }) {
     }
   }
 
-  async function analyzeBuildLink(url) {
+  async function analyzeBuildLink(url, affiliateUrl = '') {
     const flowId = flow?.flowId
     if (!flowId || activeFlowId.current !== flowId) return
     setSending(true)
@@ -878,13 +875,32 @@ export default function AdminAssistant({ open, onClose }) {
       if (activeFlowId.current !== flowId) return
 
       const source = getAiPayload(preview)
-      const componentes = buildLinkedComponents(preview, flow.hardwares || [])
+      let analysis = null
+      let analysisWarning = ''
+      try {
+        analysis = await adminService.builds.analyzeListing({ titulo: clean(source?.nome), descricao: clean(source?.descricao) })
+      } catch (error) {
+        analysisWarning = error?.message || 'Não foi possível sugerir vínculos; revise a descrição.'
+      }
+      if (activeFlowId.current !== flowId) return
+      const suggestedComponents = analysis ? buildLinkedComponents({ cadastroSugerido: { componentesDetectados: analysis.componentesDetectados } }, flow.hardwares || []) : []
+      const componentes = []
+      const offer = getAiOffer(preview) || {}
+      const host = new URL(url).hostname.replace(/^www\./, '')
+      const partner = (flow.partners || []).find(p => {
+        try {
+          const domain = new URL(p.site || `https://${p.dominio}`).hostname.replace(/^www\./, '')
+          return host === domain || host.endsWith(`.${domain}`)
+        } catch { return false }
+      })
       const build = {
         ...(flow.build || {}),
-        nome: clean(source?.nome),
+        nome: clean(source?.nome).slice(0, 200),
+        preco: offer.preco ?? '',
+        parceiroId: partner?.id || '',
         finalidade: clean(source?.finalidade),
         resolucaoRecomendada: clean(source?.resolucaoRecomendada || source?.resolucao),
-        categoria: clean(source?.categoria) || buildCategoryFromPurpose(source?.finalidade),
+        categoria: analysis?.tipoSugerido === 'KIT_UPGRADE' ? 'KIT_UPGRADE' : 'PC_MONTADO',
         descricao: clean(source?.descricao),
         imagemUrl: clean(source?.imagemUrl),
         publicado: true,
@@ -892,56 +908,13 @@ export default function AdminAssistant({ open, onClose }) {
         componentes,
       }
 
-      const infoQuestions = BUILD_INFO_QUESTIONS.filter((question) => !clean(build[question.field]))
-      if (infoQuestions.length > 0) {
-        setFlow((current) => current && current.flowId === flowId ? {
-          ...current,
-          step: 'BUILD_INFO',
-          url,
-          preview,
-          build,
-          buildInfoQuestions: infoQuestions,
-          infoIndex: 0,
-          componentIndex: nextBuildComponentIndex(componentes, 0),
-        } : current)
-        setMessages((current) => [...current, {
-          role: 'assistente',
-          text: `A IA analisou o link e vinculou ${componentes.length} peça(s). ${infoQuestions[0].prompt}`,
-        }])
-        return
-      }
-
-      const nextIndex = nextBuildComponentIndex(componentes, 0)
-      if (nextIndex >= BUILD_COMPONENT_STEPS.length) {
-        setFlow((current) => current && current.flowId === flowId ? {
-          ...current,
-          step: 'BUILD_PREVIEW',
-          url,
-          preview,
-          build,
-          componentIndex: nextIndex,
-          buildCandidates: [],
-        } : current)
-        setMessages((current) => [...current, {
-          role: 'assistente',
-          text: `A IA conseguiu vincular ${componentes.length} peça(s) do anúncio ao catálogo. Confira a prévia e confirme para validar/publicar.`,
-        }])
-        return
-      }
-
-      const nextStep = BUILD_COMPONENT_STEPS[nextIndex]
-      setFlow((current) => current && current.flowId === flowId ? {
-        ...current,
-        step: 'BUILD_COMPONENT',
-        url,
-        preview,
-        build,
-        componentIndex: nextIndex,
-        buildCandidates: [],
+      setFlow(current => current && current.flowId === flowId ? {
+        ...current, step: 'BUILD_PREVIEW', url, affiliateUrl, preview, build,
+        analysis, analysisWarning, suggestedComponents,
       } : current)
-      setMessages((current) => [...current, {
+      setMessages(current => [...current, {
         role: 'assistente',
-        text: `A IA vinculou ${componentes.length} peça(s). Não consegui vincular a ${nextStep.label}. ${buildComponentPrompt(nextStep)}`,
+        text: 'Confira o tipo, a descrição e o preço. Marque somente os vínculos comprovados; peças genéricas e acessórios podem ficar apenas na descrição.',
       }])
     } catch (error) {
       if (activeFlowId.current !== flowId) return
@@ -1105,6 +1078,10 @@ export default function AdminAssistant({ open, onClose }) {
     if (flow?.action !== ACTION_BUILD || flow?.step !== 'BUILD_PREVIEW' || sending) return
     const flowId = flow?.flowId
     const build = flow.build || {}
+    if (!Number.isFinite(Number(build.preco)) || Number(build.preco) <= 0 || !Number(build.parceiroId)) {
+      setMessages(current => [...current, { role: 'assistente', text: 'Informe o preço do PC completo e selecione a loja na prévia.' }])
+      return
+    }
     const componentes = (Array.isArray(build.componentes) ? build.componentes : []).map((item, index) => ({
       hardwareId: Number(item.hardwareId),
       categoria: item.categoria,
@@ -1118,11 +1095,13 @@ export default function AdminAssistant({ open, onClose }) {
       categoria: clean(build.categoria) || buildCategoryFromPurpose(finalidade),
       ...(finalidade ? { finalidade } : {}),
       ...(clean(build.resolucaoRecomendada) ? { resolucaoRecomendada: clean(build.resolucaoRecomendada) } : {}),
-      descricao: `PC montado${finalidade ? ` para ${finalidade}` : ''} com ${componentNames.join(', ')}.`,
+      descricao: clean(build.descricao) || (componentNames.length ? `Componentes: ${componentNames.join(', ')}.` : ''),
       publicado: true,
       ativo: true,
       componentes,
       configuracao3D: {},
+      ...(build.imagemUrl ? { imagemUrl: build.imagemUrl } : {}),
+      oferta: { preco: Number(build.preco), parceiroId: Number(build.parceiroId), urlOriginal: flow.url, urlAfiliada: flow.affiliateUrl },
     }
 
     setSending(true)
@@ -1495,7 +1474,7 @@ export default function AdminAssistant({ open, onClose }) {
         </div>}
         {messages.map((message,index)=><div key={`${message.role}-${index}`} className={`admin-ia-chat-msg admin-ia-chat-msg--${message.role}`}>{message.text}</div>)}
         {flow?.step === 'PREVIEW' && <RegistrationPreview flow={flow} onConfirm={confirmRegistration} onCancel={cancelRegistration} onOpenForm={openFallbackForm} sending={sending} />}
-        {flow?.step === 'BUILD_PREVIEW' && <BuildRegistrationPreview flow={flow} onConfirm={confirmBuildRegistration} onCancel={cancelRegistration} sending={sending} />}
+        {flow?.step === 'BUILD_PREVIEW' && <BuildRegistrationPreview flow={flow} onChange={(field, value) => setFlow(current => ({ ...current, build: { ...current.build, [field]: value } }))} onConfirm={confirmBuildRegistration} onCancel={cancelRegistration} sending={sending} />}
         {sending&&<div className="admin-ia-chat-digitando"><span/><span/><span/></div>}
       </div>
       {['URL', 'BUILD_URL'].includes(flow?.step)
@@ -1533,7 +1512,7 @@ export default function AdminAssistant({ open, onClose }) {
               </button>)}
             </div>}
             {showStickyBuildConfirm && <div className="admin-ia-bottom-action" aria-label="Confirmar PC Montado">
-              <span><strong>PC pronto para validação</strong><small>O backend confere compatibilidade antes de publicar.</small></span>
+              <span><strong>PC pronto para validação</strong><small>Confira a descrição, os vínculos opcionais e a oferta.</small></span>
               <button type="button" className="btn btn-primario btn-pequeno" onClick={confirmBuildRegistration} disabled={sending}>
                 {sending ? 'Publicando...' : 'Confirmar e publicar PC'}
               </button>

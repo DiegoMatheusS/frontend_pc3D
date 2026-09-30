@@ -1,3 +1,4 @@
+import { normalizeNotebookSpecs } from '../utils/notebookSpecs'
 import { getCommunityOfferCreatorName, getOfferCreatorId } from '../utils/offerCreator'
 import { configurationFromComponents, inferMountedPcConfiguration } from '../utils/builderConfiguration'
 import { safeHttpUrl } from '../utils/safeUrl'
@@ -360,7 +361,17 @@ function cpuSpecs(item) {
 }
 
 function genericSpecs(item) {
+  const metadata = [item.produto?.metadados, item.metadados].filter(Boolean)
+  const collected = Object.fromEntries(metadata.flatMap(meta =>
+    (meta.atributosColetados || meta.informacoesProdutoEncontradas || []).flatMap(row => {
+      const key = row?.nome || row?.name
+      const value = row?.valor ?? row?.value ?? row?.value_name
+      return key && value !== null && value !== undefined && value !== '' ? [[key, value]] : []
+    })
+  ))
   const candidates = [
+    collected,
+    ...metadata.map(meta => meta.especificacoesEncontradas),
     item.metadados?.especificacoes,
     item.produto?.metadados?.especificacoes,
     item.especificacoes,
@@ -568,6 +579,9 @@ export function normalizeProduct(item) {
     categoryKey,
     name: text(item.nome ?? item.name ?? product?.nome ?? product?.name, `${text(item.marca ?? product?.marca, '')} ${text(item.modelo ?? product?.modelo, '')}`.trim() || 'Produto'),
     brand: text(item.marca ?? item.brand ?? product?.marca ?? product?.brand ?? hardware?.marca),
+    model: text(item.modelo ?? item.model ?? product?.modelo ?? product?.model ?? hardware?.modelo, ''),
+    mpn: text(item.mpn ?? product?.mpn ?? hardware?.mpn, ''),
+    gtin: text(item.gtin ?? item.ean ?? product?.gtin ?? product?.ean ?? hardware?.gtin ?? hardware?.ean, ''),
     description: item.descricao || item.description || product?.descricao || product?.description || hardware?.descricao || notebook?.descricao || peripheral?.descricao || setupItem?.descricao || '',
     image: item.imagemUrl || item.imagem || item.image || product?.imagemUrl || product?.imagem || product?.image || hardware?.imagemUrl || peripheral?.imagemUrl || setupItem?.imagemUrl || null,
     hoverImage: item.imagemHoverUrl || item.hoverImage || item.imageHover || product?.imagemHoverUrl || product?.hoverImage || hardware?.imagemHoverUrl || peripheral?.imagemHoverUrl || setupItem?.imagemHoverUrl || null,
@@ -586,48 +600,6 @@ export function normalizeProduct(item) {
   }
 }
 
-
-function normalizeNotebookSpecs(rawSpecs = {}) {
-  const spec = rawSpecs && typeof rawSpecs === 'object' ? rawSpecs : {}
-  const width = number(spec.resolucaoLargura ?? spec.resolutionWidth, 0)
-  const height = number(spec.resolucaoAltura ?? spec.resolutionHeight, 0)
-  const resolution = text(spec.resolution ?? spec.resolucaoTela ?? spec.resolucao, '') || (width && height ? `${width}x${height}` : '')
-  const upgradeRamRaw = spec.upgradeRam ?? spec.ramExpansivel
-  const upgradeStorageRaw = spec.upgradeArmazenamento ?? spec.upgradeStorage ?? spec.armazenamentoExpansivel
-  const storageGb = number(spec.storageGb ?? spec.armazenamentoGb ?? spec.capacidadeArmazenamentoGb, 0)
-  const storageType = text(spec.storageType ?? spec.tipoArmazenamento, '')
-  const yesNo = (value) => typeof value === 'boolean' ? (value ? 'Sim' : 'Não') : text(value, '—')
-  return {
-    ...spec,
-    cpu: text(spec.cpu ?? spec.processador ?? spec.processadorModelo ?? spec.processadorNome),
-    cpuBrand: text(spec.cpuBrand ?? spec.marcaProcessador ?? spec.processadorMarca, ''),
-    cpuGeneration: text(spec.cpuGeneration ?? spec.geracaoProcessador ?? spec.processadorGeracao, ''),
-    cpuCores: number(spec.cpuCores ?? spec.nucleosProcessador ?? spec.nucleos, 0),
-    cpuThreads: number(spec.cpuThreads ?? spec.threadsProcessador ?? spec.threads, 0),
-    cpuTdpWatts: number(spec.cpuTdpWatts ?? spec.tdpProcessador ?? spec.tdpCpu ?? spec.tdpWatts, 0),
-    gpu: text(spec.gpu ?? spec.placaVideo ?? spec.placaDeVideo ?? spec.gpuNome, ''),
-    dedicatedGpu: Boolean(spec.dedicatedGpu ?? spec.gpuDedicada ?? spec.placaVideoDedicada),
-    vramGb: number(spec.vramGb ?? spec.memoriaVideoGb ?? spec.vram, 0),
-    gpuTgpWatts: number(spec.gpuTgpWatts ?? spec.tgpGpu ?? spec.tgp ?? spec.tgpWatts, 0),
-    ramGb: number(spec.ramGb ?? spec.memoriaRamGb ?? spec.memoriaInstaladaGb ?? spec.ramInstaladaGb, 0),
-    ramModel: text(spec.ramModel ?? spec.modeloRam ?? spec.modeloMemoriaRam ?? spec.memoriaRamModelo ?? spec.memoriaModelo, ''),
-    ramType: text(spec.ramType ?? spec.tipoMemoria ?? spec.tipoRam, ''),
-    maxRamGb: number(spec.maxRamGb ?? spec.memoriaMaximaGb ?? spec.ramMaximaGb, 0),
-    storageGb,
-    storageType,
-    storageLabel: [storageGb > 0 ? `${storageGb} GB` : '', storageType].filter(Boolean).join(' '),
-    m2Slots: number(spec.m2Slots ?? spec.slotsM2 ?? spec.slotsM2Total, 0),
-    screenInches: number(spec.screenInches ?? spec.telaPolegadas ?? spec.polegadas ?? spec.tamanhoTelaPolegadas, 0),
-    resolution,
-    refreshRateHz: number(spec.refreshRateHz ?? spec.taxaAtualizacaoHz ?? spec.hz, 0),
-    panel: text(spec.panel ?? spec.painelTela ?? spec.tipoPainel, ''),
-    brightnessNits: number(spec.brightnessNits ?? spec.brilhoNits, 0),
-    batteryWh: number(spec.batteryWh ?? spec.bateriaWh, 0),
-    weightKg: number(spec.weightKg ?? spec.pesoKg, 0),
-    upgradeRam: yesNo(upgradeRamRaw),
-    upgradeStorage: yesNo(upgradeStorageRaw),
-  }
-}
 
 export function normalizeNotebook(item) {
   if (!item || typeof item !== 'object') return null
@@ -649,8 +621,8 @@ export function normalizeNotebook(item) {
     description: product.descricao || item.descricao || item.description || '',
     image: product.imagemUrl || item.imagemUrl || item.imagem || item.image || null,
     hoverImage: product.imagemHoverUrl || item.imagemHoverUrl || item.hoverImage || null,
-    rating: number(item.mediaAvaliacoes ?? item.rating),
-    reviewsCount: number(item.quantidadeAvaliacoes ?? item.reviewsCount),
+    rating: number(item.mediaAvaliacoes ?? item.avaliacao?.media ?? item.rating),
+    reviewsCount: number(item.quantidadeAvaliacoes ?? item.avaliacao?.quantidade ?? item.reviewsCount),
     price: offers[0]?.price ?? number(item.precoAtual ?? item.preco ?? item.price),
     previousPrice: offers.find((offer) => offer.previousPrice)?.previousPrice ?? (number(item.precoAnterior ?? item.previousPrice, 0) || null),
     tags: Array.isArray(item.tags) ? item.tags : [],

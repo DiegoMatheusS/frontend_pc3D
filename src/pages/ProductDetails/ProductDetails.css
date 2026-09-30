@@ -28,7 +28,7 @@
 .product-detail-section__heading p { margin: 0; color: var(--color-text-soft); font-size: 12px; }
 .product-spec-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); margin: 0; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
 .product-spec-grid > div { min-width: 0; display: grid; gap: 7px; padding: 18px 20px; border-right: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
-.product-spec-grid dt { color: var(--color-text); font-size: 14px; font-weight: 800; overflow-wrap: anywhere; }
+.product-spec-grid dt { color: var(--color-text); font-size: 15px; font-weight: 800; overflow-wrap: anywhere; }
 .product-spec-grid dd { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .product-offers-list { display: grid; gap: 10px; }
 .product-offer-row { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 20px; padding: 14px 16px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); }

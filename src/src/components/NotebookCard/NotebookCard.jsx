@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { asArray, asNumber, asText, formatCurrency, formatRating } from '../../utils/display'
+import { notebookPath } from '../../utils/notebookSpecs'
 import './NotebookCard.css'
 
 export default function NotebookCard({ notebook = {}, onCompare, selected = false }) {
@@ -12,7 +13,7 @@ export default function NotebookCard({ notebook = {}, onCompare, selected = fals
 
   return (
     <article className={`notebook-card ${selected ? 'notebook-card--selected' : ''}`}>
-      <Link className="notebook-card__visual" to={`/notebooks/${notebook.id}`} aria-label={`Ver ${name}`}>
+      <Link className="notebook-card__visual" to={notebookPath(notebook)} aria-label={`Ver ${name}`}>
         {discount > 0 && <span className="notebook-card__discount">-{discount}%</span>}
         {notebook.image ? <img className={`notebook-card__image ${notebook.hoverImage ? 'has-hover' : ''}`} src={notebook.image} alt="" loading="lazy" onError={(event) => {
           event.currentTarget.hidden = true
@@ -28,7 +29,7 @@ export default function NotebookCard({ notebook = {}, onCompare, selected = fals
           <span>★ {formatRating(notebook.rating)} <small>({asNumber(notebook.reviewsCount, 0)})</small></span>
         </div>
 
-        <Link className="notebook-card__title" to={`/notebooks/${notebook.id}`}>{name}</Link>
+        <Link className="notebook-card__title" to={notebookPath(notebook)}>{name}</Link>
         <p>{asText(notebook.description, '')}</p>
 
         <dl className="notebook-card__quick-specs">
@@ -44,7 +45,7 @@ export default function NotebookCard({ notebook = {}, onCompare, selected = fals
         </div>
 
         <div className="notebook-card__actions">
-          <Link className="button button--primary" to={`/notebooks/${notebook.id}`}>Ver notebook</Link>
+          <Link className="button button--primary" to={notebookPath(notebook)}>Ver notebook</Link>
           {onCompare && <button className="button button--secondary" type="button" aria-pressed={selected} onClick={() => onCompare(notebook)}>{selected ? 'Selecionado' : 'Comparar'}</button>}
         </div>
       </div>

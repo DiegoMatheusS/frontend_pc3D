@@ -4,6 +4,14 @@ on:
   pull_request:
     paths:
       - "src/admin/components/AdminAssistant.jsx"
+      - "src/admin/pages/AdminHardwareDiscovery.jsx"
+      - "src/utils/productSpecs.js"
+      - "src/src/utils/productSpecs.js"
+      - "tests/**"
+      - "src/**/Notebook*"
+      - "src/components/MountedPcCard/**"
+      - "src/utils/notebookSpecs.js"
+      - "src/src/utils/notebookSpecs.js"
       - "src/admin/services/adminService.js"
       - "src/admin/utils/aiImportContract.js"
       - "src/admin/utils/autoScrollOfferEditor.js"
@@ -31,6 +39,14 @@ on:
     branches: [main]
     paths:
       - "src/admin/components/AdminAssistant.jsx"
+      - "src/admin/pages/AdminHardwareDiscovery.jsx"
+      - "src/utils/productSpecs.js"
+      - "src/src/utils/productSpecs.js"
+      - "tests/**"
+      - "src/**/Notebook*"
+      - "src/components/MountedPcCard/**"
+      - "src/utils/notebookSpecs.js"
+      - "src/src/utils/notebookSpecs.js"
       - "src/admin/services/adminService.js"
       - "src/admin/utils/aiImportContract.js"
       - "src/admin/utils/autoScrollOfferEditor.js"
@@ -85,6 +101,8 @@ jobs:
           src/src/services/productsService.js
           src/services/normalizers.js
           src/src/services/normalizers.js
+      - name: Testes de formatação e fluxo
+        run: node --test tests/*.test.js
       - name: Build da raiz
         run: npm run build
       - name: Build com /src como raiz

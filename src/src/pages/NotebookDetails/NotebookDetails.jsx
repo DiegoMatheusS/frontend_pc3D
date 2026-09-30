@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getNotebookById } from '../../services/notebooksService'
 import ReviewsPanel from '../../components/ReviewsPanel/ReviewsPanel'
 import { asArray, asNumber, asText, formatCurrency, formatRating } from '../../utils/display'
 import { setDocumentMeta } from '../../utils/pageMeta'
+import { notebookPath, notebookSpecValue } from '../../utils/notebookSpecs'
 import './NotebookDetails.css'
 
 const sections = [
@@ -11,12 +12,12 @@ const sections = [
     title: 'Processador',
     fields: [
       ['Modelo', 'cpu'], ['Marca', 'cpuBrand'], ['Geração', 'cpuGeneration'], ['Núcleos', 'cpuCores'], ['Threads', 'cpuThreads'],
-      ['Clock base', 'cpuBaseClockGhz', ' GHz'], ['Clock turbo', 'cpuBoostClockGhz', ' GHz'], ['TDP', 'cpuTdpWatts', ' W'],
+      ['Frequência base', 'cpuBaseClockGhz', ' GHz'], ['Frequência turbo', 'cpuBoostClockGhz', ' GHz'], ['Consumo do processador', 'cpuTdpWatts', ' W'],
     ],
   },
   {
     title: 'Placa de vídeo',
-    fields: [['GPU', 'gpu'], ['GPU dedicada', 'dedicatedGpu'], ['VRAM', 'vramGb', ' GB'], ['TGP', 'gpuTgpWatts', ' W']],
+    fields: [['Modelo', 'gpu'], ['Placa de vídeo dedicada', 'dedicatedGpu'], ['Memória de vídeo', 'vramGb', ' GB'], ['Consumo da placa de vídeo', 'gpuTgpWatts', ' W']],
   },
   {
     title: 'Memória e armazenamento',
@@ -28,30 +29,24 @@ const sections = [
   },
   {
     title: 'Tela',
-    fields: [['Tamanho', 'screenInches', '”'], ['Resolução', 'resolution'], ['Taxa de atualização', 'refreshRateHz', ' Hz'], ['Painel', 'panel'], ['Brilho', 'brightnessNits', ' nits'], ['Touch', 'touch']],
+    fields: [['Tamanho', 'screenInches', '”'], ['Resolução', 'resolution'], ['Taxa de atualização', 'refreshRateHz', ' Hz'], ['Painel', 'panel'], ['Brilho', 'brightnessNits', ' nits'], ['Tela sensível ao toque', 'touch']],
   },
   {
     title: 'Mobilidade e conectividade',
     fields: [
-      ['Bateria', 'batteryWh', ' Wh'], ['Carregador', 'chargerWatts', ' W'], ['Peso', 'weightKg', ' kg'], ['Dimensões', 'dimensions'],
-      ['Wi‑Fi', 'wifi'], ['Bluetooth', 'bluetooth'], ['USB-A', 'usbA'], ['USB-C', 'usbC'], ['Thunderbolt', 'thunderbolt'], ['HDMI', 'hdmi'], ['Ethernet', 'ethernet'],
+      ['Bateria', 'batteryWh', ' Wh'], ['Autonomia informada', 'batteryLifeHours', ' horas'], ['Carregador', 'chargerWatts', ' W'], ['Peso', 'weightKg', ' kg'], ['Dimensões', 'dimensions'],
+      ['Wi‑Fi', 'wifi'], ['Bluetooth', 'bluetooth'], ['Leitor de cartões', 'cardReader'], ['USB-A', 'usbA'], ['USB-C', 'usbC'], ['Thunderbolt', 'thunderbolt'], ['HDMI', 'hdmi'], ['DisplayPort', 'displayPort'], ['Ethernet', 'ethernet'],
     ],
   },
   {
     title: 'Outros recursos',
-    fields: [['Sistema operacional', 'os'], ['Webcam', 'webcam'], ['Teclado iluminado', 'backlitKeyboard'], ['Teclado numérico', 'numericKeypad'], ['Leitor de digital', 'fingerprint']],
+    fields: [['Sistema operacional', 'os'], ['Webcam', 'webcam'], ['Resolução da webcam', 'webcamResolution'], ['Teclado iluminado', 'backlitKeyboard'], ['Teclado numérico', 'numericKeypad'], ['Leitor de digital', 'fingerprint']],
   },
 ]
 
-function displayValue(key, value, suffix = '') {
-  if (key === 'dedicatedGpu') return value ? 'Sim' : 'Não'
-  if ((key === 'vramGb' || key === 'gpuTgpWatts') && !value) return 'Não se aplica'
-  if (value === null || value === undefined || value === '') return 'Não informado'
-  return `${value}${typeof value === 'number' ? suffix : ''}`
-}
-
 export default function NotebookDetails() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const [notebook, setNotebook] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -62,10 +57,17 @@ export default function NotebookDetails() {
   }, [id])
 
   useEffect(() => {
+    if (notebook?.slug && !/^\d+$/.test(notebook.slug) && String(id) !== notebook.slug) {
+      navigate(notebookPath(notebook), { replace: true })
+    }
+  }, [notebook, id, navigate])
+
+  useEffect(() => {
     if (!notebook) return
-    setDocumentMeta({
+    return setDocumentMeta({
       title: `${notebook.name} — CriaByte`,
       description: notebook.description || `Veja ficha técnica, avaliações e ofertas de ${notebook.name}.`,
+      canonical: notebookPath(notebook),
     })
   }, [notebook])
 
@@ -105,18 +107,18 @@ export default function NotebookDetails() {
           <section className="notebook-details__summary">
             <header><span className="eyebrow">Resumo</span><h2>Visão rápida</h2></header>
             <div className="notebook-details__summary-grid">
-              <div><span>Processador</span><strong>{notebook.specs?.cpu}</strong></div>
-              <div><span>GPU</span><strong>{notebook.specs?.gpu}</strong></div>
-              <div><span>Memória</span><strong>{notebook.specs?.ramGb} GB {notebook.specs?.ramType}</strong></div>
-              <div><span>Armazenamento</span><strong>{notebook.specs?.storageGb} GB {notebook.specs?.storageType}</strong></div>
-              <div><span>Tela</span><strong>{notebook.specs?.screenInches}” · {notebook.specs?.refreshRateHz} Hz</strong></div>
-              <div><span>Peso</span><strong>{notebook.specs?.weightKg} kg</strong></div>
+              <div><span>Processador</span><strong>{notebookSpecValue('cpu', notebook.specs?.cpu)}</strong></div>
+              <div><span>GPU</span><strong>{notebookSpecValue('gpu', notebook.specs?.gpu)}</strong></div>
+              <div><span>Memória</span><strong>{notebookSpecValue('ramGb', notebook.specs?.ramGb, ' GB')} {notebook.specs?.ramType}</strong></div>
+              <div><span>Armazenamento</span><strong>{notebookSpecValue('storageGb', notebook.specs?.storageGb, ' GB')} {notebook.specs?.storageType}</strong></div>
+              <div><span>Tela</span><strong>{notebookSpecValue('screenInches', notebook.specs?.screenInches, '”')} · {notebookSpecValue('refreshRateHz', notebook.specs?.refreshRateHz, ' Hz')}</strong></div>
+              <div><span>Peso</span><strong>{notebookSpecValue('weightKg', notebook.specs?.weightKg, ' kg')}</strong></div>
             </div>
           </section>
 
           {sections.map((section) => <section className="notebook-details__section" key={section.title}>
             <h2>{section.title}</h2>
-            <dl>{section.fields.map(([label, key, suffix]) => <div key={key}><dt>{label}</dt><dd>{displayValue(key, notebook.specs?.[key], suffix)}</dd></div>)}</dl>
+            <dl>{section.fields.map(([label, key, suffix]) => <div key={key}><dt>{label}</dt><dd>{notebookSpecValue(key, notebook.specs?.[key], suffix)}</dd></div>)}</dl>
           </section>)}
 
           <section className="notebook-details__section" id="onde-comprar">
@@ -146,8 +148,8 @@ export default function NotebookDetails() {
         </div>
 
         <aside className="notebook-details__sidebar">
-          <div><span className="eyebrow">Upgrade</span><h3>Possibilidades</h3><p><strong>RAM:</strong> {notebook.specs?.upgradeRam}</p><p><strong>Armazenamento:</strong> {notebook.specs?.upgradeStorage}</p></div>
-          <div><span className="eyebrow">Uso indicado</span><h3>{notebook.use}</h3><p>A classificação é informativa e poderá vir do catálogo revisado pelo admin.</p></div>
+          <div><span className="eyebrow">Upgrade</span><h3>Possibilidades</h3><p><strong>RAM:</strong> {notebookSpecValue('upgradeRam', notebook.specs?.upgradeRam)}</p><p><strong>Armazenamento:</strong> {notebookSpecValue('upgradeStorage', notebook.specs?.upgradeStorage)}</p></div>
+          <div><span className="eyebrow">Uso indicado</span><h3>{notebook.use}</h3><p>Confira as especificações para escolher o notebook adequado às suas tarefas.</p></div>
         </aside>
       </div>
     </main>

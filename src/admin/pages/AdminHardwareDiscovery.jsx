@@ -216,7 +216,7 @@ function HardwareCard({ item, index, selected, busy, metaBusy, aiBusy, itemError
   const metaApplied = item?.metaAiWhatsappAplicado === true
   const showAi = shouldShowAiButton(item)
   const aiApplied = item?.iaTecnicaAplicada === true
-  const aiCompleted = aiApplied && listStrings(item?.camposAusentes).length === 0 && quality === 100
+  const aiCompleted = aiApplied && listStrings(item?.camposAusentes).length === 0 && quality === 100 && listStrings(item?.camposParaRevisao).length === 0 && conflicts.length === 0
 
   return (
     <article className={`admin-discovery-card status-${status.toLowerCase().replaceAll('_', '-')}`}>
@@ -256,6 +256,14 @@ function HardwareCard({ item, index, selected, busy, metaBusy, aiBusy, itemError
         {missing.length > 0 && <span>{missing.length} campo(s) ainda ausente(s)</span>}
         {conflicts.length > 0 && <span>{conflicts.length} conflito(s) para revisar</span>}
       </div>}
+
+      {item?.auditoriaPesquisa && <details className="admin-discovery-alerts">
+        <summary>Revisão da IA: {item.auditoriaPesquisa.status || 'Confira os campos'}</summary>
+        <p>Campos para revisar: {listStrings(item.camposParaRevisao).join(', ') || 'Nenhum indicado'}</p>
+        {Object.entries(item.confiancaPorCampo || {}).map(([field, evidence]) => <p key={field}>
+          {field}: {typeof evidence?.score === 'number' ? `${Math.round(evidence.score * 100)}%` : 'Confiança não informada'} · {evidence?.fonte || 'Fonte não informada'}
+        </p>)}
+      </details>}
 
       {itemError && <div className="admin-discovery-item-error" role="alert">{itemError}</div>}
       {aiError && <div className="admin-discovery-item-error" role="alert">{aiError}</div>}
@@ -577,7 +585,7 @@ export default function AdminHardwareDiscovery() {
         provedor: 'GEMINI',
         categoria: categoriaAtual,
         nome: identity.nome,
-        payload,
+        payload: item?.iaPayloadOriginal || payload,
         somentePreencheLacunas: true,
       })
 
@@ -605,6 +613,10 @@ export default function AdminHardwareDiscovery() {
           ...current,
           payload: nextPayload,
           payloadHardware: nextPayload,
+          iaPayloadOriginal: current.iaPayloadOriginal || payload,
+          auditoriaPesquisa: response?.auditoriaPesquisa,
+          confiancaPorCampo: response?.confiancaPorCampo || {},
+          camposParaRevisao: response?.camposParaRevisao || response?.auditoriaPesquisa?.camposParaRevisao || [],
           ...(coverageAfter !== null ? { coberturaTecnica: coverageAfter, cobertura: coverageAfter, qualidade: coverageAfter } : {}),
           ...(STATUS_LABEL[statusAfter] ? { statusFicha: statusAfter } : {}),
           fontes: nextSources,

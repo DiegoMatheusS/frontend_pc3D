@@ -107,7 +107,13 @@ export default function ProductDetails() {
     return () => { active = false }
   }, [id])
 
-  const specs = useMemo(() => product ? Object.entries(product.specs || {}).filter(([key, value]) => isPublicSpec(key, value)) : [], [product])
+  const specs = useMemo(() => {
+    const rows = new Map()
+    for (const [key, value] of Object.entries(product?.specs || {})) {
+      if (isPublicSpec(key, value)) rows.set(publicSpecLabel(key).toLocaleLowerCase('pt-BR'), [key, value])
+    }
+    return [...rows.values()]
+  }, [product])
   const description = product ? publicProductDescription(product.description, product.name) : ''
   useEffect(() => {
     if (!product) return undefined

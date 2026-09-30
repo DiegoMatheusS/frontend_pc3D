@@ -13,15 +13,16 @@ export default function MountedPcCard({ pc = {}, onCompare, selected = false, co
 
   return (
     <article className={`mounted-card ${selected ? 'mounted-card--selected' : ''} ${compact ? 'mounted-card--compact' : ''}`}>
-      <div className="mounted-card__visual" aria-hidden="true">
+      <Link className="mounted-card__visual" to={`/montados/${pc.id}`} aria-label={`Ver ${name}`}>
         {pc.highlight ? <span className="mounted-card__chip">{asText(pc.highlight, '')}</span> : null}
         {pc.image ? <img className="mounted-card__image" src={pc.image} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true; event.currentTarget.nextElementSibling?.removeAttribute('hidden') }} /> : null}
         <div className="mounted-card__case" hidden={Boolean(pc.image)}><span className="mounted-card__fan mounted-card__fan--one" /><span className="mounted-card__fan mounted-card__fan--two" /><span className="mounted-card__gpu" /></div>
-      </div>
+      </Link>
 
       <div className="mounted-card__content">
         <span className="mounted-card__category">{buildCategoryLabel(pc)}</span>
-        <h3>{name}</h3>
+        <h3><Link to={`/montados/${pc.id}`}>{name}</Link></h3>
+        {pc.description && <Link className="mounted-card__description" to={`/montados/${pc.id}`}>{asText(pc.description, '')}</Link>}
 
         <dl className="mounted-card__specs">
           <div><dt>CPU</dt><dd>{asText(pc.cpu)}</dd></div>
