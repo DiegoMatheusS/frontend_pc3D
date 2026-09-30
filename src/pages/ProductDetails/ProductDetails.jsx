@@ -4,6 +4,7 @@ import { getProductById } from '../../services/productsService'
 import ReviewsPanel from '../../components/ReviewsPanel/ReviewsPanel'
 import { asArray, asNumber, asText, formatCurrency, formatRating } from '../../utils/display'
 import { setDocumentMeta } from '../../utils/pageMeta'
+import { isPublicSpec, publicProductDescription, publicSpecLabel, publicSpecValue } from '../../utils/productSpecPresentation'
 import './ProductDetails.css'
 
 const groupNavigation = {
@@ -39,43 +40,6 @@ const builderCategory = {
   ventoinha: 'ventoinhas',
 }
 
-const specLabels = {
-  socket: 'Socket', generation: 'Geração', architecture: 'Arquitetura', cores: 'Núcleos', threads: 'Threads',
-  baseClockGhz: 'Clock base', boostClockGhz: 'Clock turbo', cacheL3Mb: 'Cache L3', tdpWatts: 'TDP', integratedGraphics: 'Vídeo integrado', memory: 'Memória suportada', pcie: 'PCIe',
-  vramGb: 'VRAM', memoryType: 'Tipo de memória', memoryBusBits: 'Barramento', boostClockMhz: 'Clock boost', tgpWatts: 'TGP', recommendedPsuWatts: 'Fonte recomendada', lengthMm: 'Comprimento', slots: 'Slots',
-  chipset: 'Chipset', formFactor: 'Formato', ramSlots: 'Slots RAM', maxRamGb: 'RAM máxima', m2Slots: 'Slots M.2', sataPorts: 'Portas SATA', wifi: 'Wi-Fi', bluetooth: 'Bluetooth',
-  capacityGb: 'Capacidade', modules: 'Módulos', frequencyMhz: 'Frequência', latency: 'Latência', voltage: 'Tensão', rgb: 'Com iluminação RGB', type: 'Tipo', interface: 'Interface', readMbps: 'Leitura', writeMbps: 'Gravação',
-  coolingType: 'Tipo de refrigeração', sockets: 'Sockets suportados', thermalCapacityWatts: 'Capacidade térmica', radiatorMm: 'Radiador', fanCount: 'Quantidade de fans', noiseDb: 'Nível de ruído', lifeHours: 'Vida útil', maxRpm: 'Velocidade máxima', depthMm: 'Profundidade',
-  powerWatts: 'Potência', certification: 'Certificação', modularity: 'Modularidade', pcie5: 'PCIe 5', fanMm: 'Ventoinha',
-  sensor: 'Sensor', dpiMax: 'DPI máximo', pollingRateHz: 'Polling rate', buttons: 'Botões', weightGrams: 'Peso', connection: 'Conexão', layout: 'Layout', size: 'Tamanho', switch: 'Switch', hotSwap: 'Hot swap',
-  driverMm: 'Driver', microphone: 'Microfone', surround: 'Surround', sizeInches: 'Tamanho', resolution: 'Resolução', refreshRateHz: 'Taxa de atualização', panel: 'Painel', responseTimeMs: 'Tempo de resposta', hdr: 'HDR', displayPort: 'DisplayPort', hdmi: 'HDMI', vesa: 'VESA',
-  cpu: 'Processador', gpu: 'Placa de vídeo', ramGb: 'RAM', storageGb: 'Armazenamento', screenInches: 'Tela', weightKg: 'Peso', upgradeRam: 'Upgrade de RAM', upgradeStorage: 'Upgrade de armazenamento',
-  material: 'Material', maxWeightKg: 'Peso máximo', armrest: 'Apoio de braço', reclining: 'Reclinação', lumbarSupport: 'Apoio lombar', headrest: 'Apoio de cabeça',
-  widthMm: 'Largura', heightMm: 'Altura', thicknessMm: 'Espessura', surface: 'Superfície', base: 'Base',
-}
-
-const unitFor = (key) => ({
-  baseClockGhz: ' GHz', boostClockGhz: ' GHz', cacheL3Mb: ' MB', tdpWatts: ' W', vramGb: ' GB', memoryBusBits: ' bits', boostClockMhz: ' MHz', tgpWatts: ' W', recommendedPsuWatts: ' W', lengthMm: ' mm', maxRamGb: ' GB', capacityGb: ' GB', frequencyMhz: ' MHz', readMbps: ' MB/s', writeMbps: ' MB/s', powerWatts: ' W', fanMm: ' mm', pollingRateHz: ' Hz', weightGrams: ' g', driverMm: ' mm', sizeInches: '”', refreshRateHz: ' Hz', responseTimeMs: ' ms', ramGb: ' GB', storageGb: ' GB', screenInches: '”', weightKg: ' kg', maxWeightKg: ' kg', widthMm: ' mm', heightMm: ' mm', depthMm: ' mm', thicknessMm: ' mm', thermalCapacityWatts: ' W', radiatorMm: ' mm', noiseDb: ' dB', lifeHours: ' horas', maxRpm: ' RPM',
-}[key] ?? '')
-
-
-function formatPublicSpecValue(key, value) {
-  if (value === null || value === undefined || value === '') return '—'
-  if (typeof value === 'number') {
-    const fractionDigits = key === 'noiseDb' ? 1 : Number.isInteger(value) ? 0 : 2
-    return value.toLocaleString('pt-BR', { maximumFractionDigits: fractionDigits })
-  }
-  return String(value)
-}
-
-function isInternalSpecKey(key) {
-  const normalized = String(key || '').replace(/[^a-z0-9]/gi, '').toLowerCase()
-  return [
-    'id', 'produtoid', 'hardwareid', 'categoriaid', 'parceiroid',
-    'modelo3did', 'hardwareid3d', 'criadoem', 'atualizadoem',
-  ].includes(normalized)
-}
-
 function productCanonical(product) {
   return `/produto/${encodeURIComponent(product.slug || product.id)}`
 }
@@ -84,7 +48,7 @@ function productStructuredData(product) {
   const offers = asArray(product.offers).filter((offer) => Number(offer?.price) > 0)
   const prices = offers.map((offer) => Number(offer.price)).filter(Number.isFinite)
   const description = asText(
-    product.description,
+    publicProductDescription(product.description, product.name),
     `Compare preços, especificações e ofertas de ${product.name} no CriaByte.`,
   )
 
@@ -143,23 +107,24 @@ export default function ProductDetails() {
     return () => { active = false }
   }, [id])
 
-  const specs = useMemo(() => product ? Object.entries(product.specs || {}).filter(([key]) => !isInternalSpecKey(key)) : [], [product])
+  const specs = useMemo(() => product ? Object.entries(product.specs || {}).filter(([key, value]) => isPublicSpec(key, value)) : [], [product])
+  const description = product ? publicProductDescription(product.description, product.name) : ''
   useEffect(() => {
     if (!product) return undefined
     const offers = asArray(product.offers)
     const priceText = Number(product.price) > 0 ? ` a partir de ${formatCurrency(product.price)}` : ''
-    const description = product.description
+    const metadataDescription = description
       || `Compare ${offers.length || 'as'} oferta${offers.length === 1 ? '' : 's'} de ${product.name}${priceText}. Veja ficha técnica, avaliações e onde comprar.`
 
     return setDocumentMeta({
       title: `${product.name}: preços e ficha técnica | CriaByte`,
-      description,
+      description: metadataDescription,
       canonical: productCanonical(product),
       image: product.image,
       type: 'product',
       structuredData: productStructuredData(product),
     })
-  }, [product])
+  }, [product, description])
 
   useEffect(() => {
     if (!product || window.location.hash !== '#onde-comprar') return undefined
@@ -195,7 +160,7 @@ export default function ProductDetails() {
           <div className="product-detail-breadcrumb"><Link to={section.to}>{section.label}</Link><span>/</span><span>{asText(product.category, 'Produto')}</span></div>
           <span className="eyebrow">{asText(product.brand)}</span>
           <h1>{product.name}</h1>
-          <p>{product.description}</p>
+          <p>{description || `Compare especificações e ofertas de ${product.name}.`}</p>
           <div className="product-detail-rating"><strong>★ {formatRating(product.rating)}</strong><span>{asNumber(product.reviewsCount, 0)} avaliações</span></div>
           <div className="product-detail-price"><span>{asNumber(product.price, 0) > 0 ? 'A partir de' : 'Preço'}</span><strong>{asNumber(product.price, 0) > 0 ? formatCurrency(product.price) : 'Sem oferta ativa'}</strong><small>{asArray(product.offers).length} oferta{asArray(product.offers).length === 1 ? '' : 's'} ativa{asArray(product.offers).length === 1 ? '' : 's'}</small></div>
           <div className="product-detail-actions">
@@ -211,7 +176,7 @@ export default function ProductDetails() {
       <section className="page-container product-detail-section">
         <div className="product-detail-section__heading"><span className="eyebrow">Ficha técnica</span><h2>Especificações</h2></div>
         <dl className="product-spec-grid">
-          {specs.map(([key, value]) => <div key={key}><dt>{specLabels[key] ?? key}</dt><dd>{formatPublicSpecValue(key, value)}{unitFor(key)}</dd></div>)}
+          {specs.map(([key, value]) => <div key={key}><dt>{publicSpecLabel(key)}</dt><dd>{publicSpecValue(key, value)}</dd></div>)}
         </dl>
       </section>
 
