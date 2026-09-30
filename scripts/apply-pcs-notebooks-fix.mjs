@@ -1,30 +1,15 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const normalizerFiles = [
-  'src/services/normalizers.js',
-  'src/src/services/normalizers.js',
-]
-
-const notebookDetailsFiles = [
-  'src/pages/NotebookDetails/NotebookDetails.jsx',
-  'src/src/pages/NotebookDetails/NotebookDetails.jsx',
-]
-
-const mountedCardFiles = [
-  'src/components/MountedPcCard/MountedPcCard.jsx',
-  'src/src/components/MountedPcCard/MountedPcCard.jsx',
-]
-
-const mountedCssFiles = [
-  'src/components/MountedPcCard/MountedPcCard.css',
-  'src/src/components/MountedPcCard/MountedPcCard.css',
-]
+const normalizerFiles = ['src/services/normalizers.js', 'src/src/services/normalizers.js']
+const notebookDetailsFiles = ['src/pages/NotebookDetails/NotebookDetails.jsx', 'src/src/pages/NotebookDetails/NotebookDetails.jsx']
+const mountedCardFiles = ['src/components/MountedPcCard/MountedPcCard.jsx', 'src/src/components/MountedPcCard/MountedPcCard.jsx']
+const mountedCssFiles = ['src/components/MountedPcCard/MountedPcCard.css', 'src/src/components/MountedPcCard/MountedPcCard.css']
 
 const normalizeNotebookSpecs = `function normalizeNotebookSpecs(rawSpecs = {}) {
   const spec = rawSpecs && typeof rawSpecs === 'object' ? rawSpecs : {}
   const width = number(spec.resolucaoLargura ?? spec.resolutionWidth, 0)
   const height = number(spec.resolucaoAltura ?? spec.resolutionHeight, 0)
-  const resolution = text(spec.resolution ?? spec.resolucaoTela ?? spec.resolucao, '') || (width && height ? \`${'${width}'}x${'${height}'}\` : '')
+  const resolution = text(spec.resolution ?? spec.resolucaoTela ?? spec.resolucao, '') || (width && height ? String(width) + 'x' + String(height) : '')
   const upgradeRamRaw = spec.upgradeRam ?? spec.ramExpansivel
   const upgradeStorageRaw = spec.upgradeArmazenamento ?? spec.upgradeStorage ?? spec.armazenamentoExpansivel
   const storageGb = number(spec.storageGb ?? spec.armazenamentoGb ?? spec.capacidadeArmazenamentoGb, 0)
@@ -44,13 +29,8 @@ const normalizeNotebookSpecs = `function normalizeNotebookSpecs(rawSpecs = {}) {
     if (parsed === undefined) return text(value, '—')
     return parsed ? 'Sim' : 'Não'
   }
-  const dimensions = text(spec.dimensions ?? spec.dimensoes, '') || [
-    number(spec.larguraMm, 0),
-    number(spec.profundidadeMm, 0),
-    number(spec.alturaMm, 0),
-  ].every((value) => value > 0)
-    ? \`${'${number(spec.larguraMm)'}'} × ${'${number(spec.profundidadeMm)'}'} × ${'${number(spec.alturaMm)'}'} mm\`
-    : ''
+  const dimensionValues = [number(spec.larguraMm, 0), number(spec.profundidadeMm, 0), number(spec.alturaMm, 0)]
+  const dimensions = text(spec.dimensions ?? spec.dimensoes, '') || (dimensionValues.every((value) => value > 0) ? dimensionValues.join(' × ') + ' mm' : '')
 
   return {
     ...spec,
@@ -76,7 +56,7 @@ const normalizeNotebookSpecs = `function normalizeNotebookSpecs(rawSpecs = {}) {
     solderedRamGb: number(spec.solderedRamGb ?? spec.ramSoldadaGb, 0),
     storageGb,
     storageType,
-    storageLabel: [storageGb > 0 ? \`${'${storageGb}'} GB\` : '', storageType].filter(Boolean).join(' '),
+    storageLabel: [storageGb > 0 ? String(storageGb) + ' GB' : '', storageType].filter(Boolean).join(' '),
     m2Slots: number(spec.m2Slots ?? spec.slotsM2 ?? spec.slotsM2Total, 0),
     freeM2Slots: number(spec.freeM2Slots ?? spec.slotsM2Livres, 0),
     screenInches: number(spec.screenInches ?? spec.telaPolegadas ?? spec.polegadas ?? spec.tamanhoTelaPolegadas, 0),
@@ -109,19 +89,14 @@ const normalizeNotebookSpecs = `function normalizeNotebookSpecs(rawSpecs = {}) {
 
 function patchNormalizers(file) {
   const source = readFileSync(file, 'utf8')
-  const next = source.replace(
-    /function normalizeNotebookSpecs\(rawSpecs = \{\}\) \{[\s\S]*?\n\}\n\nexport function normalizeNotebook/,
-    `${normalizeNotebookSpecs}\n\nexport function normalizeNotebook`,
-  )
+  const next = source.replace(/function normalizeNotebookSpecs\(rawSpecs = \{\}\) \{[\s\S]*?\n\}\n\nexport function normalizeNotebook/, normalizeNotebookSpecs + '\n\nexport function normalizeNotebook')
   if (next === source) throw new Error(`normalizeNotebookSpecs não encontrado em ${file}`)
   writeFileSync(file, next)
 }
 
 function patchNotebookDetails(file) {
   const source = readFileSync(file, 'utf8')
-  const next = source.replace(
-    /function displayValue\(key, value, suffix = ''\) \{[\s\S]*?\n\}/,
-`function displayValue(key, value, suffix = '') {
+  const replacement = `function displayValue(key, value, suffix = '') {
   if ((key === 'vramGb' || key === 'gpuTgpWatts') && (value === 0 || value === null)) return 'Não se aplica'
   if (value === null || value === undefined || value === '') return 'Não informado'
   if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
@@ -130,49 +105,28 @@ function patchNotebookDetails(file) {
     if (['true', 'sim', 'yes', '1'].includes(normalized)) return 'Sim'
     if (['false', 'não', 'nao', 'no', '0'].includes(normalized)) return 'Não'
   }
-  return \`${'${value}'}${'${typeof value === \'number\' ? suffix : \'\'}'}\`
-}`,
-  )
+  return String(value) + (typeof value === 'number' ? suffix : '')
+}`
+  const next = source.replace(/function displayValue\(key, value, suffix = ''\) \{[\s\S]*?\n\}/, replacement)
   if (next === source) throw new Error(`displayValue não encontrado em ${file}`)
   writeFileSync(file, next)
 }
 
 function patchMountedCard(file) {
   let source = readFileSync(file, 'utf8')
-  source = source.replace(
-    /const offersCount = Math\.max\(0, asNumber\(pc\.offersCount, 0\)\)\n/,
-    "const offersCount = Math.max(0, asNumber(pc.offersCount, 0))\n  const detailsPath = `/montados/${pc.id}`\n",
-  )
-  source = source.replace(
-    /<div className="mounted-card__visual" aria-hidden="true">([\s\S]*?)<\/div>\n\n      <div className="mounted-card__content">/,
-    `<Link className="mounted-card__visual" to={detailsPath} aria-label={\`Ver detalhes de ${'${name}'}\`}>$1</Link>\n\n      <div className="mounted-card__content">`,
-  )
-  source = source.replace(
-    /<h3>\{name\}<\/h3>/,
-    '<h3><Link className="mounted-card__title" to={detailsPath}>{name}</Link></h3>',
-  )
+  source = source.replace(/const offersCount = Math\.max\(0, asNumber\(pc\.offersCount, 0\)\)\n/, "const offersCount = Math.max(0, asNumber(pc.offersCount, 0))\n  const detailsPath = '/montados/' + pc.id\n")
+  source = source.replace(/<div className="mounted-card__visual" aria-hidden="true">([\s\S]*?)<\/div>\n\n      <div className="mounted-card__content">/, '<Link className="mounted-card__visual" to={detailsPath} aria-label={\'Ver detalhes de \' + name}>$1</Link>\n\n      <div className="mounted-card__content">')
+  source = source.replace(/<h3>\{name\}<\/h3>/, '<h3><Link className="mounted-card__title" to={detailsPath}>{name}</Link></h3>')
   source = source.replace(/to=\{`\/montados\/\$\{pc\.id\}`\}/g, 'to={detailsPath}')
-  if (!source.includes('mounted-card__title') || !source.includes('aria-label={`Ver detalhes de ${name}`}')) {
-    throw new Error(`Links do PC montado não foram aplicados em ${file}`)
-  }
+  if (!source.includes('mounted-card__title') || !source.includes("aria-label={'Ver detalhes de ' + name}")) throw new Error(`Links do PC montado não foram aplicados em ${file}`)
   writeFileSync(file, source)
 }
 
 function patchMountedCss(file) {
   let source = readFileSync(file, 'utf8')
   if (!source.includes('.mounted-card__visual {')) throw new Error(`CSS visual não encontrado em ${file}`)
-  if (!source.includes('text-decoration: none;')) {
-    source = source.replace(
-      '.mounted-card__visual {\n',
-      '.mounted-card__visual {\n  color: inherit;\n  text-decoration: none;\n',
-    )
-  }
-  if (!source.includes('.mounted-card__title {')) {
-    source = source.replace(
-      '.mounted-card h3 {\n',
-      `.mounted-card__title {\n  color: inherit;\n  text-decoration: none;\n}\n\n.mounted-card__title:hover {\n  color: var(--color-primary);\n}\n\n.mounted-card__visual:focus-visible,\n.mounted-card__title:focus-visible {\n  outline: 2px solid var(--color-primary);\n  outline-offset: 3px;\n}\n\n.mounted-card h3 {\n`,
-    )
-  }
+  if (!source.includes('.mounted-card__visual {\n  color: inherit;')) source = source.replace('.mounted-card__visual {\n', '.mounted-card__visual {\n  color: inherit;\n  text-decoration: none;\n')
+  if (!source.includes('.mounted-card__title {')) source = source.replace('.mounted-card h3 {\n', '.mounted-card__title {\n  color: inherit;\n  text-decoration: none;\n}\n\n.mounted-card__title:hover {\n  color: var(--color-primary);\n}\n\n.mounted-card__visual:focus-visible,\n.mounted-card__title:focus-visible {\n  outline: 2px solid var(--color-primary);\n  outline-offset: 3px;\n}\n\n.mounted-card h3 {\n')
   writeFileSync(file, source)
 }
 
