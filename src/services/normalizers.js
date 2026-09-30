@@ -360,7 +360,17 @@ function cpuSpecs(item) {
 }
 
 function genericSpecs(item) {
+  const metadata = [item.produto?.metadados, item.metadados].filter(Boolean)
+  const collected = Object.fromEntries(metadata.flatMap(meta =>
+    (meta.atributosColetados || meta.informacoesProdutoEncontradas || []).flatMap(row => {
+      const key = row?.nome || row?.name
+      const value = row?.valor ?? row?.value ?? row?.value_name
+      return key && value !== null && value !== undefined && value !== '' ? [[key, value]] : []
+    })
+  ))
   const candidates = [
+    collected,
+    ...metadata.map(meta => meta.especificacoesEncontradas),
     item.metadados?.especificacoes,
     item.produto?.metadados?.especificacoes,
     item.especificacoes,

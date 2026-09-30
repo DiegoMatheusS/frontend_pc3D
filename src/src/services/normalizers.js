@@ -360,7 +360,17 @@ function cpuSpecs(item) {
 }
 
 function genericSpecs(item) {
+  const metadata = [item.produto?.metadados, item.metadados].filter(Boolean)
+  const collected = Object.fromEntries(metadata.flatMap(meta =>
+    (meta.atributosColetados || meta.informacoesProdutoEncontradas || []).flatMap(row => {
+      const key = row?.nome || row?.name
+      const value = row?.valor ?? row?.value ?? row?.value_name
+      return key && value !== null && value !== undefined && value !== '' ? [[key, value]] : []
+    })
+  ))
   const candidates = [
+    collected,
+    ...metadata.map(meta => meta.especificacoesEncontradas),
     item.metadados?.especificacoes,
     item.produto?.metadados?.especificacoes,
     item.especificacoes,
@@ -568,6 +578,9 @@ export function normalizeProduct(item) {
     categoryKey,
     name: text(item.nome ?? item.name ?? product?.nome ?? product?.name, `${text(item.marca ?? product?.marca, '')} ${text(item.modelo ?? product?.modelo, '')}`.trim() || 'Produto'),
     brand: text(item.marca ?? item.brand ?? product?.marca ?? product?.brand ?? hardware?.marca),
+    model: text(item.modelo ?? item.model ?? product?.modelo ?? product?.model ?? hardware?.modelo, ''),
+    mpn: text(item.mpn ?? product?.mpn ?? hardware?.mpn, ''),
+    gtin: text(item.gtin ?? item.ean ?? product?.gtin ?? product?.ean ?? hardware?.gtin ?? hardware?.ean, ''),
     description: item.descricao || item.description || product?.descricao || product?.description || hardware?.descricao || notebook?.descricao || peripheral?.descricao || setupItem?.descricao || '',
     image: item.imagemUrl || item.imagem || item.image || product?.imagemUrl || product?.imagem || product?.image || hardware?.imagemUrl || peripheral?.imagemUrl || setupItem?.imagemUrl || null,
     hoverImage: item.imagemHoverUrl || item.hoverImage || item.imageHover || product?.imagemHoverUrl || product?.hoverImage || hardware?.imagemHoverUrl || peripheral?.imagemHoverUrl || setupItem?.imagemHoverUrl || null,

@@ -1,3 +1,4 @@
+import { specLabel, specValue } from '../../utils/productSpecs'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getProductById } from '../../services/productsService'
@@ -39,34 +40,6 @@ const builderCategory = {
   ventoinha: 'ventoinhas',
 }
 
-const specLabels = {
-  socket: 'Socket', generation: 'Geração', architecture: 'Arquitetura', cores: 'Núcleos', threads: 'Threads',
-  baseClockGhz: 'Clock base', boostClockGhz: 'Clock turbo', cacheL3Mb: 'Cache L3', tdpWatts: 'TDP', integratedGraphics: 'Vídeo integrado', memory: 'Memória suportada', pcie: 'PCIe',
-  vramGb: 'VRAM', memoryType: 'Tipo de memória', memoryBusBits: 'Barramento', boostClockMhz: 'Clock boost', tgpWatts: 'TGP', recommendedPsuWatts: 'Fonte recomendada', lengthMm: 'Comprimento', slots: 'Slots',
-  chipset: 'Chipset', formFactor: 'Formato', ramSlots: 'Slots RAM', maxRamGb: 'RAM máxima', m2Slots: 'Slots M.2', sataPorts: 'Portas SATA', wifi: 'Wi-Fi', bluetooth: 'Bluetooth',
-  capacityGb: 'Capacidade', modules: 'Módulos', frequencyMhz: 'Frequência', latency: 'Latência', voltage: 'Tensão', rgb: 'Com iluminação RGB', type: 'Tipo', interface: 'Interface', readMbps: 'Leitura', writeMbps: 'Gravação',
-  coolingType: 'Tipo de refrigeração', sockets: 'Sockets suportados', thermalCapacityWatts: 'Capacidade térmica', radiatorMm: 'Radiador', fanCount: 'Quantidade de fans', noiseDb: 'Nível de ruído', lifeHours: 'Vida útil', maxRpm: 'Velocidade máxima', depthMm: 'Profundidade',
-  powerWatts: 'Potência', certification: 'Certificação', modularity: 'Modularidade', pcie5: 'PCIe 5', fanMm: 'Ventoinha',
-  sensor: 'Sensor', dpiMax: 'DPI máximo', pollingRateHz: 'Polling rate', buttons: 'Botões', weightGrams: 'Peso', connection: 'Conexão', layout: 'Layout', size: 'Tamanho', switch: 'Switch', hotSwap: 'Hot swap',
-  driverMm: 'Driver', microphone: 'Microfone', surround: 'Surround', sizeInches: 'Tamanho', resolution: 'Resolução', refreshRateHz: 'Taxa de atualização', panel: 'Painel', responseTimeMs: 'Tempo de resposta', hdr: 'HDR', displayPort: 'DisplayPort', hdmi: 'HDMI', vesa: 'VESA',
-  cpu: 'Processador', gpu: 'Placa de vídeo', ramGb: 'RAM', storageGb: 'Armazenamento', screenInches: 'Tela', weightKg: 'Peso', upgradeRam: 'Upgrade de RAM', upgradeStorage: 'Upgrade de armazenamento',
-  material: 'Material', maxWeightKg: 'Peso máximo', armrest: 'Apoio de braço', reclining: 'Reclinação', lumbarSupport: 'Apoio lombar', headrest: 'Apoio de cabeça',
-  widthMm: 'Largura', heightMm: 'Altura', thicknessMm: 'Espessura', surface: 'Superfície', base: 'Base',
-}
-
-const unitFor = (key) => ({
-  baseClockGhz: ' GHz', boostClockGhz: ' GHz', cacheL3Mb: ' MB', tdpWatts: ' W', vramGb: ' GB', memoryBusBits: ' bits', boostClockMhz: ' MHz', tgpWatts: ' W', recommendedPsuWatts: ' W', lengthMm: ' mm', maxRamGb: ' GB', capacityGb: ' GB', frequencyMhz: ' MHz', readMbps: ' MB/s', writeMbps: ' MB/s', powerWatts: ' W', fanMm: ' mm', pollingRateHz: ' Hz', weightGrams: ' g', driverMm: ' mm', sizeInches: '”', refreshRateHz: ' Hz', responseTimeMs: ' ms', ramGb: ' GB', storageGb: ' GB', screenInches: '”', weightKg: ' kg', maxWeightKg: ' kg', widthMm: ' mm', heightMm: ' mm', depthMm: ' mm', thicknessMm: ' mm', thermalCapacityWatts: ' W', radiatorMm: ' mm', noiseDb: ' dB', lifeHours: ' horas', maxRpm: ' RPM',
-}[key] ?? '')
-
-
-function formatPublicSpecValue(key, value) {
-  if (value === null || value === undefined || value === '') return '—'
-  if (typeof value === 'number') {
-    const fractionDigits = key === 'noiseDb' ? 1 : Number.isInteger(value) ? 0 : 2
-    return value.toLocaleString('pt-BR', { maximumFractionDigits: fractionDigits })
-  }
-  return String(value)
-}
 
 function isInternalSpecKey(key) {
   const normalized = String(key || '').replace(/[^a-z0-9]/gi, '').toLowerCase()
@@ -143,7 +116,13 @@ export default function ProductDetails() {
     return () => { active = false }
   }, [id])
 
-  const specs = useMemo(() => product ? Object.entries(product.specs || {}).filter(([key]) => !isInternalSpecKey(key)) : [], [product])
+  const specs = useMemo(() => {
+    const rows = new Map()
+    for (const [key, value] of Object.entries(product?.specs || {})) {
+      if (!isInternalSpecKey(key)) rows.set(specLabel(key).toLocaleLowerCase('pt-BR'), [key, value])
+    }
+    return [...rows.values()]
+  }, [product])
   useEffect(() => {
     if (!product) return undefined
     const offers = asArray(product.offers)
@@ -211,7 +190,7 @@ export default function ProductDetails() {
       <section className="page-container product-detail-section">
         <div className="product-detail-section__heading"><span className="eyebrow">Ficha técnica</span><h2>Especificações</h2></div>
         <dl className="product-spec-grid">
-          {specs.map(([key, value]) => <div key={key}><dt>{specLabels[key] ?? key}</dt><dd>{formatPublicSpecValue(key, value)}{unitFor(key)}</dd></div>)}
+          {specs.map(([key, value]) => <div key={key}><dt>{specLabel(key)}</dt><dd>{specValue(key, value)}</dd></div>)}
         </dl>
       </section>
 
