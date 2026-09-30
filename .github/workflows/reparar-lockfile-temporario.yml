@@ -1,0 +1,48 @@
+name: Reparar lockfiles temporariamente
+
+on:
+  push:
+    branches: [fix/ofertas-scroll-especificacoes-20260930]
+    paths: [.github/workflows/reparar-lockfile-temporario.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-lockfile:
+    if: github.repository == 'DiegoMatheusS/frontend_pc3D' && github.ref == 'refs/heads/fix/ofertas-scroll-especificacoes-20260930'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ofertas-scroll-especificacoes-20260930
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Atualizar apenas dependencias vulneraveis no lockfile principal
+        run: npm audit fix --package-lock-only --audit-level=high
+      - name: Atualizar apenas dependencias vulneraveis no lockfile secundario
+        working-directory: src
+        run: npm audit fix --package-lock-only --audit-level=high
+      - name: Validar raiz
+        run: |
+          npm ci
+          npm run build
+          npm run security:audit
+          node scripts/test-product-spec-presentation.mjs
+      - name: Validar segunda raiz
+        working-directory: src
+        run: |
+          npm ci
+          npm run build
+          npm audit --audit-level=high
+      - name: Registrar lockfiles corrigidos e remover este workflow temporario
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/reparar-lockfile-temporario.yml
+          git add package-lock.json src/package-lock.json
+          git commit -m 'fix: atualizar lockfiles vulneraveis apos verificacao'
+          git push origin HEAD:fix/ofertas-scroll-especificacoes-20260930
