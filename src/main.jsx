@@ -7,11 +7,14 @@ import './index.css'
 import './styles/disable-public-ai-assistant.css'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary.jsx'
+import { installAutoScrollOfferEditor } from './admin/utils/autoScrollOfferEditor'
 
 const temaSalvo = localStorage.getItem('pcBuilderTema')
 if (temaSalvo === 'dark' || temaSalvo === 'light') {
   document.documentElement.dataset.theme = temaSalvo
 }
+
+installAutoScrollOfferEditor()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

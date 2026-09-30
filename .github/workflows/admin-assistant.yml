@@ -8,12 +8,19 @@ on:
       - "src/utils/productSpecs.js"
       - "src/src/utils/productSpecs.js"
       - "tests/**"
+      - "src/**/Notebook*"
+      - "src/components/MountedPcCard/**"
+      - "src/utils/notebookSpecs.js"
+      - "src/src/utils/notebookSpecs.js"
       - "src/admin/services/adminService.js"
       - "src/admin/utils/aiImportContract.js"
+      - "src/admin/utils/autoScrollOfferEditor.js"
       - "src/admin/Admin.css"
       - "src/components/Header/**"
       - "src/pages/Store/**"
       - "src/pages/ProductDetails/**"
+      - "src/utils/productSpecPresentation.js"
+      - "scripts/test-product-spec-presentation.mjs"
       - "src/services/productsService.js"
       - "src/services/normalizers.js"
       - "src/data/productsMock.js"
@@ -36,12 +43,19 @@ on:
       - "src/utils/productSpecs.js"
       - "src/src/utils/productSpecs.js"
       - "tests/**"
+      - "src/**/Notebook*"
+      - "src/components/MountedPcCard/**"
+      - "src/utils/notebookSpecs.js"
+      - "src/src/utils/notebookSpecs.js"
       - "src/admin/services/adminService.js"
       - "src/admin/utils/aiImportContract.js"
+      - "src/admin/utils/autoScrollOfferEditor.js"
       - "src/admin/Admin.css"
       - "src/components/Header/**"
       - "src/pages/Store/**"
       - "src/pages/ProductDetails/**"
+      - "src/utils/productSpecPresentation.js"
+      - "scripts/test-product-spec-presentation.mjs"
       - "src/services/productsService.js"
       - "src/services/normalizers.js"
       - "src/data/productsMock.js"
@@ -70,12 +84,16 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - name: Testar apresentação de especificações
+        run: node scripts/test-product-spec-presentation.mjs
       - name: Lint da lógica alterada
         run: >
           npx eslint
           src/admin/components/AdminAssistant.jsx
           src/admin/services/adminService.js
           src/admin/utils/aiImportContract.js
+          src/admin/utils/autoScrollOfferEditor.js
+          src/utils/productSpecPresentation.js
           src/src/admin/components/AdminAssistant.jsx
           src/src/admin/services/adminService.js
           src/src/admin/utils/aiImportContract.js

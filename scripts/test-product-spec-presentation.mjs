@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict'
+import { isPublicSpec, publicProductDescription, publicSpecLabel, publicSpecValue } from '../src/utils/productSpecPresentation.js'
+
+assert.equal(publicSpecLabel('nfc'), 'NFC')
+assert.equal(publicSpecLabel('possuiNfc'), 'NFC')
+assert.equal(publicSpecValue('nfc', true), 'Sim')
+assert.equal(publicSpecValue('nfc', false), 'Não')
+assert.equal(publicSpecValue('nfc', 'true'), 'Sim')
+assert.equal(publicSpecValue('nfc', 'false'), 'Não')
+assert.equal(publicSpecLabel('capacidadeBateriaMah'), 'Capacidade da bateria')
+assert.equal(publicSpecValue('capacidadeBateriaMah', 5000), '5.000 mAh')
+assert.equal(publicSpecValue('bateriaMah', '5.000 mAh'), '5.000 mAh')
+assert.equal(publicSpecValue('bateria', '5 Ah'), '5.000 mAh')
+assert.equal(publicSpecValue('wifi', true), 'Sim')
+assert.equal(publicSpecValue('camposDesconhecidos', { memoriaRamGb: 8 }), 'Memória RAM: 8 GB')
+assert.equal(isPublicSpec('produtoId', 123), false)
+assert.equal(isPublicSpec('nfc', false), true)
+assert.equal(publicProductDescription('Galaxy A55 - Tela de 6,6 polegadas', 'Galaxy A55'), 'Tela de 6,6 polegadas')
+assert.equal(publicProductDescription('Galaxy A55', 'Galaxy A55'), '')
+console.log('Formatação pública de especificações OK')

@@ -14,7 +14,7 @@ export function getNotebooks() {
 export function getNotebookById(id) {
   return apiFirst({
     key: 'notebook',
-    path: `/api/notebooks/${encodeURIComponent(id)}`,
+    path: /^\d+$/.test(String(id)) ? `/api/notebooks/${encodeURIComponent(id)}` : `/api/notebooks/slug/${encodeURIComponent(id)}`,
     fallback: () => structuredClone(notebooksMock.find((item) => String(item.id) === String(id) || item.slug === String(id)) ?? null),
     transform: (payload) => {
       const notebook = normalizeNotebook(payload?.notebook || payload)

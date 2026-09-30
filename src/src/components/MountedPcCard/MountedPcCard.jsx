@@ -1,24 +1,28 @@
 import { Link } from 'react-router-dom'
 import { getMountedPcBuilderPath } from '../../services/mountedPcsService'
+import { buildCategoryLabel, hasCompleteBuilderConfiguration, isUpgradeKit } from '../../utils/commercialBuild'
 import { asNumber, asText, formatCurrency, formatRating } from '../../utils/display'
 import './MountedPcCard.css'
 
 export default function MountedPcCard({ pc = {}, onCompare, selected = false, compact = false }) {
-  const builderPath = getMountedPcBuilderPath(pc)
-  const name = asText(pc.name, 'PC Montado')
+  const canOpen3D = hasCompleteBuilderConfiguration(pc)
+  const builderPath = canOpen3D ? getMountedPcBuilderPath(pc) : null
+  const kit = isUpgradeKit(pc)
+  const name = asText(pc.name, kit ? 'Kit de upgrade' : 'PC montado')
   const offersCount = Math.max(0, asNumber(pc.offersCount, 0))
 
   return (
     <article className={`mounted-card ${selected ? 'mounted-card--selected' : ''} ${compact ? 'mounted-card--compact' : ''}`}>
-      <div className="mounted-card__visual" aria-hidden="true">
+      <Link className="mounted-card__visual" to={`/montados/${pc.id}`} aria-label={`Ver ${name}`}>
         {pc.highlight ? <span className="mounted-card__chip">{asText(pc.highlight, '')}</span> : null}
         {pc.image ? <img className="mounted-card__image" src={pc.image} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true; event.currentTarget.nextElementSibling?.removeAttribute('hidden') }} /> : null}
         <div className="mounted-card__case" hidden={Boolean(pc.image)}><span className="mounted-card__fan mounted-card__fan--one" /><span className="mounted-card__fan mounted-card__fan--two" /><span className="mounted-card__gpu" /></div>
-      </div>
+      </Link>
 
       <div className="mounted-card__content">
-        <span className="mounted-card__category">{asText(pc.category, 'PC Montado')}</span>
-        <h3>{name}</h3>
+        <span className="mounted-card__category">{buildCategoryLabel(pc)}</span>
+        <h3><Link to={`/montados/${pc.id}`}>{name}</Link></h3>
+        {pc.description && <Link className="mounted-card__description" to={`/montados/${pc.id}`}>{asText(pc.description, '')}</Link>}
 
         <dl className="mounted-card__specs">
           <div><dt>CPU</dt><dd>{asText(pc.cpu)}</dd></div>
@@ -35,8 +39,8 @@ export default function MountedPcCard({ pc = {}, onCompare, selected = false, co
         <div className="mounted-card__price"><span>{asNumber(pc.price, 0) > 0 ? 'A partir de' : 'Preço'}</span><strong>{asNumber(pc.price, 0) > 0 ? formatCurrency(pc.price) : 'Sem oferta ativa'}</strong></div>
 
         <div className="mounted-card__actions">
-          <Link className="button button--primary" to={`/montados/${pc.id}`}>Ver PC</Link>
-          <Link className="button button--secondary" to={builderPath}>Abrir no 3D</Link>
+          <Link className="button button--primary" to={`/montados/${pc.id}`}>{kit ? 'Ver kit' : 'Ver PC'}</Link>
+          {builderPath && <Link className="button button--secondary" to={builderPath}>Abrir no 3D</Link>}
           {onCompare ? (
             <button className="button button--secondary mounted-card__compare" type="button" aria-pressed={selected} onClick={() => onCompare(pc)}>
               {selected ? 'Selecionado' : 'Comparar'}

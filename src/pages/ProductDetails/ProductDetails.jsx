@@ -1,10 +1,10 @@
-import { specLabel, specValue } from '../../utils/productSpecs'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getProductById } from '../../services/productsService'
 import ReviewsPanel from '../../components/ReviewsPanel/ReviewsPanel'
 import { asArray, asNumber, asText, formatCurrency, formatRating } from '../../utils/display'
 import { setDocumentMeta } from '../../utils/pageMeta'
+import { isPublicSpec, publicProductDescription, publicSpecLabel, publicSpecValue } from '../../utils/productSpecPresentation'
 import './ProductDetails.css'
 
 const groupNavigation = {
@@ -40,15 +40,6 @@ const builderCategory = {
   ventoinha: 'ventoinhas',
 }
 
-
-function isInternalSpecKey(key) {
-  const normalized = String(key || '').replace(/[^a-z0-9]/gi, '').toLowerCase()
-  return [
-    'id', 'produtoid', 'hardwareid', 'categoriaid', 'parceiroid',
-    'modelo3did', 'hardwareid3d', 'criadoem', 'atualizadoem',
-  ].includes(normalized)
-}
-
 function productCanonical(product) {
   return `/produto/${encodeURIComponent(product.slug || product.id)}`
 }
@@ -57,7 +48,7 @@ function productStructuredData(product) {
   const offers = asArray(product.offers).filter((offer) => Number(offer?.price) > 0)
   const prices = offers.map((offer) => Number(offer.price)).filter(Number.isFinite)
   const description = asText(
-    product.description,
+    publicProductDescription(product.description, product.name),
     `Compare preços, especificações e ofertas de ${product.name} no CriaByte.`,
   )
 
@@ -119,26 +110,27 @@ export default function ProductDetails() {
   const specs = useMemo(() => {
     const rows = new Map()
     for (const [key, value] of Object.entries(product?.specs || {})) {
-      if (!isInternalSpecKey(key)) rows.set(specLabel(key).toLocaleLowerCase('pt-BR'), [key, value])
+      if (isPublicSpec(key, value)) rows.set(publicSpecLabel(key).toLocaleLowerCase('pt-BR'), [key, value])
     }
     return [...rows.values()]
   }, [product])
+  const description = product ? publicProductDescription(product.description, product.name) : ''
   useEffect(() => {
     if (!product) return undefined
     const offers = asArray(product.offers)
     const priceText = Number(product.price) > 0 ? ` a partir de ${formatCurrency(product.price)}` : ''
-    const description = product.description
+    const metadataDescription = description
       || `Compare ${offers.length || 'as'} oferta${offers.length === 1 ? '' : 's'} de ${product.name}${priceText}. Veja ficha técnica, avaliações e onde comprar.`
 
     return setDocumentMeta({
       title: `${product.name}: preços e ficha técnica | CriaByte`,
-      description,
+      description: metadataDescription,
       canonical: productCanonical(product),
       image: product.image,
       type: 'product',
       structuredData: productStructuredData(product),
     })
-  }, [product])
+  }, [product, description])
 
   useEffect(() => {
     if (!product || window.location.hash !== '#onde-comprar') return undefined
@@ -174,7 +166,7 @@ export default function ProductDetails() {
           <div className="product-detail-breadcrumb"><Link to={section.to}>{section.label}</Link><span>/</span><span>{asText(product.category, 'Produto')}</span></div>
           <span className="eyebrow">{asText(product.brand)}</span>
           <h1>{product.name}</h1>
-          <p>{product.description}</p>
+          <p>{description || `Compare especificações e ofertas de ${product.name}.`}</p>
           <div className="product-detail-rating"><strong>★ {formatRating(product.rating)}</strong><span>{asNumber(product.reviewsCount, 0)} avaliações</span></div>
           <div className="product-detail-price"><span>{asNumber(product.price, 0) > 0 ? 'A partir de' : 'Preço'}</span><strong>{asNumber(product.price, 0) > 0 ? formatCurrency(product.price) : 'Sem oferta ativa'}</strong><small>{asArray(product.offers).length} oferta{asArray(product.offers).length === 1 ? '' : 's'} ativa{asArray(product.offers).length === 1 ? '' : 's'}</small></div>
           <div className="product-detail-actions">
@@ -190,7 +182,7 @@ export default function ProductDetails() {
       <section className="page-container product-detail-section">
         <div className="product-detail-section__heading"><span className="eyebrow">Ficha técnica</span><h2>Especificações</h2></div>
         <dl className="product-spec-grid">
-          {specs.map(([key, value]) => <div key={key}><dt>{specLabel(key)}</dt><dd>{specValue(key, value)}</dd></div>)}
+          {specs.map(([key, value]) => <div key={key}><dt>{publicSpecLabel(key)}</dt><dd>{publicSpecValue(key, value)}</dd></div>)}
         </dl>
       </section>
 
