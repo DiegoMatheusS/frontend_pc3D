@@ -1,0 +1,21 @@
+.commercial-hardware-section > header p{margin:.45rem 0 1rem;color:var(--text-muted,#677386)}
+.commercial-hardware-list{display:grid;gap:.7rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr))}
+.commercial-hardware-item{display:flex;align-items:center;gap:.85rem;min-width:0;border:1px solid var(--border-color,#dce3ed);border-radius:12px;padding:.85rem;background:var(--surface,#fff)}
+.commercial-hardware-item img{width:72px;height:72px;object-fit:contain;flex-shrink:0}
+.commercial-hardware-item>div{display:flex;flex:1;min-width:0;flex-direction:column;gap:.2rem;overflow-wrap:anywhere}
+.commercial-hardware-item small,.commercial-hardware-item span{font-size:.78rem;color:var(--text-muted,#64748b)}
+.commercial-hardware-item strong{font-size:.98rem}
+.commercial-hardware-item .button{flex-shrink:0}
+.commercial-hardware-backdrop{position:fixed;inset:0;z-index:1600;background:rgba(9,15,30,.72);display:grid;place-items:center;padding:1rem}
+.commercial-hardware-dialog{box-sizing:border-box;background:var(--surface,#fff);color:var(--text,#132238);width:min(720px,100%);max-height:min(90vh,850px);overflow-y:auto;border-radius:16px;padding:clamp(1rem,3vw,2rem);box-shadow:0 20px 85px rgba(0,0,0,.32)}
+.commercial-hardware-dialog>header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1.5rem}
+.commercial-hardware-dialog h2{overflow-wrap:anywhere}
+.commercial-hardware-dialog header p{color:var(--text-muted,#64748b)}
+.commercial-hardware-close{border:1px solid var(--border-color,#dce3ed);border-radius:50%;width:2.4rem;height:2.4rem;flex-shrink:0;font-size:1.5rem;background:transparent;color:inherit;cursor:pointer}
+.commercial-hardware-spec-group{margin:1.2rem 0}
+.commercial-hardware-spec-group h3{font-size:1.1rem;margin:0 0 .5rem}
+.commercial-hardware-spec-group dl{margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:.45rem .9rem}
+.commercial-hardware-spec-group dl div{border-bottom:1px solid var(--border-color,#dce3ed);padding:.4rem 0;display:flex;flex-direction:column;gap:.15rem}
+.commercial-hardware-spec-group dt{font-size:.78rem;color:var(--text-muted,#64748b)}
+.commercial-hardware-spec-group dd{margin:0;overflow-wrap:anywhere}
+@media(max-width:520px){.commercial-hardware-item{flex-wrap:wrap}.commercial-hardware-item .button{width:100%}}

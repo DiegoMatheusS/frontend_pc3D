@@ -1,11 +1,14 @@
 import { Link } from 'react-router-dom'
 import { getMountedPcBuilderPath } from '../../services/mountedPcsService'
+import { buildCategoryLabel, hasCompleteBuilderConfiguration, isUpgradeKit } from '../../utils/commercialBuild'
 import { asNumber, asText, formatCurrency, formatRating } from '../../utils/display'
 import './MountedPcCard.css'
 
 export default function MountedPcCard({ pc = {}, onCompare, selected = false, compact = false }) {
-  const builderPath = getMountedPcBuilderPath(pc)
-  const name = asText(pc.name, 'PC Montado')
+  const canOpen3D = hasCompleteBuilderConfiguration(pc)
+  const builderPath = canOpen3D ? getMountedPcBuilderPath(pc) : null
+  const kit = isUpgradeKit(pc)
+  const name = asText(pc.name, kit ? 'Kit de upgrade' : 'PC montado')
   const offersCount = Math.max(0, asNumber(pc.offersCount, 0))
 
   return (
@@ -17,7 +20,7 @@ export default function MountedPcCard({ pc = {}, onCompare, selected = false, co
       </div>
 
       <div className="mounted-card__content">
-        <span className="mounted-card__category">{asText(pc.category, 'PC Montado')}</span>
+        <span className="mounted-card__category">{buildCategoryLabel(pc)}</span>
         <h3>{name}</h3>
 
         <dl className="mounted-card__specs">
@@ -35,8 +38,8 @@ export default function MountedPcCard({ pc = {}, onCompare, selected = false, co
         <div className="mounted-card__price"><span>{asNumber(pc.price, 0) > 0 ? 'A partir de' : 'Preço'}</span><strong>{asNumber(pc.price, 0) > 0 ? formatCurrency(pc.price) : 'Sem oferta ativa'}</strong></div>
 
         <div className="mounted-card__actions">
-          <Link className="button button--primary" to={`/montados/${pc.id}`}>Ver PC</Link>
-          <Link className="button button--secondary" to={builderPath}>Abrir no 3D</Link>
+          <Link className="button button--primary" to={`/montados/${pc.id}`}>{kit ? 'Ver kit' : 'Ver PC'}</Link>
+          {builderPath && <Link className="button button--secondary" to={builderPath}>Abrir no 3D</Link>}
           {onCompare ? (
             <button className="button button--secondary mounted-card__compare" type="button" aria-pressed={selected} onClick={() => onCompare(pc)}>
               {selected ? 'Selecionado' : 'Comparar'}
