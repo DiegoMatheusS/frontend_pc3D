@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { authService } from '../services/authService'
 import { AuthContext } from './authContext'
+import { userInitials } from '../utils/userInitials'
+import './user-avatar.css'
 
 export default function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -24,6 +26,22 @@ export default function AuthProvider({ children }) {
       active = false
     }
   }, [])
+
+  // Mantém a sigla de Header, Conta e Admin uniforme inclusive após navegar.
+  // Não modifica texto do React: o CSS lê apenas data-user-initials.
+  useEffect(() => {
+    if (!user) return undefined
+    const sigla = userInitials(user)
+    const atualizar = () => {
+      document.querySelectorAll('.account-menu__avatar, .admin-avatar, .account-avatar').forEach((avatar) => {
+        if (avatar.dataset.userInitials !== sigla) avatar.dataset.userInitials = sigla
+      })
+    }
+    atualizar()
+    const observer = new MutationObserver(atualizar)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [user])
 
   const refresh = useCallback(async () => {
     try {
