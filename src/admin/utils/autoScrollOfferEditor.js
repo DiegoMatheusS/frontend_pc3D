@@ -1,7 +1,7 @@
 /*
  * O formulário de Produtos renderiza novos editores de ofertas após um setState.
- * Acompanhar essa atualização permite fazer o scroll até a linha recém-criada
- * sem depender de timeout fixo nem deslocar a tela em cliques normais.
+ * Capturar o clique ANTES do onClick do React garante a contagem correta dos
+ * editores anteriores e permite rolar exatamente até a nova oferta.
  */
 export function installAutoScrollOfferEditor() {
   document.addEventListener('click', (event) => {
@@ -42,5 +42,5 @@ export function installAutoScrollOfferEditor() {
     observer.observe(form, { childList: true, subtree: true })
     window.requestAnimationFrame(tryScroll)
     stopTimer = window.setTimeout(() => observer.disconnect(), 1200)
-  })
+  }, { capture: true })
 }
