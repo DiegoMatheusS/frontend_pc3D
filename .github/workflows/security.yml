@@ -23,3 +23,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run security:audit
+      - name: Instalar dependencias da segunda raiz
+        working-directory: src
+        run: npm ci
+      - name: Auditar dependencias da segunda raiz
+        working-directory: src
+        run: npm audit --audit-level=high
