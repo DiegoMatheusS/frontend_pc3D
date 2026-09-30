@@ -1,0 +1,43 @@
+name: Avatares unificados
+
+on:
+  pull_request:
+    paths:
+      - 'src/contexts/**'
+      - 'src/utils/userInitials.js'
+      - 'src/src/contexts/**'
+      - 'src/src/utils/userInitials.js'
+      - 'scripts/test-user-initials.mjs'
+      - '.github/workflows/avatar-consistency.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/contexts/**'
+      - 'src/utils/userInitials.js'
+      - 'src/src/contexts/**'
+      - 'src/src/utils/userInitials.js'
+      - 'scripts/test-user-initials.mjs'
+      - '.github/workflows/avatar-consistency.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node scripts/test-user-initials.mjs
+      - run: npx eslint src/contexts/AuthProvider.jsx src/utils/userInitials.js src/src/contexts/AuthProvider.jsx src/src/utils/userInitials.js
+      - run: npm run build
+      - name: Compilar segunda raiz
+        working-directory: src
+        run: |
+          npm ci
+          npm run build

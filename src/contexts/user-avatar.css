@@ -1,0 +1,31 @@
+/* Adaptação temporária dos avatares antigos à regra central de iniciais. */
+.account-menu__avatar[data-user-initials],
+.admin-avatar[data-user-initials],
+.account-avatar[data-user-initials] {
+  font-size: 0 !important; /* oculta as siglas antigas CB e AD */
+  border-radius: 50% !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  background: #1646b3 !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+}
+
+.account-menu__avatar[data-user-initials],
+.admin-avatar[data-user-initials] {
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+}
+
+.account-menu__avatar[data-user-initials]::after,
+.admin-avatar[data-user-initials]::after,
+.account-avatar[data-user-initials]::after {
+  content: attr(data-user-initials);
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.account-avatar[data-user-initials]::after { font-size: 21px; }

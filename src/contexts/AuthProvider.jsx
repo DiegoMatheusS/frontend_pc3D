@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { authService } from '../services/authService'
 import { AuthContext } from './authContext'
+import { userInitials } from '../utils/userInitials'
+import './user-avatar.css'
 
 export default function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -24,6 +26,24 @@ export default function AuthProvider({ children }) {
       active = false
     }
   }, [])
+
+  // Compatibilidade com avatares existentes: o Header, a tela de Conta e o
+  // Admin usam agora as mesmas iniciais reais, mesmo ao alternar de rota.
+  // Não modificar nós de texto gerenciados pelo React; a camada visual lê
+  // exclusivamente o atributo data-user-initials.
+  useEffect(() => {
+    if (!user) return undefined
+    const sigla = userInitials(user)
+    const atualizar = () => {
+      document.querySelectorAll('.account-menu__avatar, .admin-avatar, .account-avatar').forEach((avatar) => {
+        if (avatar.dataset.userInitials !== sigla) avatar.dataset.userInitials = sigla
+      })
+    }
+    atualizar()
+    const observer = new MutationObserver(atualizar)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [user])
 
   const refresh = useCallback(async () => {
     try {
