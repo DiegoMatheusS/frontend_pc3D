@@ -7,18 +7,19 @@ export default function MountedPcCard({ pc = {}, onCompare, selected = false, co
   const builderPath = getMountedPcBuilderPath(pc)
   const name = asText(pc.name, 'PC Montado')
   const offersCount = Math.max(0, asNumber(pc.offersCount, 0))
+  const detailsPath = '/montados/' + pc.id
 
   return (
     <article className={`mounted-card ${selected ? 'mounted-card--selected' : ''} ${compact ? 'mounted-card--compact' : ''}`}>
-      <div className="mounted-card__visual" aria-hidden="true">
+      <Link className="mounted-card__visual" to={detailsPath} aria-label={'Ver detalhes de ' + name}>
         {pc.highlight ? <span className="mounted-card__chip">{asText(pc.highlight, '')}</span> : null}
         {pc.image ? <img className="mounted-card__image" src={pc.image} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true; event.currentTarget.nextElementSibling?.removeAttribute('hidden') }} /> : null}
         <div className="mounted-card__case" hidden={Boolean(pc.image)}><span className="mounted-card__fan mounted-card__fan--one" /><span className="mounted-card__fan mounted-card__fan--two" /><span className="mounted-card__gpu" /></div>
-      </div>
+      </Link>
 
       <div className="mounted-card__content">
         <span className="mounted-card__category">{asText(pc.category, 'PC Montado')}</span>
-        <h3>{name}</h3>
+        <h3><Link className="mounted-card__title" to={detailsPath}>{name}</Link></h3>
 
         <dl className="mounted-card__specs">
           <div><dt>CPU</dt><dd>{asText(pc.cpu)}</dd></div>
@@ -35,7 +36,7 @@ export default function MountedPcCard({ pc = {}, onCompare, selected = false, co
         <div className="mounted-card__price"><span>{asNumber(pc.price, 0) > 0 ? 'A partir de' : 'Preço'}</span><strong>{asNumber(pc.price, 0) > 0 ? formatCurrency(pc.price) : 'Sem oferta ativa'}</strong></div>
 
         <div className="mounted-card__actions">
-          <Link className="button button--primary" to={`/montados/${pc.id}`}>Ver PC</Link>
+          <Link className="button button--primary" to={detailsPath}>Ver PC</Link>
           <Link className="button button--secondary" to={builderPath}>Abrir no 3D</Link>
           {onCompare ? (
             <button className="button button--secondary mounted-card__compare" type="button" aria-pressed={selected} onClick={() => onCompare(pc)}>

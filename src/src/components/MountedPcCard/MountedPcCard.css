@@ -17,6 +17,8 @@
 }
 
 .mounted-card__visual {
+  color: inherit;
+  text-decoration: none;
   position: relative;
   min-height: 174px;
   display: grid;
@@ -99,6 +101,21 @@
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.mounted-card__title {
+  color: inherit;
+  text-decoration: none;
+}
+
+.mounted-card__title:hover {
+  color: var(--color-primary);
+}
+
+.mounted-card__visual:focus-visible,
+.mounted-card__title:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
 }
 
 .mounted-card h3 {

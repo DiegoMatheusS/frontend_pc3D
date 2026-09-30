@@ -44,10 +44,15 @@ const sections = [
 ]
 
 function displayValue(key, value, suffix = '') {
-  if (key === 'dedicatedGpu') return value ? 'Sim' : 'Não'
-  if ((key === 'vramGb' || key === 'gpuTgpWatts') && !value) return 'Não se aplica'
+  if ((key === 'vramGb' || key === 'gpuTgpWatts') && (value === 0 || value === null)) return 'Não se aplica'
   if (value === null || value === undefined || value === '') return 'Não informado'
-  return `${value}${typeof value === 'number' ? suffix : ''}`
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLocaleLowerCase('pt-BR')
+    if (['true', 'sim', 'yes', '1'].includes(normalized)) return 'Sim'
+    if (['false', 'não', 'nao', 'no', '0'].includes(normalized)) return 'Não'
+  }
+  return String(value) + (typeof value === 'number' ? suffix : '')
 }
 
 export default function NotebookDetails() {
