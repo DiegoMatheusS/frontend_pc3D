@@ -27,11 +27,21 @@ const HARDWARE_CATEGORIES = new Set([
 ])
 
 const CATEGORY_LABELS = {
-  PC_MONTADO: 'PC montado / kit', NOTEBOOK: 'Notebook', PROCESSADOR: 'Processador',
+  PC_MONTADO: 'Computador / PC montado', NOTEBOOK: 'Notebook', PROCESSADOR: 'Processador',
   PLACA_MAE: 'Placa-mãe', MEMORIA_RAM: 'Memória RAM', PLACA_VIDEO: 'Placa de vídeo',
   ARMAZENAMENTO: 'Armazenamento', FONTE: 'Fonte', GABINETE: 'Gabinete',
   COOLER: 'Cooler', VENTOINHA: 'Ventoinha', PRODUTO: 'Produto',
 }
+
+const COMPONENT_ONLY_START = /^\s*(?:kit\s+(?:de\s+)?upgrade|processador|cpu|placa\s*m[aã]e|motherboard|placa\s*(?:de\s*)?v[ií]deo|gpu|mem[oó]ria(?:\s+ram)?|ram|ssd|nvme|hdd|fonte|gabinete|cooler|ventoinha)\b/i
+const PC_EQUIPMENT = /\b(?:pc|computador|desktop)\b/i
+const STRONG_PC_TITLE = /\b(?:pc|computador|desktop)\s+(?:gamer|montado|completo|de\s+mesa|amd|intel|ryzen|core|celeron|pentium)\b/i
+const PC_CONFIG_SIGNALS = [
+  /\b(?:ryzen\s*[3579]?\s*\d{3,5}[a-z]{0,2}|(?:intel\s+)?core\s+i[3579][ -]?\d{3,5}[a-z]{0,2}|i[3579][ -]?\d{3,5}[a-z]{0,2})\b/i,
+  /\b(?:4|8|12|16|24|32|48|64|96|128)\s*gb\b.{0,18}\b(?:ram|ddr[345])\b|\b(?:ram|ddr[345])\b.{0,18}\b(?:4|8|12|16|24|32|48|64|96|128)\s*gb\b/i,
+  /\b(?:ssd|nvme|hdd|hd)\b.{0,18}\b\d+(?:[.,]\d+)?\s*(?:gb|tb)\b|\b\d+(?:[.,]\d+)?\s*(?:gb|tb)\b.{0,18}\b(?:ssd|nvme|hdd|hd)\b/i,
+  /\b(?:rtx|gtx)\s*\d{3,4}(?:\s*ti|\s*super)?\b|\bradeon\s*(?:rx)?\s*\d{3,4}\b/i,
+]
 
 function clean(value) {
   return String(value ?? '').trim()
@@ -43,9 +53,21 @@ function money(value) {
   return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+function looksLikeCompletePc(value) {
+  const title = clean(value).slice(0, 420)
+  if (!title) return false
+  if (/\b(?:mini[- ]?pc|mini\s+computador|notebook|laptop|ultrabook)\b/i.test(title)) return false
+  if (COMPONENT_ONLY_START.test(title)) return false
+  if (/\b(?:kit\s+(?:de\s+)?upgrade|combo\s+upgrade)\b/i.test(title)) return false
+  if (STRONG_PC_TITLE.test(title)) return true
+  if (!PC_EQUIPMENT.test(title)) return false
+  return PC_CONFIG_SIGNALS.filter((pattern) => pattern.test(title)).length >= 2
+}
+
 function inferCategory(item) {
-  const text = `${clean(item?.nome)} ${clean(item?.loja)}`
-  return CATEGORY_RULES.find(([, pattern]) => pattern.test(text))?.[0] || 'PRODUTO'
+  const title = clean(item?.nome)
+  if (looksLikeCompletePc(title)) return 'PC_MONTADO'
+  return CATEGORY_RULES.find(([, pattern]) => pattern.test(title))?.[0] || 'PRODUTO'
 }
 
 function expectedDestination(category) {
@@ -93,6 +115,7 @@ function fallbackPreview(item, category) {
 function componentSuggestions(analysis) {
   if (!analysis || typeof analysis !== 'object') return []
   const candidates = [
+    analysis.componentesDetectados,
     analysis.componentes,
     analysis.componentesSugeridos,
     analysis.vinculosSugeridos,
@@ -101,7 +124,7 @@ function componentSuggestions(analysis) {
   ].find(Array.isArray) || []
   return candidates.map((item) => ({
     id: Number(item?.hardwareId ?? item?.hardware?.id ?? item?.id) || null,
-    nome: clean(item?.nome ?? item?.hardware?.nome ?? item?.modelo ?? item?.hardware?.modelo),
+    nome: clean(item?.hardwareNome ?? item?.nome ?? item?.hardware?.nome ?? item?.modelo ?? item?.hardware?.modelo),
     categoria: clean(item?.categoria ?? item?.hardware?.categoria),
     confianca: item?.confianca ?? item?.score ?? null,
   })).filter((item) => item.id || item.nome)
@@ -164,25 +187,36 @@ export default function AdminOfferDiscovery() {
   async function analyze(item) {
     const key = item._key
     const category = item._category
-    const destination = expectedDestination(category)
+    const initialDestination = expectedDestination(category)
     const url = clean(item.urlOriginal || item.urlAfiliada)
     setAnalyzingId(key)
     setError('')
     try {
       let preview
       try {
+        // Não força PROCESSADOR/GPU/etc. durante a análise. A ProdutoIA precisa
+        // poder corrigir um resultado da busca que na verdade seja um PC completo.
         preview = url
-          ? await adminService.ai.importLink(url, destination === 'PRODUTO' ? undefined : destination)
+          ? await adminService.ai.importLink(url, category === 'PC_MONTADO' || category === 'NOTEBOOK' ? category : undefined)
           : fallbackPreview(item, category)
       } catch {
         preview = fallbackPreview(item, category)
       }
 
+      const detectedCategory = clean(
+        preview?.categoriaDetectada
+        || preview?.normalizacao?.camposNormalizados?.categoria
+        || category,
+      ).toUpperCase()
+      const previewDestination = clean(preview?.destinoSugerido).toUpperCase()
+      let resolvedDestination = previewDestination || expectedDestination(detectedCategory || category) || initialDestination
+
       let buildAnalysis = null
       let buildWarning = ''
-      if (destination === 'PC_MONTADO') {
+      if (resolvedDestination === 'PC_MONTADO' || detectedCategory === 'PC_MONTADO' || category === 'PC_MONTADO') {
         try {
           buildAnalysis = await adminService.builds.analyzeListing({ titulo: clean(item.nome), descricao: '' })
+          if (buildAnalysis?.tipoSugerido === 'PC_MONTADO') resolvedDestination = 'PC_MONTADO'
         } catch (cause) {
           buildWarning = cause?.message || 'Não foi possível sugerir vínculos de componentes.'
         }
@@ -191,7 +225,8 @@ export default function AdminOfferDiscovery() {
       const mergedPreview = {
         ...fallbackPreview(item, category),
         ...preview,
-        destinoSugerido: preview?.destinoSugerido || destination,
+        categoriaDetectada: detectedCategory || category,
+        destinoSugerido: resolvedDestination,
       }
       const result = { preview: mergedPreview, buildAnalysis, buildWarning }
       setAnalyses((current) => ({ ...current, [key]: result }))
@@ -247,12 +282,13 @@ export default function AdminOfferDiscovery() {
         const analysis = analyses[item._key]
         const suggestions = componentSuggestions(analysis?.buildAnalysis)
         const destination = clean(analysis?.preview?.destinoSugerido).toUpperCase() || expectedDestination(item._category)
+        const analyzedCategory = clean(analysis?.preview?.categoriaDetectada).toUpperCase() || item._category
         return <article className="admin-discovery-card" key={item._key}>
           <div className="admin-discovery-image">
             {item.imagemUrl ? <img src={item.imagemUrl} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none' }} /> : <span>Sem imagem</span>}
           </div>
           <div className="admin-discovery-body">
-            <div className="admin-discovery-tags"><span>Shopee</span><span>{CATEGORY_LABELS[item._category] || 'Produto'}</span>{item.emPromocao && <span>Promoção</span>}</div>
+            <div className="admin-discovery-tags"><span>Shopee</span><span>{CATEGORY_LABELS[analyzedCategory] || 'Produto'}</span>{item.emPromocao && <span>Promoção</span>}</div>
             <h2>{item.nome || 'Produto sem nome'}</h2>
             <p className="admin-discovery-store">{item.loja || 'Loja não informada'}{item.vendas != null ? ` · ${item.vendas} venda(s)` : ''}{item.avaliacao != null ? ` · ★ ${item.avaliacao}` : ''}</p>
             <strong className="admin-discovery-price">{money(item.preco ?? item.precoMin)}</strong>
@@ -263,7 +299,7 @@ export default function AdminOfferDiscovery() {
             </div>
 
             {analysis && <div className="admin-discovery-analysis">
-              <div><span>Destino sugerido</span><strong>{CATEGORY_LABELS[item._category] || destination}</strong></div>
+              <div><span>Destino sugerido</span><strong>{CATEGORY_LABELS[analyzedCategory] || destination}</strong></div>
               {destination === 'PC_MONTADO' && <>
                 <div><span>Catálogo consultado</span><strong>{analysis.buildAnalysis?.catalogoConsultado ?? '—'}</strong></div>
                 {suggestions.length > 0
