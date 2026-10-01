@@ -14,6 +14,18 @@ if (temaSalvo === 'dark' || temaSalvo === 'light') {
   document.documentElement.dataset.theme = temaSalvo
 }
 
+// A marca deve ser o único texto exibido na aba do navegador, inclusive no admin.
+// Metadados de SEO/compartilhamento continuam podendo ter títulos descritivos.
+const enforceBrowserTitle = () => {
+  if (document.title !== 'CriaByte') document.title = 'CriaByte'
+}
+enforceBrowserTitle()
+new MutationObserver(enforceBrowserTitle).observe(document.head, {
+  childList: true,
+  subtree: true,
+  characterData: true,
+})
+
 installAutoScrollOfferEditor()
 
 createRoot(document.getElementById('root')).render(

@@ -70,7 +70,9 @@ export default function RouteEffects() {
       description = match?.[2] || DEFAULT_DESCRIPTION
     }
 
-    document.title = title
+    // A aba do navegador usa somente a marca. Os títulos detalhados continuam
+    // nos metadados sociais/SEO para não perder contexto de compartilhamento.
+    document.title = 'CriaByte'
     upsertMeta('meta[name="description"]', { name: 'description' }, description)
     upsertMeta('meta[property="og:title"]', { property: 'og:title' }, title)
     upsertMeta('meta[property="og:description"]', { property: 'og:description' }, description)
