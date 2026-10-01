@@ -96,7 +96,7 @@ function fallbackPreview(item, category) {
         nome: clean(item?.nome),
         ...(HARDWARE_CATEGORIES.has(category) ? { categoria: category } : {}),
         imagemUrl: clean(item?.imagemUrl),
-        descricao: '',
+        descricao: clean(item?.descricao),
       },
       alertas: ['Dados vieram da busca de ofertas. Revise a ficha antes de salvar.'],
     },
@@ -128,6 +128,17 @@ function componentSuggestions(analysis) {
     categoria: clean(item?.categoria ?? item?.hardware?.categoria),
     confianca: item?.confianca ?? item?.score ?? null,
   })).filter((item) => item.id || item.nome)
+}
+
+function previewFields(preview) {
+  const normalized = preview?.normalizacao?.camposNormalizados
+  const suggested = preview?.cadastroSugerido?.payload
+  const partial = preview?.resultadoProdutoIa?.payloadParcialBackend
+  return {
+    nome: clean(normalized?.nome || suggested?.nome || partial?.nome),
+    descricao: clean(normalized?.descricao || suggested?.descricao || partial?.descricao),
+    imagemUrl: clean(normalized?.imagemUrl || suggested?.imagemUrl || partial?.imagemUrl),
+  }
 }
 
 export default function AdminOfferDiscovery() {
@@ -194,10 +205,10 @@ export default function AdminOfferDiscovery() {
     try {
       let preview
       try {
-        // Não força PROCESSADOR/GPU/etc. durante a análise. A ProdutoIA precisa
-        // poder corrigir um resultado da busca que na verdade seja um PC completo.
+        // Envia a categoria inferida quando ela é conhecida. Isso ativa o
+        // enriquecimento técnico das peças e preserva PC/Notebook como destino.
         preview = url
-          ? await adminService.ai.importLink(url, category === 'PC_MONTADO' || category === 'NOTEBOOK' ? category : undefined)
+          ? await adminService.ai.importLink(url, category !== 'PRODUTO' ? category : undefined)
           : fallbackPreview(item, category)
       } catch {
         preview = fallbackPreview(item, category)
@@ -210,21 +221,41 @@ export default function AdminOfferDiscovery() {
       ).toUpperCase()
       const previewDestination = clean(preview?.destinoSugerido).toUpperCase()
       let resolvedDestination = previewDestination || expectedDestination(detectedCategory || category) || initialDestination
+      const extracted = previewFields(preview)
+      const listingTitle = extracted.nome || clean(item.nome)
+      const listingDescription = extracted.descricao || clean(item.descricao)
 
       let buildAnalysis = null
       let buildWarning = ''
       if (resolvedDestination === 'PC_MONTADO' || detectedCategory === 'PC_MONTADO' || category === 'PC_MONTADO') {
         try {
-          buildAnalysis = await adminService.builds.analyzeListing({ titulo: clean(item.nome), descricao: '' })
+          buildAnalysis = await adminService.builds.analyzeListing({
+            titulo: listingTitle,
+            descricao: listingDescription,
+          })
           if (buildAnalysis?.tipoSugerido === 'PC_MONTADO') resolvedDestination = 'PC_MONTADO'
         } catch (cause) {
           buildWarning = cause?.message || 'Não foi possível sugerir vínculos de componentes.'
         }
       }
 
+      const fallback = fallbackPreview(item, category)
+      const normalizedFields = {
+        ...fallback.normalizacao.camposNormalizados,
+        ...(preview?.normalizacao?.camposNormalizados || {}),
+      }
+      if (!clean(normalizedFields.nome)) normalizedFields.nome = listingTitle
+      if (!clean(normalizedFields.descricao) && listingDescription) normalizedFields.descricao = listingDescription
+      if (!clean(normalizedFields.imagemUrl)) normalizedFields.imagemUrl = extracted.imagemUrl || clean(item.imagemUrl)
+
       const mergedPreview = {
-        ...fallbackPreview(item, category),
+        ...fallback,
         ...preview,
+        normalizacao: {
+          ...fallback.normalizacao,
+          ...(preview?.normalizacao || {}),
+          camposNormalizados: normalizedFields,
+        },
         categoriaDetectada: detectedCategory || category,
         destinoSugerido: resolvedDestination,
       }
