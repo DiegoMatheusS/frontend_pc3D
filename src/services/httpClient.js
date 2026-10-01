@@ -51,6 +51,11 @@ function getErrorMessage(data, status) {
   return 'Não foi possível concluir a solicitação.'
 }
 
+function canReplayPostAfterRedirect(pathname) {
+  return /\/(?:ia-tecnica|meta-ai-whatsapp)\/enriquecer\/?$/.test(pathname)
+    || /\/admin\/hardwares\/descobrir\/\d+\/imagem\/?$/.test(pathname)
+}
+
 export async function apiRequest(path, options = {}) {
   const url = buildUrl(path)
   const hasBody = options.body !== undefined && options.body !== null
@@ -93,12 +98,14 @@ export async function apiRequest(path, options = {}) {
   } catch {
     throw new ApiError('O servidor retornou uma resposta inválida.', { status: response.status, url })
   }
-  // Reenvia apenas POST de enriquecimento convertido em GET por redirecionamento,
-  // no mesmo endpoint e origem. Não repete erros de processamento nem cadastros.
-  const isEnrichment = /\/(?:ia-tecnica|meta-ai-whatsapp)\/enriquecer\/?$/.test(new URL(url, window.location.origin).pathname)
-  if (options.redirect !== 'error' && method === 'POST' && isEnrichment && response.redirected && response.status === 404
+
+  // Alguns proxies respondem POST com 301/302 e o navegador segue o redirecionamento
+  // convertendo a chamada em GET. Reexecuta apenas operações idempotentes/conhecidas,
+  // no mesmo endpoint e origem, preservando explicitamente o POST.
+  const original = new URL(url, window.location.origin)
+  const canReplayRedirect = canReplayPostAfterRedirect(original.pathname)
+  if (options.redirect !== 'error' && method === 'POST' && canReplayRedirect && response.redirected && response.status === 404
       && /Cannot GET/i.test(String(data?.mensagem || data?.message || data || ''))) {
-    const original = new URL(url, window.location.origin)
     const destination = new URL(response.url)
     if (destination.origin === original.origin && destination.pathname.replace(/\/$/, '') === original.pathname.replace(/\/$/, '')) {
       return apiRequest(destination.href, { ...options, method, redirect: 'error' })
