@@ -59,7 +59,7 @@ export function setDocumentMeta({
   robots = 'index,follow',
   structuredData,
 }) {
-  if (title) document.title = title
+  document.title = 'CriaByte'
 
   if (description) {
     setMeta('meta[name="description"]', 'name', 'description', description)
