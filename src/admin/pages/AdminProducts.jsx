@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { adminService } from '../services/adminService'
+import { apiRequest } from '../../services/httpClient'
 import { AdminError, AdminLoading, AdminPageHeader, AdminStatus, EmptyRow, formatDate } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 import { useAdminPermissions } from '../components/AdminAccess'
@@ -72,6 +73,7 @@ export default function AdminProducts() {
   const [category, setCategory] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [findingOffersFor, setFindingOffersFor] = useState(null)
+  const [permanentDeleting, setPermanentDeleting] = useState(null)
 
   async function fetchProductsWithPrices() {
     const [productsResult, offersResult] = await Promise.allSettled([
@@ -115,6 +117,21 @@ export default function AdminProducts() {
       await load()
     } catch (err) {
       toast.show(err.message, 'erro')
+    }
+  }
+
+  async function permanentDelete(item) {
+    if (item.ativo !== false || permanentDeleting) return
+    if (!window.confirm(`Excluir DEFINITIVAMENTE o produto “${item.nome}” (#${item.id})? Esta ação é irreversível e também remove dados dependentes que usam exclusão em cascata.`)) return
+    setPermanentDeleting(item.id)
+    try {
+      await apiRequest(`/api/admin/produtos/${item.id}/permanente`, { method: 'DELETE' })
+      toast.show('Produto excluído definitivamente.')
+      await load()
+    } catch (err) {
+      toast.show(err?.message || 'Não foi possível excluir o produto definitivamente.', 'erro')
+    } finally {
+      setPermanentDeleting(null)
     }
   }
 
@@ -199,6 +216,7 @@ export default function AdminProducts() {
                 {item.ativo === false
                   ? canWriteCatalog && <button className="admin-action-button admin-action-button--success" type="button" onClick={() => reactivate(item)}>Reativar</button>
                   : canDeleteCatalog && <button className="admin-action-button" type="button" onClick={() => remove(item)}>{specialized ? `Arquivar ${specialized.label}` : 'Arquivar'}</button>}
+                {canDeleteCatalog && item.ativo === false && !specialized && <button className="admin-action-button" type="button" disabled={permanentDeleting !== null} onClick={() => permanentDelete(item)}>{permanentDeleting === item.id ? 'Excluindo...' : 'Excluir definitivamente'}</button>}
                 {!canWriteCatalog && !canDeleteCatalog && <span className="admin-muted">Somente leitura</span>}
               </>
             })()}</div></td>
