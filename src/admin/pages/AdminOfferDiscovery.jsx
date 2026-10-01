@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AdminPageHeader } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 import { adminService } from '../services/adminService'
+import { offerDiscoveryService } from '../services/offerDiscoveryService'
 import { storeAiImportPreview } from '../utils/aiImportTransfer'
 import './AdminOfferDiscovery.css'
 
@@ -121,7 +122,7 @@ export default function AdminOfferDiscovery() {
 
   useEffect(() => {
     let active = true
-    adminService.discovery.shopeeStatus()
+    offerDiscoveryService.status()
       .then((value) => { if (active) setStatus(value) })
       .catch(() => { if (active) setStatus(null) })
     return () => { active = false }
@@ -144,7 +145,7 @@ export default function AdminOfferDiscovery() {
     setError('')
     setAnalyses({})
     try {
-      const payload = await adminService.discovery.searchShopee({
+      const payload = await offerDiscoveryService.search({
         consulta: term,
         limite: Number(limit) || 24,
         somentePromocoes: onlyPromotions,
@@ -192,24 +193,20 @@ export default function AdminOfferDiscovery() {
         ...preview,
         destinoSugerido: preview?.destinoSugerido || destination,
       }
-      setAnalyses((current) => ({
-        ...current,
-        [key]: { preview: mergedPreview, buildAnalysis, buildWarning },
-      }))
+      const result = { preview: mergedPreview, buildAnalysis, buildWarning }
+      setAnalyses((current) => ({ ...current, [key]: result }))
+      return result
     } catch (cause) {
       setError(cause?.message || 'Não foi possível analisar esta oferta.')
+      return { preview: fallbackPreview(item, category), buildAnalysis: null, buildWarning: cause?.message || '' }
     } finally {
       setAnalyzingId(null)
     }
   }
 
   async function register(item) {
-    let analysis = analyses[item._key]
-    if (!analysis?.preview) {
-      await analyze(item)
-      analysis = null
-    }
-    const latest = analysis?.preview || analyses[item._key]?.preview || fallbackPreview(item, item._category)
+    const analysis = analyses[item._key] || await analyze(item)
+    const latest = analysis?.preview || fallbackPreview(item, item._category)
     const destination = clean(latest?.destinoSugerido).toUpperCase() || expectedDestination(item._category)
     const stored = storeAiImportPreview(latest)
     if (!stored) {
@@ -262,7 +259,7 @@ export default function AdminOfferDiscovery() {
             <div className="admin-discovery-actions">
               {(item.urlAfiliada || item.urlOriginal) && <a className="btn btn-secundario btn-pequeno" href={item.urlAfiliada || item.urlOriginal} target="_blank" rel="noopener noreferrer">Ver anúncio</a>}
               <button className="btn btn-secundario btn-pequeno" type="button" disabled={analyzingId !== null} onClick={() => analyze(item)}>{analyzingId === item._key ? 'Analisando...' : analysis ? 'Analisar novamente' : 'Analisar'}</button>
-              <button className="btn btn-primario btn-pequeno" type="button" onClick={() => register(item)}>Cadastrar</button>
+              <button className="btn btn-primario btn-pequeno" type="button" disabled={analyzingId !== null} onClick={() => register(item)}>Cadastrar</button>
             </div>
 
             {analysis && <div className="admin-discovery-analysis">
