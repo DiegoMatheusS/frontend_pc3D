@@ -64,11 +64,7 @@ export default function AdminHardwares() {
   }
 
   function searchImage(item) {
-    const popup = window.open(imageSearchUrl(item), '_blank', 'noopener,noreferrer')
-    if (!popup) {
-      toast.show('O navegador bloqueou a nova aba. Libere pop-ups para usar a busca de imagem.', 'alerta')
-      return
-    }
+    window.open(imageSearchUrl(item), '_blank', 'noopener,noreferrer')
     toast.show('Busca de imagens aberta. Copie o endereço da imagem escolhida e cole em “Imagem principal” ao editar o hardware.')
   }
 
