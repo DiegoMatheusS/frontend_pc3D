@@ -1,0 +1,35 @@
+name: Ofertas do mesmo produto
+
+on:
+  pull_request:
+    paths:
+      - 'src/admin/pages/AdminProducts.jsx'
+      - 'src/admin/services/adminService.js'
+      - 'src/admin/utils/identicalOffers.js'
+      - 'src/src/admin/pages/AdminProducts.jsx'
+      - 'src/src/admin/services/adminService.js'
+      - 'tests/identicalOffers.test.mjs'
+      - '.github/workflows/identical-offers.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/identicalOffers.test.mjs
+      - run: npx eslint src/admin/pages/AdminProducts.jsx src/admin/services/adminService.js src/admin/utils/identicalOffers.js src/src/admin/pages/AdminProducts.jsx src/src/admin/services/adminService.js
+      - run: npm run build
+      - name: Compilar segunda raiz
+        working-directory: src
+        run: |
+          npm ci
+          npm run build

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { adminService } from '../services/adminService'
 import { apiRequest } from '../../services/httpClient'
@@ -6,6 +6,7 @@ import { AdminError, AdminLoading, AdminPageHeader, AdminStatus, EmptyRow, forma
 import { useAdminToast } from '../components/AdminToast'
 import { useAdminPermissions } from '../components/AdminAccess'
 import { getSpecializedProductTarget } from '../utils/productRouting'
+import { identicalOffersFeedback } from '../utils/identicalOffers'
 
 const PAGE_SIZE = 10
 
@@ -73,6 +74,7 @@ export default function AdminProducts() {
   const [category, setCategory] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [findingOffersFor, setFindingOffersFor] = useState(null)
+  const findingOffersLock = useRef(false)
   const [permanentDeleting, setPermanentDeleting] = useState(null)
 
   async function fetchProductsWithPrices() {
@@ -136,31 +138,24 @@ export default function AdminProducts() {
   }
 
   async function findIdenticalOffers(item) {
-    if (findingOffersFor) return
+    if (!canWriteCatalog || item.ativo === false || findingOffersLock.current) return
     const identity = [item.gtin, item.mpn, item.modelo].filter((value) => String(value || '').trim())
     if (!identity.length) {
       toast.show('Este Produto precisa ter GTIN/EAN, MPN ou modelo para confirmar que o item encontrado é idêntico.', 'erro')
       return
     }
 
+    findingOffersLock.current = true
     setFindingOffersFor(item.id)
     try {
       const result = await adminService.products.findAndRegisterIdenticalOffers(item.id)
-      const found = Number(result?.quantidadeEncontrada || 0)
       const created = Number(result?.quantidadeCadastrada || 0)
-      const skipped = Number(result?.quantidadeIgnorada || 0)
-
-      if (created > 0) {
-        toast.show(`${created} nova(s) oferta(s) cadastrada(s) para “${item.nome}”. ${skipped ? `${skipped} já existia(m) ou foi(ram) ignorada(s).` : ''}`)
-        await load()
-      } else if (found > 0) {
-        toast.show('As ofertas idênticas encontradas já estavam cadastradas para este Produto.')
-      } else {
-        toast.show('Nenhum produto idêntico foi confirmado no Mercado Livre, Magazine Luiza ou Shopee.')
-      }
+      toast.show(identicalOffersFeedback(result, item.nome))
+      if (created > 0) await load()
     } catch (err) {
       toast.show(err?.message || 'Não foi possível buscar ofertas idênticas.', 'erro')
     } finally {
+      findingOffersLock.current = false
       setFindingOffersFor(null)
     }
   }
@@ -206,7 +201,7 @@ export default function AdminProducts() {
                 {canWriteCatalog && <button
                   className="admin-action-button admin-action-button--success"
                   type="button"
-                  disabled={Boolean(findingOffersFor)}
+                  disabled={findingOffersFor !== null || item.ativo === false}
                   onClick={() => findIdenticalOffers(item)}
                   title="Procura o mesmo Produto no Mercado Livre, Magazine Luiza e Shopee e cadastra somente novas ofertas"
                 >
