@@ -8,6 +8,7 @@ import { AdminTechnicalFields, normalizeSpec, productSchemaFor, readSpec } from 
 import { getSpecializedProductTarget } from '../utils/productRouting'
 import { consumeAiImportPreview, storeAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiConflicts, getAiDiagnostics, getAiOffer, getAiPayload, getAiReadiness, getAiReconciliation } from '../utils/aiImportContract'
+import { aiImportOfferRow } from '../components/AdminMultiOfferEditor.utils'
 
 const EMPTY = {
   categoriaId: '', nome: '', marca: '', modelo: '', descricao: '', mpn: '', gtin: '',
@@ -847,7 +848,7 @@ export default function AdminProductForm() {
       setIncludeOffer(true)
       setOfferRows((current) => {
         const importedUrl = cleanText(offer.urlOriginal) || cleanText(importUrl)
-        const importedPartnerId = offer.parceiroId ? String(offer.parceiroId) : ''
+        const importedPartnerId = aiImportOfferRow(offer, partners).parceiroId
         const nextOffer = {
           ...EMPTY_OFFER,
           parceiroId: importedPartnerId,

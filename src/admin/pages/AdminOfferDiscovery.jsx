@@ -5,6 +5,7 @@ import { useAdminToast } from '../components/AdminToast'
 import { adminService } from '../services/adminService'
 import { offerDiscoveryService } from '../services/offerDiscoveryService'
 import { storeAiImportPreview } from '../utils/aiImportTransfer'
+import { getAiPayload, mergeAiImportPreview } from '../utils/aiImportContract'
 import './AdminOfferDiscovery.css'
 
 const CATEGORY_RULES = [
@@ -102,11 +103,13 @@ function fallbackPreview(item, category) {
     },
     ofertaColetada: {
       preco: Number(item?.preco ?? item?.precoMin) || undefined,
+      precoAnterior: Number(item?.precoAnterior) || undefined,
       urlOriginal: clean(item?.urlOriginal || item?.urlAfiliada),
       urlAfiliada: clean(item?.urlAfiliada),
       parceiroNome: 'Shopee',
       codigoMarketplace: clean(item?.itemId),
       vendedorNome: clean(item?.loja),
+      vendedorIdentificador: clean(item?.shopId),
       disponivel: true,
     },
   }
@@ -131,13 +134,11 @@ function componentSuggestions(analysis) {
 }
 
 function previewFields(preview) {
-  const normalized = preview?.normalizacao?.camposNormalizados
-  const suggested = preview?.cadastroSugerido?.payload
-  const partial = preview?.resultadoProdutoIa?.payloadParcialBackend
+  const source = getAiPayload(preview)
   return {
-    nome: clean(normalized?.nome || suggested?.nome || partial?.nome),
-    descricao: clean(normalized?.descricao || suggested?.descricao || partial?.descricao),
-    imagemUrl: clean(normalized?.imagemUrl || suggested?.imagemUrl || partial?.imagemUrl),
+    nome: clean(source.nome),
+    descricao: clean(source.descricao),
+    imagemUrl: clean(source.imagemUrl),
   }
 }
 
@@ -240,22 +241,8 @@ export default function AdminOfferDiscovery() {
       }
 
       const fallback = fallbackPreview(item, category)
-      const normalizedFields = {
-        ...fallback.normalizacao.camposNormalizados,
-        ...(preview?.normalizacao?.camposNormalizados || {}),
-      }
-      if (!clean(normalizedFields.nome)) normalizedFields.nome = listingTitle
-      if (!clean(normalizedFields.descricao) && listingDescription) normalizedFields.descricao = listingDescription
-      if (!clean(normalizedFields.imagemUrl)) normalizedFields.imagemUrl = extracted.imagemUrl || clean(item.imagemUrl)
-
       const mergedPreview = {
-        ...fallback,
-        ...preview,
-        normalizacao: {
-          ...fallback.normalizacao,
-          ...(preview?.normalizacao || {}),
-          camposNormalizados: normalizedFields,
-        },
+        ...mergeAiImportPreview(fallback, preview),
         categoriaDetectada: detectedCategory || category,
         destinoSugerido: resolvedDestination,
       }

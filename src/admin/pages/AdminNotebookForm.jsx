@@ -5,7 +5,7 @@ import { adminService } from '../services/adminService'
 import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 import AdminMultiOfferEditor from '../components/AdminMultiOfferEditor'
-import { emptyOfferRow, normalizeOfferRow } from '../components/AdminMultiOfferEditor.utils'
+import { aiImportOfferRow, emptyOfferRow, normalizeOfferRow } from '../components/AdminMultiOfferEditor.utils'
 import { consumeAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiOffer, getAiPayload } from '../utils/aiImportContract'
 
@@ -109,10 +109,6 @@ function toIsoDate(value) {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
 }
 
-function normalizeSearch(value) {
-  return cleanText(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-}
-
 export default function AdminNotebookForm() {
   const { id } = useParams()
   const editing = Boolean(id && id !== 'novo')
@@ -121,7 +117,7 @@ export default function AdminNotebookForm() {
   const { user } = useAuth()
   const canImportLink = String(user?.papel || '').toUpperCase() === 'ADMIN'
   const [form, setForm] = useState(EMPTY)
-  const [loading, setLoading] = useState(editing)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
   const [importUrl, setImportUrl] = useState('')
@@ -222,17 +218,11 @@ export default function AdminNotebookForm() {
     const url = cleanText(suggestedOffer.urlOriginal || importUrl || preview?.urlFinal || preview?.urlOrigem)
     if (url && !offerRows.some((row) => !row._removed && cleanText(row.urlOriginal))) {
       const siteName = cleanText(preview?.coleta?.meta?.siteName || preview?.coleta?.meta?.['og:site_name'])
-      const matchedPartner = suggestedOffer.parceiroId
-        ? partners.find((partner) => Number(partner.id) === Number(suggestedOffer.parceiroId))
-        : siteName
-          ? partners.find((partner) => normalizeSearch(partner.nome).includes(normalizeSearch(siteName)) || normalizeSearch(siteName).includes(normalizeSearch(partner.nome)))
-          : null
-      addOffer({
+      addOffer(aiImportOfferRow({
+        ...suggestedOffer,
         urlOriginal: url,
-        parceiroId: suggestedOffer.parceiroId ? String(suggestedOffer.parceiroId) : (matchedPartner?.id ? String(matchedPartner.id) : ''),
-        preco: suggestedOffer.preco ?? '',
-        precoAnterior: suggestedOffer.precoAnterior ?? '',
-      })
+        parceiroNome: suggestedOffer.parceiroNome || siteName,
+      }, partners))
     }
 
     if (notify) toast.show('Dados da IA aplicados ao Notebook. Revise tudo antes de salvar.')

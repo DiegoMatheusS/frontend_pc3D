@@ -6,7 +6,7 @@ import { adminService } from '../services/adminService'
 import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 import AdminMultiOfferEditor from '../components/AdminMultiOfferEditor'
-import { emptyOfferRow, normalizeOfferRow } from '../components/AdminMultiOfferEditor.utils'
+import { aiImportOfferRow, emptyOfferRow, normalizeOfferRow } from '../components/AdminMultiOfferEditor.utils'
 import { consumeAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiOffer, getAiPayload } from '../utils/aiImportContract'
 
@@ -67,7 +67,7 @@ export default function AdminMountedFlexibleForm() {
   const [hardwares, setHardwares] = useState([])
   const [partners, setPartners] = useState([])
   const [offerRows, setOfferRows] = useState([])
-  const [loading, setLoading] = useState(editing)
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
@@ -164,16 +164,15 @@ export default function AdminMountedFlexibleForm() {
       imagemUrl: clean(source.imagemUrl || preview?.coleta?.meta?.['og:image']) || previous.imagemUrl,
       imagemHoverUrl: clean(source.imagemHoverUrl) || previous.imagemHoverUrl,
       finalidade: clean(source.finalidade) || previous.finalidade,
+      categoria: clean(source.categoria) || previous.categoria,
+      resolucaoRecomendada: clean(source.resolucaoRecomendada || source.resolucao) || previous.resolucaoRecomendada,
     }))
     const offer = getAiOffer(preview) || {}
     const originalUrl = clean(offer.urlOriginal || url || preview?.urlOrigem || preview?.urlFinal)
     if (originalUrl) {
       setOfferRows((previous) => previous.some((row) => clean(row.urlOriginal) === originalUrl)
         ? previous
-        : [...previous, { ...emptyOfferRow(), urlOriginal: originalUrl,
-          preco: offer.preco ?? '', precoAnterior: offer.precoAnterior ?? '',
-          parceiroId: offer.parceiroId ? String(offer.parceiroId) : '',
-        }])
+        : [...previous, aiImportOfferRow({ ...offer, urlOriginal: originalUrl }, partners)])
     }
     // Não confiar em hardwareId gerado pela IA no payload; sempre consultar
     // a descrição e o catálogo atual e pedir confirmação de cada vínculo.

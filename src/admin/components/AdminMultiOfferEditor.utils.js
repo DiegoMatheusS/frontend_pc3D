@@ -40,3 +40,21 @@ export function normalizeOfferRow(item = {}) {
   }
 }
 
+export function aiImportOfferRow(offer = {}, partners = []) {
+  const token = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const partnerName = token(offer.parceiroNome)
+  let originalHost = ''
+  try { originalHost = new URL(offer.urlOriginal).hostname.toLowerCase() } catch { /* URL ausente */ }
+  const matched = partners.find((partner) => {
+    if (partner.ativo === false) return false
+    if (offer.parceiroId) return Number(partner.id) === Number(offer.parceiroId)
+    if (partnerName && [partner.nome, partner.slug].some((value) => token(value) === partnerName)) return true
+    const domain = String(partner.dominio || '').trim().toLowerCase().replace(/^www\./, '')
+    return Boolean(domain && (originalHost === domain || originalHost.endsWith(`.${domain}`)))
+  })
+  return {
+    ...normalizeOfferRow(offer),
+    id: null,
+    parceiroId: String(offer.parceiroId || matched?.id || ''),
+  }
+}

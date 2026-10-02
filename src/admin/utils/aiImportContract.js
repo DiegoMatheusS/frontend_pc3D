@@ -15,6 +15,13 @@ function object(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 }
 
+function mergeFilledFields(...sources) {
+  return Object.assign({}, ...sources.map((source) => Object.fromEntries(
+    Object.entries(object(source)).filter(([, value]) => value !== null && value !== undefined
+      && (typeof value !== 'string' || value.trim() !== '')),
+  )))
+}
+
 export function safeText(value) {
   return typeof value === 'string' ? value.trim() : ''
 }
@@ -24,7 +31,8 @@ export function safeValue(value, fallback = '') {
 }
 
 function firstDefined(...values) {
-  return values.find((value) => value !== undefined && value !== null && value !== '')
+  return values.find((value) => value !== undefined && value !== null
+    && (typeof value !== 'string' || value.trim() !== ''))
 }
 
 function normalizeCategory(value) {
@@ -163,16 +171,9 @@ export function getAiPayload(response = {}) {
               : Object.keys(confirmationBody).length ? confirmationBody
                 : legacyNormalized
 
-  const merged = {
-    ...legacyNormalized,
-    ...actionPayload,
-    ...confirmationBody,
-    ...nestedPartialPayload,
-    ...directPartialPayload,
-    ...analysisHardware,
-    ...analysisProduct,
-    ...cadastroPayload,
-  }
+  // Uma prévia parcial não deve apagar dados já coletados da oferta/página.
+  const merged = mergeFilledFields(legacyNormalized, actionPayload, confirmationBody,
+    nestedPartialPayload, directPartialPayload, analysisHardware, analysisProduct, cadastroPayload)
 
   const partialSpec = specKey ? object(nestedPartialPayload?.[specKey]) : {}
   const directPartialSpec = specKey ? object(directPartialPayload?.[specKey]) : {}
@@ -211,7 +212,7 @@ export function getAiPayload(response = {}) {
   return {
     ...merged,
     ...normalizedSpec,
-    descricao: primaryPayload?.descricao ?? merged?.descricao ?? '',
+    descricao: merged.descricao ?? '',
   }
 }
 
@@ -221,16 +222,16 @@ export function getAiOffer(response = {}) {
   const suggested = object(response?.ofertaSugerida)
   const nested = object(response?.resultadoProdutoIa?.ofertaColetada)
   const collected = object(response?.ofertaColetada)
-  const offer = { ...suggested, ...nested, ...collected, ...analysisOffer }
+  const offer = mergeFilledFields(suggested, nested, collected, analysisOffer)
   if (!Object.keys(offer).length) return null
   return {
     ...offer,
     // Preço e disponibilidade têm como fonte principal ofertaColetada.
-    preco: safeValue(analysisOffer.preco ?? collected.preco ?? nested.preco ?? suggested.preco),
-    precoAnterior: safeValue(analysisOffer.precoAnterior ?? collected.precoAnterior ?? nested.precoAnterior ?? suggested.precoAnterior),
-    disponivel: analysisOffer.disponivel ?? collected.disponivel ?? nested.disponivel ?? suggested.disponivel ?? true,
-    parceiroId: analysisOffer.parceiroId ?? analysis?.oferta?.parceiro?.id ?? collected.parceiroId ?? nested.parceiroId ?? suggested.parceiroId,
-    parceiroNome: analysisOffer.parceiroNome ?? analysis?.oferta?.parceiro?.nome ?? collected.parceiroNome ?? nested.parceiroNome ?? suggested.parceiroNome,
+    preco: safeValue(firstDefined(analysisOffer.preco, collected.preco, nested.preco, suggested.preco)),
+    precoAnterior: safeValue(firstDefined(analysisOffer.precoAnterior, collected.precoAnterior, nested.precoAnterior, suggested.precoAnterior)),
+    disponivel: firstDefined(analysisOffer.disponivel, collected.disponivel, nested.disponivel, suggested.disponivel, true),
+    parceiroId: firstDefined(analysisOffer.parceiroId, analysis?.oferta?.parceiro?.id, collected.parceiroId, nested.parceiroId, suggested.parceiroId),
+    parceiroNome: firstDefined(analysisOffer.parceiroNome, analysis?.oferta?.parceiro?.nome, collected.parceiroNome, nested.parceiroNome, suggested.parceiroNome),
     urlOriginal: safeText(analysisOffer.urlOriginal)
       || safeText(collected.urlOriginal)
       || safeText(collected.urlProduto)
@@ -239,8 +240,24 @@ export function getAiOffer(response = {}) {
       || safeText(suggested.urlOriginal)
       || safeText(suggested.urlProduto),
     // Nunca inventar URL afiliada no frontend; apenas reaproveitar o que o backend enviar.
-    urlAfiliada: safeText(analysisOffer.urlAfiliada ?? collected.urlAfiliada ?? nested.urlAfiliada ?? suggested.urlAfiliada),
+    urlAfiliada: safeText(firstDefined(analysisOffer.urlAfiliada, collected.urlAfiliada, nested.urlAfiliada, suggested.urlAfiliada)),
   }
+}
+
+export function mergeAiImportPreview(fallback, response) {
+  const payload = mergeFilledFields(getAiPayload(fallback), getAiPayload(response))
+  const offer = mergeFilledFields(getAiOffer(fallback), getAiOffer(response))
+  return normalizeAiResponse({
+    ...fallback,
+    ...response,
+    cadastroSugerido: { ...object(response?.cadastroSugerido), payload },
+    ofertaColetada: offer,
+    normalizacao: {
+      ...object(fallback?.normalizacao),
+      ...object(response?.normalizacao),
+      camposNormalizados: payload,
+    },
+  })
 }
 
 export function getAiMissingFields(response = {}) {
