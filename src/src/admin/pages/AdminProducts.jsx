@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { adminService } from '../services/adminService'
 import { AdminError, AdminLoading, AdminPageHeader, AdminStatus, EmptyRow, formatDate } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 import { useAdminPermissions } from '../components/AdminAccess'
 import { getSpecializedProductTarget } from '../utils/productRouting'
+import { identicalOffersFeedback } from '../../../admin/utils/identicalOffers'
 
 const PAGE_SIZE = 10
 
@@ -71,6 +72,8 @@ export default function AdminProducts() {
   const [status, setStatus] = useState('')
   const [category, setCategory] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [findingOffersFor, setFindingOffersFor] = useState(null)
+  const findingOffersLock = useRef(false)
 
   async function fetchProductsWithPrices() {
     const [productsResult, offersResult] = await Promise.allSettled([
@@ -117,6 +120,29 @@ export default function AdminProducts() {
     }
   }
 
+  async function findIdenticalOffers(item) {
+    if (!canWriteCatalog || item.ativo === false || findingOffersLock.current) return
+    const identity = [item.gtin, item.mpn, item.modelo].filter((value) => String(value || '').trim())
+    if (!identity.length) {
+      toast.show('Este Produto precisa ter GTIN/EAN, MPN ou modelo para confirmar que o item encontrado é idêntico.', 'erro')
+      return
+    }
+
+    findingOffersLock.current = true
+    setFindingOffersFor(item.id)
+    try {
+      const result = await adminService.products.findAndRegisterIdenticalOffers(item.id)
+      const created = Number(result?.quantidadeCadastrada || 0)
+      toast.show(identicalOffersFeedback(result, item.nome))
+      if (created > 0) await load()
+    } catch (err) {
+      toast.show(err?.message || 'Não foi possível buscar ofertas idênticas.', 'erro')
+    } finally {
+      findingOffersLock.current = false
+      setFindingOffersFor(null)
+    }
+  }
+
   async function reactivate(item) {
     const specialized = getSpecializedProductTarget(item)
     const label = specialized?.label || 'Produto'
@@ -155,7 +181,16 @@ export default function AdminProducts() {
               const specialized = getSpecializedProductTarget(item)
               return <>
                 {canWriteCatalog && <Link className="admin-action-button" to={specialized?.route || `/admin/produtos/${item.id}`}>{specialized ? `Editar ${specialized.label}` : 'Editar'}</Link>}
-                {canWriteCatalog && <Link className="admin-action-button admin-action-button--success" to={`/admin/ofertas/novo?produtoId=${encodeURIComponent(item.id)}`}>+ Oferta</Link>}
+                {canWriteCatalog && <button
+                  className="admin-action-button admin-action-button--success"
+                  type="button"
+                  disabled={findingOffersFor !== null || item.ativo === false}
+                  onClick={() => findIdenticalOffers(item)}
+                  title="Procura o mesmo Produto no Mercado Livre, Magazine Luiza e Shopee e cadastra somente novas ofertas"
+                >
+                  {findingOffersFor === item.id ? 'Buscando lojas...' : 'Buscar em outras lojas'}
+                </button>}
+                {canWriteCatalog && <Link className="admin-action-button" to={`/admin/ofertas/novo?produtoId=${encodeURIComponent(item.id)}`}>+ Oferta manual</Link>}
                 {item.ativo === false
                   ? canWriteCatalog && <button className="admin-action-button admin-action-button--success" type="button" onClick={() => reactivate(item)}>Reativar</button>
                   : canDeleteCatalog && <button className="admin-action-button" type="button" onClick={() => remove(item)}>{specialized ? `Arquivar ${specialized.label}` : 'Arquivar'}</button>}
