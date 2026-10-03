@@ -205,13 +205,15 @@ export default function AdminOfferDiscovery() {
     setError('')
     try {
       let preview
+      let collectionWarning = ''
       try {
         // Envia a categoria inferida quando ela é conhecida. Isso ativa o
         // enriquecimento técnico das peças e preserva PC/Notebook como destino.
         preview = url
           ? await adminService.ai.importLink(url, category !== 'PRODUTO' ? category : undefined)
           : fallbackPreview(item, category)
-      } catch {
+      } catch (cause) {
+        collectionWarning = cause?.message || 'Não foi possível coletar os detalhes do anúncio.'
         preview = fallbackPreview(item, category)
       }
 
@@ -246,7 +248,10 @@ export default function AdminOfferDiscovery() {
         categoriaDetectada: detectedCategory || category,
         destinoSugerido: resolvedDestination,
       }
-      const result = { preview: mergedPreview, buildAnalysis, buildWarning }
+      if (!previewFields(mergedPreview).descricao) {
+        collectionWarning = [collectionWarning, 'A descrição não foi retornada pela loja. Os dados disponíveis da busca serão transferidos; complete a descrição antes de salvar.'].filter(Boolean).join(' ')
+      }
+      const result = { preview: mergedPreview, buildAnalysis, buildWarning, collectionWarning }
       setAnalyses((current) => ({ ...current, [key]: result }))
       return result
     } catch (cause) {
@@ -266,6 +271,7 @@ export default function AdminOfferDiscovery() {
       setError('Não foi possível transferir a prévia para o formulário de cadastro.')
       return
     }
+    if (analysis?.collectionWarning) toast.show(analysis.collectionWarning, 'alerta')
     navigate(destinationRoute(destination))
   }
 
@@ -317,6 +323,7 @@ export default function AdminOfferDiscovery() {
             </div>
 
             {analysis && <div className="admin-discovery-analysis">
+              {analysis.collectionWarning && <small className="admin-inline-warning">{analysis.collectionWarning}</small>}
               <div><span>Destino sugerido</span><strong>{CATEGORY_LABELS[analyzedCategory] || destination}</strong></div>
               {destination === 'PC_MONTADO' && <>
                 <div><span>Catálogo consultado</span><strong>{analysis.buildAnalysis?.catalogoConsultado ?? '—'}</strong></div>

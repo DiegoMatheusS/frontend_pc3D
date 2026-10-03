@@ -8,6 +8,9 @@ on:
       - "src/utils/productSpecs.js"
       - "src/src/utils/productSpecs.js"
       - "tests/**"
+      - "src/**/admin/utils/aiImportTransfer.js"
+      - "src/**/admin/pages/Admin*Form.jsx"
+      - "src/admin/pages/AdminOfferDiscovery.jsx"
       - "src/**/Notebook*"
       - "src/components/MountedPcCard/**"
       - "src/utils/notebookSpecs.js"
@@ -43,6 +46,9 @@ on:
       - "src/utils/productSpecs.js"
       - "src/src/utils/productSpecs.js"
       - "tests/**"
+      - "src/**/admin/utils/aiImportTransfer.js"
+      - "src/**/admin/pages/Admin*Form.jsx"
+      - "src/admin/pages/AdminOfferDiscovery.jsx"
       - "src/**/Notebook*"
       - "src/components/MountedPcCard/**"
       - "src/utils/notebookSpecs.js"
@@ -92,11 +98,13 @@ jobs:
           src/admin/components/AdminAssistant.jsx
           src/admin/services/adminService.js
           src/admin/utils/aiImportContract.js
+          src/admin/utils/aiImportTransfer.js
           src/admin/utils/autoScrollOfferEditor.js
           src/utils/productSpecPresentation.js
           src/src/admin/components/AdminAssistant.jsx
           src/src/admin/services/adminService.js
           src/src/admin/utils/aiImportContract.js
+          src/src/admin/utils/aiImportTransfer.js
           src/services/productsService.js
           src/src/services/productsService.js
           src/services/normalizers.js
