@@ -5,6 +5,7 @@ import { adminService } from '../services/adminService'
 import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 import { AdminTechnicalFields, hardwareSchemaFor, normalizeSpec, readSpec } from '../components/AdminTechnicalFields'
+import { readAiImportPreview, clearAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiConflicts, getAiDiagnostics, getAiOffer, getAiPayload, getAiReadiness, getAiReconciliation } from '../utils/aiImportContract'
 
 const CATEGORIES = ['PROCESSADOR','COOLER','PLACA_MAE','MEMORIA_RAM','PLACA_VIDEO','ARMAZENAMENTO','FONTE','GABINETE','VENTOINHA','MONITOR','MOUSE','TECLADO','FONE','HEADSET','MICROFONE']
@@ -86,19 +87,6 @@ function technicalFromPreview(schema, source = {}) {
   return Object.fromEntries(keys.flatMap((key) => source[key] !== undefined && source[key] !== null ? [[key, source[key]]] : []))
 }
 
-function consumeTransferredPreview(expectedDestination) {
-  try {
-    const raw = sessionStorage.getItem('criabyteAdminIaImportPreview')
-    if (!raw) return null
-    const preview = JSON.parse(raw)
-    if (preview?.destinoSugerido !== expectedDestination) return null
-    sessionStorage.removeItem('criabyteAdminIaImportPreview')
-    return preview
-  } catch {
-    sessionStorage.removeItem('criabyteAdminIaImportPreview')
-    return null
-  }
-}
 
 function hardwareInitialFromPreview(preview) {
   if (!preview) return EMPTY
@@ -159,7 +147,7 @@ export default function AdminHardwareForm() {
   const toast = useAdminToast()
   const { user } = useAuth()
   const canImportLink = String(user?.papel || '').toUpperCase() === 'ADMIN'
-  const [transferredPreview] = useState(() => editing ? null : consumeTransferredPreview('HARDWARE'))
+  const [transferredPreview] = useState(() => editing ? null : readAiImportPreview('HARDWARE'))
   const [form, setForm] = useState(() => hardwareInitialFromPreview(transferredPreview))
   const [technical, setTechnical] = useState(() => {
     const source = getAiPayload(transferredPreview)
@@ -178,6 +166,10 @@ export default function AdminHardwareForm() {
   const originalSpecsRef = useRef({})
 
   const schema = useMemo(() => hardwareSchemaFor(form.categoria), [form.categoria])
+
+  useEffect(() => {
+    if (!editing && transferredPreview) clearAiImportPreview(transferredPreview)
+  }, [editing, transferredPreview])
 
   useEffect(() => {
     if (!editing) return

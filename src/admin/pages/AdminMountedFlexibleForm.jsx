@@ -7,7 +7,7 @@ import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../compone
 import { useAdminToast } from '../components/AdminToast'
 import AdminMultiOfferEditor from '../components/AdminMultiOfferEditor'
 import { aiImportOfferRow, emptyOfferRow, normalizeOfferRow } from '../components/AdminMultiOfferEditor.utils'
-import { consumeAiImportPreview } from '../utils/aiImportTransfer'
+import { clearAiImportPreview, readAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiOffer, getAiPayload } from '../utils/aiImportContract'
 
 const EMPTY = {
@@ -77,7 +77,7 @@ export default function AdminMountedFlexibleForm() {
   const [analyzing, setAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState(null)
   const [analysisWarning, setAnalysisWarning] = useState('')
-  const [transferredPreview] = useState(() => editing ? null : consumeAiImportPreview('PC_MONTADO'))
+  const [transferredPreview] = useState(() => editing ? null : readAiImportPreview('PC_MONTADO'))
   const [transferredApplied, setTransferredApplied] = useState(false)
 
   const update = (key, value) => setForm((previous) => ({ ...previous, [key]: value }))
@@ -185,6 +185,7 @@ export default function AdminMountedFlexibleForm() {
     setImportUrl(url)
     setTransferredApplied(true)
     void applyImportPreview(transferredPreview, url)
+    clearAiImportPreview(transferredPreview)
   }, [editing, loading, transferredApplied, transferredPreview])
 
   async function importLink() {

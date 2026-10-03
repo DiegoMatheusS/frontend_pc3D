@@ -6,7 +6,7 @@ import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../compone
 import { useAdminToast } from '../components/AdminToast'
 import AdminMultiOfferEditor from '../components/AdminMultiOfferEditor'
 import { aiImportOfferRow, emptyOfferRow, normalizeOfferRow } from '../components/AdminMultiOfferEditor.utils'
-import { consumeAiImportPreview } from '../utils/aiImportTransfer'
+import { clearAiImportPreview, readAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiOffer, getAiPayload } from '../utils/aiImportContract'
 
 const EMPTY = {
@@ -123,7 +123,7 @@ export default function AdminNotebookForm() {
   const [importUrl, setImportUrl] = useState('')
   const [importing, setImporting] = useState(false)
   const [importPreview, setImportPreview] = useState(null)
-  const [transferredPreview] = useState(() => editing ? null : consumeAiImportPreview('NOTEBOOK'))
+  const [transferredPreview] = useState(() => editing ? null : readAiImportPreview('NOTEBOOK'))
   const [transferredApplied, setTransferredApplied] = useState(false)
   const [partners, setPartners] = useState([])
   const [offerRows, setOfferRows] = useState([])
@@ -233,6 +233,7 @@ export default function AdminNotebookForm() {
     setImportPreview(transferredPreview)
     setImportUrl(cleanText(transferredPreview?.urlOrigem || transferredPreview?.urlFinal))
     applyImportPreview(transferredPreview, false)
+    clearAiImportPreview(transferredPreview)
     setTransferredApplied(true)
     toast.show('Prévia do Produto IA transferida para o cadastro de Notebook. Revise antes de salvar.')
   }, [editing, loading, transferredApplied, transferredPreview])

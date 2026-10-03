@@ -6,7 +6,7 @@ import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../compone
 import { useAdminToast } from '../components/AdminToast'
 import { AdminTechnicalFields, normalizeSpec, productSchemaFor, readSpec } from '../components/AdminTechnicalFields'
 import { getSpecializedProductTarget } from '../utils/productRouting'
-import { consumeAiImportPreview, storeAiImportPreview } from '../utils/aiImportTransfer'
+import { clearAiImportPreview, readAiImportPreview, storeAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiConflicts, getAiDiagnostics, getAiOffer, getAiPayload, getAiReadiness, getAiReconciliation } from '../utils/aiImportContract'
 import { aiImportOfferRow } from '../components/AdminMultiOfferEditor.utils'
 
@@ -314,7 +314,7 @@ export default function AdminProductForm() {
   const canWriteAi = role === 'ADMIN' || role === 'EDITOR'
   const canImportLink = role === 'ADMIN'
 
-  const [transferredPreview] = useState(() => editing ? null : consumeAiImportPreview())
+  const [transferredPreview] = useState(() => editing ? null : readAiImportPreview())
   const [transferredPreviewApplied, setTransferredPreviewApplied] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [technical, setTechnical] = useState({})
@@ -411,7 +411,10 @@ export default function AdminProductForm() {
   useEffect(() => {
     if (!transferredPreview || transferredPreviewApplied || loading || !categories.length) return
     setTransferredPreviewApplied(true)
-    applySmartImportPreview(transferredPreview, false)
+    // O formulário já foi montado e mantém a cópia em estado. Um
+    // redirecionamento abaixo pode gravar a prévia novamente para outro destino.
+    clearAiImportPreview(transferredPreview)
+    void applySmartImportPreview(transferredPreview, false)
   }, [transferredPreview, transferredPreviewApplied, loading, categories.length])
   const selectedLinkedProductId = hardwareProductId(selectedHardware)
   const linkedCount = useMemo(() => hardwares.filter((hardware) => hardwareProductId(hardware)).length, [hardwares])
