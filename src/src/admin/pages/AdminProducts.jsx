@@ -6,6 +6,7 @@ import { useAdminToast } from '../components/AdminToast'
 import { useAdminPermissions } from '../components/AdminAccess'
 import { getSpecializedProductTarget } from '../utils/productRouting'
 import { identicalOffersFeedback } from '../../../admin/utils/identicalOffers'
+import { productImageService } from '../services/productImageService'
 
 const PAGE_SIZE = 10
 
@@ -74,6 +75,8 @@ export default function AdminProducts() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [findingOffersFor, setFindingOffersFor] = useState(null)
   const findingOffersLock = useRef(false)
+  const [searchingImageFor, setSearchingImageFor] = useState(null)
+  const imageSearchLock = useRef(false)
 
   async function fetchProductsWithPrices() {
     const [productsResult, offersResult] = await Promise.allSettled([
@@ -143,6 +146,26 @@ export default function AdminProducts() {
     }
   }
 
+  async function searchImage(item) {
+    if (!canWriteCatalog || item.ativo === false || imageSearchLock.current) return
+    imageSearchLock.current = true
+    setSearchingImageFor(item.id)
+    try {
+      const result = await productImageService.searchAndSave(item.id)
+      if (!result?.imagemUrl) throw new Error('A busca terminou sem retornar uma imagem válida.')
+      setItems((current) => current.map((entry) => entry.id === item.id ? {
+        ...entry, imagemUrl: result.imagemUrl,
+        atualizadoEm: result.produto?.atualizadoEm || entry.atualizadoEm,
+      } : entry))
+      toast.show(`Imagem encontrada e salva no Produto.${result.fonte ? ` Fonte: ${result.fonte}.` : ''}`)
+    } catch (err) {
+      toast.show(err?.message || 'Não foi possível buscar uma imagem para este produto.', 'erro')
+    } finally {
+      imageSearchLock.current = false
+      setSearchingImageFor(null)
+    }
+  }
+
   async function reactivate(item) {
     const specialized = getSpecializedProductTarget(item)
     const label = specialized?.label || 'Produto'
@@ -174,13 +197,14 @@ export default function AdminProducts() {
       <section className="admin-table-card mobile-cards">
         <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Produto</th><th>Categoria</th><th>Marca</th><th>Valor</th><th>Status</th><th>Atualização</th><th>Ações</th></tr></thead><tbody>
           {visibleItems.length ? visibleItems.map((item) => <tr key={item.id}>
-            <td data-label="Produto"><div className="admin-product-cell"><img className="admin-product-thumb" src={item.imagemUrl || '/admin-assets/placeholder-produto.svg'} alt="" onError={(e) => { e.currentTarget.style.visibility = 'hidden' }} /><span><strong>{item.nome}</strong><small>#{item.id} · {item.modelo || 'Sem modelo'}</small></span></div></td>
+            <td data-label="Produto"><div className="admin-product-cell"><img className="admin-product-thumb" src={item.imagemUrl || '/admin-assets/placeholder-produto.svg'} alt="" onLoad={(e) => { e.currentTarget.style.visibility = 'visible' }} onError={(e) => { e.currentTarget.style.visibility = 'hidden' }} /><span><strong>{item.nome}</strong><small>#{item.id} · {item.modelo || 'Sem modelo'}</small></span></div></td>
             <td data-label="Categoria">{categoryName(item)}</td><td data-label="Marca">{item.marca || item.fabricante || '—'}</td><td data-label="Valor"><strong>{formatCurrency(item.melhorPrecoAdmin)}</strong></td>
             <td data-label="Status"><AdminStatus published={item.publicado} active={item.ativo} /></td><td data-label="Atualização">{formatDate(item.atualizadoEm)}</td>
             <td data-label="Ações"><div className="admin-row-actions">{(() => {
               const specialized = getSpecializedProductTarget(item)
               return <>
                 {canWriteCatalog && <Link className="admin-action-button" to={specialized?.route || `/admin/produtos/${item.id}`}>{specialized ? `Editar ${specialized.label}` : 'Editar'}</Link>}
+                {canWriteCatalog && <button className="admin-action-button" type="button" disabled={searchingImageFor !== null || item.ativo === false} onClick={() => searchImage(item)} title="Busca a imagem do mesmo produto nas lojas e salva o endereço no campo Imagem principal">{searchingImageFor === item.id ? 'Buscando imagem...' : 'Buscar imagem'}</button>}
                 {canWriteCatalog && <button
                   className="admin-action-button admin-action-button--success"
                   type="button"
