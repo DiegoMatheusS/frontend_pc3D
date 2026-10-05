@@ -6,6 +6,7 @@ import { AdminBack, AdminError, AdminLoading, AdminPageHeader } from '../compone
 import { useAdminToast } from '../components/AdminToast'
 import { AdminTechnicalFields, normalizeSpec, productSchemaFor, readSpec } from '../components/AdminTechnicalFields'
 import { getSpecializedProductTarget } from '../utils/productRouting'
+import { findExistingHardwareFromAi } from '../utils/hardwareMatching'
 import { clearAiImportPreview, readAiImportPreview, storeAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiConflicts, getAiDiagnostics, getAiOffer, getAiPayload, getAiReadiness, getAiReconciliation } from '../utils/aiImportContract'
 import { aiImportOfferRow } from '../components/AdminMultiOfferEditor.utils'
@@ -97,27 +98,6 @@ function normalizeToken(value) {
     .replace(/[^a-z0-9]+/g, '')
 }
 
-function processorModelSignature(...values) {
-  const text = values.filter(Boolean).join(' ')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toUpperCase()
-
-  // Intel Core i3/i5/i7/i9: aceita "i5-9500", "i5 9500" e "i59500".
-  const intel = text.match(/\b(I[3579])\s*[-_ ]?\s*(\d{4,5}[A-Z]{0,3})\b/i)
-  if (intel) return `${intel[1].toUpperCase()}-${intel[2].toUpperCase()}`
-
-  // Intel Core Ultra.
-  const ultra = text.match(/\bCORE\s+ULTRA\s+([3579])\s+([0-9]{3}[A-Z]{0,2})\b/i)
-  if (ultra) return `CORE-ULTRA-${ultra[1]}-${ultra[2].toUpperCase()}`
-
-  // AMD Ryzen.
-  const ryzen = text.match(/\bRYZEN\s+([3579])\s+([0-9]{4}[A-Z0-9]{0,4})\b/i)
-  if (ryzen) return `RYZEN-${ryzen[1]}-${ryzen[2].toUpperCase()}`
-
-  return ''
-}
-
 function findCategoryFromPreview(categories, sourceCategory) {
   const target = normalizeToken(sourceCategory)
   if (!target) return null
@@ -201,56 +181,6 @@ function AiImportContractInfo({ preview }) {
   </>
 }
 
-function findExistingHardwareFromAi(hardwareItems = [], preview = {}) {
-  const source = aiPreviewSource(preview)
-  const targetCategory = normalizeToken(source.categoria || preview?.categoriaDetectada || preview?.categoriaSugerida)
-  const targetBrand = normalizeToken(source.marca)
-  const targetModel = normalizeToken(source.modelo)
-  const targetMpn = normalizeToken(source.mpn)
-  const targetGtin = normalizeGtin(source.gtin || source.ean)
-  const targetName = normalizeToken(source.nome)
-  const targetProcessorSignature = targetCategory === 'processador'
-    ? processorModelSignature(source.modelo, source.nome, source.mpn)
-    : ''
-
-  const scored = (Array.isArray(hardwareItems) ? hardwareItems : []).flatMap((hardware) => {
-    const hardwareCategory = normalizeToken(hardware?.categoria)
-    if (targetCategory && hardwareCategory && targetCategory !== hardwareCategory) return []
-
-    const brand = normalizeToken(hardware?.marca || hardware?.produto?.marca)
-    const model = normalizeToken(hardware?.modelo || hardware?.produto?.modelo)
-    const mpn = normalizeToken(hardware?.mpn || hardware?.produto?.mpn)
-    const gtin = normalizeGtin(hardware?.gtin || hardware?.produto?.gtin)
-    const name = normalizeToken(hardware?.nome || hardware?.produto?.nome)
-    const processorSignature = targetProcessorSignature
-      ? processorModelSignature(hardware?.modelo, hardware?.nome, hardware?.mpn, hardware?.produto?.modelo, hardware?.produto?.nome)
-      : ''
-
-    let score = 0
-    const reasons = []
-    if (targetGtin && gtin && targetGtin === gtin) { score += 140; reasons.push('GTIN') }
-    if (targetMpn && mpn && targetMpn === mpn) { score += 110; reasons.push('MPN') }
-    if (targetBrand && brand && targetBrand === brand) { score += 25; reasons.push('marca') }
-    if (targetProcessorSignature && processorSignature && targetProcessorSignature === processorSignature) {
-      score += 100
-      reasons.push(`modelo CPU ${targetProcessorSignature}`)
-    }
-    if (targetModel && model && targetModel === model) { score += 70; reasons.push('modelo') }
-    else if (targetModel && name && name.includes(targetModel)) { score += 65; reasons.push('modelo no nome') }
-    if (targetName && name && targetName === name) { score += 75; reasons.push('nome') }
-
-    // Não vincula automaticamente por nome/modelo fraco. GTIN/MPN ou marca+modelo exatos são seguros.
-    if (score < 90) return []
-    return [{ hardware, score, reasons }]
-  }).sort((a, b) => b.score - a.score)
-
-  if (!scored.length) return { hardware: null, ambiguous: [] }
-  const best = scored[0]
-  const tied = scored.filter((item) => item.score === best.score)
-  if (tied.length > 1) return { hardware: null, ambiguous: tied.map((item) => item.hardware) }
-  return { hardware: best.hardware, ambiguous: [] }
-}
-
 function offersForProduct(offers = [], productId) {
   if (!productId) return []
   return offers
@@ -324,6 +254,7 @@ export default function AdminProductForm() {
   const [selectedHardwareId, setSelectedHardwareId] = useState('')
   const [hardwareLoading, setHardwareLoading] = useState(!editing)
   const [hardwareError, setHardwareError] = useState('')
+  const [hardwareCandidates, setHardwareCandidates] = useState([])
 
   const [partners, setPartners] = useState([])
   const [allOffers, setAllOffers] = useState([])
@@ -408,14 +339,6 @@ export default function AdminProductForm() {
   )
 
 
-  useEffect(() => {
-    if (!transferredPreview || transferredPreviewApplied || loading || hardwareLoading || !categories.length) return
-    setTransferredPreviewApplied(true)
-    // O formulário já foi montado e mantém a cópia em estado. Um
-    // redirecionamento abaixo pode gravar a prévia novamente para outro destino.
-    clearAiImportPreview(transferredPreview)
-    void applySmartImportPreview(transferredPreview, false)
-  }, [transferredPreview, transferredPreviewApplied, loading, hardwareLoading, categories.length])
   const selectedLinkedProductId = hardwareProductId(selectedHardware)
   const linkedCount = useMemo(() => hardwares.filter((hardware) => hardwareProductId(hardware)).length, [hardwares])
 
@@ -737,6 +660,7 @@ export default function AdminProductForm() {
 
   async function applySmartImportPreview(preview = importPreview, notify = true) {
     if (!preview) return
+    setHardwareCandidates([])
 
     if (preview?.destinoSugerido === 'HARDWARE') {
       // Se o usuário já escolheu um Hardware existente, nunca manda para criar outro.
@@ -763,8 +687,9 @@ export default function AdminProductForm() {
       }
       if (reconciliation?.hardwaresAmbiguos?.length) {
         const source = aiPreviewSource(preview)
-        setHardwareSearch(cleanText(source.mpn || source.modelo || source.nome))
-        toast.show('Encontrei mais de um Hardware com essa identidade. Selecione o correto abaixo antes de continuar.', 'alerta')
+        setHardwareCandidates(reconciliation.hardwaresAmbiguos.map(item => hardwares.find(hardware => Number(hardware.id) === Number(item.id)) || item))
+        setHardwareSearch(cleanText(source.modelo))
+        toast.show('Encontrei fichas no catálogo. Confirme o Hardware abaixo para continuar em Produtos.', 'alerta')
         return
       }
 
@@ -795,8 +720,9 @@ export default function AdminProductForm() {
 
       if (match.ambiguous.length) {
         const source = aiPreviewSource(preview)
-        setHardwareSearch(cleanText(source.mpn || source.modelo || source.nome))
-        toast.show('Encontrei mais de um Hardware compatível. Selecione o correto abaixo; não vou criar outro automaticamente.', 'alerta')
+        setHardwareCandidates(match.ambiguous)
+        setHardwareSearch(cleanText(source.modelo))
+        toast.show('Encontrei fichas no catálogo. Confirme o Hardware abaixo para continuar em Produtos.', 'alerta')
         return
       }
 
@@ -809,6 +735,14 @@ export default function AdminProductForm() {
     if (!notify && preview?.destinoSugerido === 'PRODUTO') {
       toast.show('Dados encontrados pela IA foram preenchidos. Revise o Produto e as ofertas antes de salvar.')
     }
+  }
+
+  async function confirmHardwareCandidate(hardwareId) {
+    const hardware = await selectHardware(String(hardwareId))
+    if (!hardware) return
+    applyImportPreview(importPreview, false, { skipSpecialRouting: true, preserveHardware: true })
+    setHardwareCandidates([])
+    setImportPreview(current => current ? { ...current, hardwareExistenteId: hardware.id } : current)
   }
 
   function applyImportPreview(preview = importPreview, notify = true, { skipSpecialRouting = false, preserveHardware = false } = {}) {
@@ -1170,6 +1104,15 @@ export default function AdminProductForm() {
     }
   }
 
+  useEffect(() => {
+    if (!transferredPreview || transferredPreviewApplied || loading || hardwareLoading || !categories.length) return
+    setTransferredPreviewApplied(true)
+    // O formulário já foi montado e mantém a cópia em estado. Um
+    // redirecionamento abaixo pode gravar a prévia novamente para outro destino.
+    clearAiImportPreview(transferredPreview)
+    void applySmartImportPreview(transferredPreview, false)
+  }, [transferredPreview, transferredPreviewApplied, loading, hardwareLoading, categories.length])
+
   if (loading) return <AdminLoading />
   if (error && !form.nome && editing) return <AdminError error={error} />
 
@@ -1245,7 +1188,7 @@ export default function AdminProductForm() {
             <PreviewList title="Não encontrado" items={importPreview.normalizacao?.ausentes} tone="missing" />
             <AiImportContractInfo preview={importPreview} />
             <div className="admin-import-preview-actions">
-              <button className="btn btn-secundario" type="button" onClick={() => { setImportPreview(null); setImportUrl('') }}>Descartar prévia</button>
+              <button className="btn btn-secundario" type="button" onClick={() => { setImportPreview(null); setImportUrl(''); setHardwareCandidates([]) }}>Descartar prévia</button>
               <button className="btn btn-primario" type="button" onClick={() => applySmartImportPreview()}>{importPreview.destinoSugerido === 'HARDWARE' ? (selectedHardwareId ? 'Aplicar ao Produto com Hardware existente' : 'Verificar Hardware e continuar') : 'Aplicar prévia ao Produto'}</button>
             </div>
             <small className="admin-help">A IA apenas preenche campos. Revise tudo e salve manualmente.</small>
@@ -1274,6 +1217,16 @@ export default function AdminProductForm() {
             </div>
             <span className="admin-import-badge">Recomendado</span>
           </div>
+
+          {hardwareCandidates.length > 0 && <div className="admin-import-preview">
+            <h3>Hardware encontrado no catálogo</h3>
+            <p>Confirme a ficha correspondente ao anúncio para continuar com o Produto e a oferta.</p>
+            {hardwareCandidates.map(hardware => <div className="admin-hardware-picker-item" key={hardware.id}>
+              <span><strong>{hardware.nome || `Hardware #${hardware.id}`}</strong><small>#{hardware.id} · {hardware.marca} · {hardware.modelo}</small></span>
+              <button className="btn btn-primario btn-pequeno" type="button" disabled={hardwareLoading} onClick={() => confirmHardwareCandidate(hardware.id)}>Usar este Hardware</button>
+            </div>)}
+            <button className="btn btn-secundario btn-pequeno" type="button" onClick={() => applyImportPreview(importPreview, false)}>Nenhum corresponde: cadastrar Hardware</button>
+          </div>}
 
           <div className="admin-form-grid">
             <div className="admin-field full">

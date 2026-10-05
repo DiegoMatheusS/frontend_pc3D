@@ -6,6 +6,8 @@ import { adminService } from '../services/adminService'
 import { offerDiscoveryService } from '../services/offerDiscoveryService'
 import { storeAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiPayload, mergeAiImportPreview } from '../utils/aiImportContract'
+import { findExistingProductFromAi } from '../utils/catalogMatching'
+import { findExistingHardwareFromAi } from '../utils/hardwareMatching'
 import './AdminOfferDiscovery.css'
 
 const CATEGORY_RULES = [
@@ -156,6 +158,8 @@ export default function AdminOfferDiscovery() {
   const [error, setError] = useState('')
   const [analyzingId, setAnalyzingId] = useState(null)
   const [analyses, setAnalyses] = useState({})
+  const [checkingId, setCheckingId] = useState(null)
+  const [catalogReviews, setCatalogReviews] = useState({})
 
   useEffect(() => {
     let active = true
@@ -181,6 +185,7 @@ export default function AdminOfferDiscovery() {
     setLoading(true)
     setError('')
     setAnalyses({})
+    setCatalogReviews({})
     try {
       const payload = await offerDiscoveryService.search({
         consulta: term,
@@ -264,17 +269,46 @@ export default function AdminOfferDiscovery() {
     }
   }
 
+  function openRegistration(preview, destination) {
+    if (!storeAiImportPreview(preview)) throw new Error('Não foi possível transferir a prévia para o formulário de cadastro.')
+    navigate(destination)
+  }
+
+  function openExistingProduct(preview, product) {
+    openRegistration({ ...preview, produtoExistenteId: product.id }, `/admin/ofertas/novo?origem=descobrir-ofertas&produtoId=${product.id}`)
+  }
+
   async function register(item) {
-    const analysis = analyses[item._key] || await analyze(item)
-    const latest = analysis?.preview || fallbackPreview(item, item._category)
-    const destination = clean(latest?.destinoSugerido).toUpperCase() || expectedDestination(item._category)
-    const stored = storeAiImportPreview(latest)
-    if (!stored) {
-      setError('Não foi possível transferir a prévia para o formulário de cadastro.')
-      return
+    setCheckingId(item._key)
+    setError('')
+    try {
+      const analysis = analyses[item._key] || await analyze(item)
+      const latest = analysis?.preview || fallbackPreview(item, item._category)
+      const destination = clean(latest?.destinoSugerido).toUpperCase() || expectedDestination(item._category)
+      // A consulta também funciona quando a coleta/IA só conseguiu retornar o título.
+      const [products, hardwares] = await Promise.all([adminService.products.list(), adminService.hardwares.list()])
+      const productMatch = findExistingProductFromAi(products, latest)
+      const hardwareMatch = destination === 'HARDWARE' ? findExistingHardwareFromAi(hardwares, latest) : { hardware: null, ambiguous: [] }
+      const linkedProduct = hardwareMatch.hardware && products.find(product => Number(product.id) === Number(hardwareMatch.hardware.produtoId || hardwareMatch.hardware.produto?.id))
+      if (analysis?.collectionWarning) toast.show(analysis.collectionWarning, 'alerta')
+      if (productMatch.product || linkedProduct) {
+        openExistingProduct(latest, productMatch.product || linkedProduct)
+        return
+      }
+      if (productMatch.ambiguous.length) {
+        setCatalogReviews(current => ({ ...current, [item._key]: { preview: latest, products: productMatch.ambiguous, destination } }))
+        return
+      }
+      if (hardwareMatch.hardware) {
+        openRegistration({ ...latest, hardwareExistenteId: hardwareMatch.hardware.id }, '/admin/produtos/novo')
+        return
+      }
+      openRegistration(latest, destinationRoute(destination))
+    } catch (cause) {
+      setError(cause?.message || 'Não foi possível verificar o catálogo. Tente novamente antes de cadastrar.')
+    } finally {
+      setCheckingId(null)
     }
-    if (analysis?.collectionWarning) toast.show(analysis.collectionWarning, 'alerta')
-    navigate(destinationRoute(destination))
   }
 
   return <>
@@ -306,6 +340,7 @@ export default function AdminOfferDiscovery() {
     <section className="admin-discovery-grid">
       {normalizedResults.map((item) => {
         const analysis = analyses[item._key]
+        const review = catalogReviews[item._key]
         const suggestions = componentSuggestions(analysis?.buildAnalysis)
         const destination = clean(analysis?.preview?.destinoSugerido).toUpperCase() || expectedDestination(item._category)
         const analyzedCategory = clean(analysis?.preview?.categoriaDetectada).toUpperCase() || item._category
@@ -321,8 +356,18 @@ export default function AdminOfferDiscovery() {
             <div className="admin-discovery-actions">
               {(item.urlAfiliada || item.urlOriginal) && <a className="btn btn-secundario btn-pequeno" href={item.urlAfiliada || item.urlOriginal} target="_blank" rel="noopener noreferrer">Ver anúncio</a>}
               <button className="btn btn-secundario btn-pequeno" type="button" disabled={analyzingId !== null} onClick={() => analyze(item)}>{analyzingId === item._key ? 'Analisando...' : analysis ? 'Analisar novamente' : 'Analisar'}</button>
-              <button className="btn btn-primario btn-pequeno" type="button" disabled={analyzingId !== null} onClick={() => register(item)}>Cadastrar</button>
+              <button className="btn btn-primario btn-pequeno" type="button" disabled={analyzingId !== null || checkingId !== null} onClick={() => register(item)}>{checkingId === item._key ? 'Verificando catálogo...' : 'Cadastrar'}</button>
             </div>
+
+            {review && <div className="admin-discovery-analysis">
+              <strong>Produtos encontrados no catálogo</strong>
+              <small>Confirme o modelo e a variante para adicionar a oferta ao Produto existente.</small>
+              {review.products.map(product => <div key={product.id}>
+                <span>{product.nome} (#{product.id})</span>
+                <button className="btn btn-secundario btn-pequeno" type="button" onClick={() => openExistingProduct(review.preview, product)}>Usar este Produto</button>
+              </div>)}
+              <button className="btn btn-secundario btn-pequeno" type="button" onClick={() => openRegistration(review.preview, destinationRoute(review.destination))}>Nenhum corresponde: revisar novo cadastro</button>
+            </div>}
 
             {analysis && <div className="admin-discovery-analysis">
               {analysis.collectionWarning && <small className="admin-inline-warning">{analysis.collectionWarning}</small>}

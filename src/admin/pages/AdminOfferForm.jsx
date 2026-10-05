@@ -3,6 +3,9 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { adminService } from '../services/adminService'
 import { AdminBack, AdminError, AdminLoading, AdminPageHeader, formatMoney } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
+import { getAiOffer } from '../utils/aiImportContract'
+import { readAiImportPreview, clearAiImportPreview } from '../utils/aiImportTransfer'
+import { identityKey } from '../utils/catalogMatching'
 
 const EMPTY = {
   targetType: 'produto', targetId: '', parceiroId: '', vendedorNome: '', vendedorIdentificador: '',
@@ -25,6 +28,8 @@ export default function AdminOfferForm() {
   const suggestionId = !editing && searchParams.get('origem') === 'sugestao-oferta' ? searchParams.get('sugestaoId') : ''
   const initialProductId = searchParams.get('produtoId') || ''
   const initialHardwareId = searchParams.get('hardwareId') || ''
+  const fromDiscovery = !editing && searchParams.get('origem') === 'descobrir-ofertas'
+  const [importPreview] = useState(() => fromDiscovery ? readAiImportPreview() : null)
 
   const [form, setForm] = useState(() => ({
     ...EMPTY,
@@ -71,10 +76,26 @@ export default function AdminOfferForm() {
           preco: suggestion.preco ?? current.preco,
           precoAnterior: suggestion.precoAnterior ?? current.precoAnterior,
         }))
+      } else if (importPreview && Number(importPreview.produtoExistenteId) === Number(initialProductId)) {
+        const offer = getAiOffer(importPreview) || {}
+        const partner = partners.find(value => Number(value.id) === Number(offer.parceiroId))
+          || partners.find(value => identityKey(value.nome) === identityKey(offer.parceiroNome))
+        setForm(current => ({
+          ...current,
+          parceiroId: partner?.id || '',
+          vendedorNome: offer.vendedorNome || '',
+          vendedorIdentificador: offer.vendedorIdentificador || '',
+          urlOriginal: offer.urlOriginal || '',
+          urlAfiliada: offer.urlAfiliada || '',
+          preco: offer.preco ?? '',
+          precoAnterior: offer.precoAnterior ?? '',
+          frete: offer.frete ?? '',
+        }))
+        clearAiImportPreview(importPreview)
       }
     }).catch((err) => active && setError(err))
     return () => { active = false }
-  }, [editing, id, suggestionId, initialProductId])
+  }, [editing, id, suggestionId, initialProductId, importPreview])
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }))
   const targets = useMemo(() => form.targetType === 'hardware' ? (data?.hardwares || []) : (data?.products || []), [data, form.targetType])
@@ -99,7 +120,20 @@ export default function AdminOfferForm() {
         } : {}),
         ...(editing ? { status: form.status } : {}),
       }
-      const saved = editing ? await adminService.offers.update(id, body) : await adminService.offers.create(body)
+      let existingOffer = null
+      if (fromDiscovery) {
+        const offers = await adminService.offers.list()
+        existingOffer = offers.find(offer => Number(offer.produtoId || offer.produto?.id) === Number(form.targetId)
+          && Number(offer.parceiroId || offer.parceiro?.id) === Number(form.parceiroId)
+          && (offer.urlOriginal === body.urlOriginal || (getAiOffer(importPreview)?.codigoMarketplace
+            && String(offer.codigoMarketplace) === String(getAiOffer(importPreview).codigoMarketplace))))
+      }
+      const updateBody = { ...body }
+      delete updateBody.produtoId
+      delete updateBody.hardwareId
+      delete updateBody.parceiroId
+      const saved = editing ? await adminService.offers.update(id, body)
+        : existingOffer ? await adminService.offers.update(existingOffer.id, updateBody) : await adminService.offers.create(body)
       toast.show('Oferta salva.')
       if (suggestionId && !editing) {
         navigate(`/admin/sugestoes-ofertas/${encodeURIComponent(suggestionId)}?produtoId=${encodeURIComponent(form.targetId)}&ofertaId=${encodeURIComponent(saved?.id || '')}`, { replace: true })
@@ -163,6 +197,7 @@ export default function AdminOfferForm() {
     </AdminPageHeader>
 
     {suggestionId && <div className="admin-suggestion-return-banner"><strong>Oferta da sugestão #{suggestionId}</strong><span>URL original e preço já foram preenchidos. Informe o link afiliado aqui, se necessário. Isso não acontece no botão “Aceitar Oferta”.</span></div>}
+    {fromDiscovery && <div className="admin-suggestion-return-banner"><strong>Produto já cadastrado</strong><span>Os dados do anúncio foram preenchidos. Ao salvar, a oferta será adicionada ou atualizada neste Produto.</span></div>}
 
     <form className="admin-form-layout" onSubmit={submit}>
       <div className="admin-form-card">
