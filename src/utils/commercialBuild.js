@@ -23,3 +23,12 @@ export function hasCompleteBuilderConfiguration(pc) {
 export function hasVerifiedConsumption(pc) {
   return hasCompleteBuilderConfiguration(pc) && Number(pc?.estimatedConsumption) > 0
 }
+
+export function getBuilder3DUnavailableReason(pc) {
+  const components = Array.isArray(pc?.components) ? pc.components : []
+  const hasLinkedHardware = components.some((part) => part?.hardware?.id || part?.hardwareId)
+  if (!hasLinkedHardware) return 'Este PC não tem peças vinculadas para exibir no 3D.'
+  if (isUpgradeKit(pc)) return 'A visualização 3D exige uma configuração de PC completa; este anúncio é um kit de upgrade.'
+  if (!hasCompleteBuilderConfiguration(pc)) return 'Faltam peças vinculadas para visualizar a configuração completa no 3D.'
+  return ''
+}
