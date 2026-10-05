@@ -135,7 +135,7 @@ export default function MountedPcDetails() {
         <section className="mounted-detail__summary">
           <article>
             <span>Compatibilidade</span>
-            <strong className="is-success">Compatível</strong>
+            <strong className="is-success">OK</strong>
             <p>O resumo usa os dados técnicos disponíveis para esta configuração.</p>
           </article>
           <article>
