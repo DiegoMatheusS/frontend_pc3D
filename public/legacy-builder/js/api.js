@@ -4,6 +4,8 @@
  * Quando o backend público estiver pronto, basta trocar a configuração para
  * usar as rotas HTTP sem reescrever as páginas do catálogo e do montador.
  */
+import { escala3DPositiva } from "./montador/model-placement.js?v=encaixes-hardware-1";
+
 const CONFIGURACAO_PADRAO = Object.freeze({
   baseUrl: "",
   modo: "local",
@@ -502,9 +504,9 @@ function normalizarHardwareParaBuilder(hardware) {
           Number(modelo3DAtivo.rotacaoCorrecaoZ) || 0,
         ],
         escala: [
-          Number.isFinite(Number(modelo3DAtivo.escalaCorrecaoX)) ? Number(modelo3DAtivo.escalaCorrecaoX) : 1,
-          Number.isFinite(Number(modelo3DAtivo.escalaCorrecaoY)) ? Number(modelo3DAtivo.escalaCorrecaoY) : 1,
-          Number.isFinite(Number(modelo3DAtivo.escalaCorrecaoZ)) ? Number(modelo3DAtivo.escalaCorrecaoZ) : 1,
+          escala3DPositiva(modelo3DAtivo.escalaCorrecaoX),
+          escala3DPositiva(modelo3DAtivo.escalaCorrecaoY),
+          escala3DPositiva(modelo3DAtivo.escalaCorrecaoZ),
         ],
         dimensoesReaisMm: {
           altura: Number(modelo3DAtivo.alturaRealMm) || 0,
@@ -696,9 +698,9 @@ function normalizarModelo3DPublico(modelo) {
         Number(modelo.rotacaoCorrecaoZ) || 0,
       ],
       escala: [
-        Number.isFinite(Number(modelo.escalaCorrecaoX)) ? Number(modelo.escalaCorrecaoX) : 1,
-        Number.isFinite(Number(modelo.escalaCorrecaoY)) ? Number(modelo.escalaCorrecaoY) : 1,
-        Number.isFinite(Number(modelo.escalaCorrecaoZ)) ? Number(modelo.escalaCorrecaoZ) : 1,
+        escala3DPositiva(modelo.escalaCorrecaoX),
+        escala3DPositiva(modelo.escalaCorrecaoY),
+        escala3DPositiva(modelo.escalaCorrecaoZ),
       ],
       dimensoesReaisMm: {
         altura: Number(modelo.alturaRealMm) || 0,
