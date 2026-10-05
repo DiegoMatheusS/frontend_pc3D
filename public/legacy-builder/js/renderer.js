@@ -218,9 +218,16 @@ if (!carregador) {
 const cacheModelos3D = new Map();
 
 function clonarCenaGltf(gltf) {
+    const scene = gltf.scene.clone(true);
+    const geometrias = new Map();
+    scene.traverse((objeto) => {
+        if (!objeto.isMesh || !objeto.geometry) return;
+        if (!geometrias.has(objeto.geometry)) geometrias.set(objeto.geometry, objeto.geometry.clone());
+        objeto.geometry = geometrias.get(objeto.geometry);
+    });
     return {
         ...gltf,
-        scene: gltf.scene.clone(true)
+        scene
     };
 }
 
@@ -334,7 +341,7 @@ function ehWaterCoolerSnapshot() {
 
     const grupo = cena.getObjectByName("grupo-modelos-cooler");
     const procedural = grupo?.children?.find((objeto) => objeto?.userData?.fallback3D === true);
-    return Boolean(procedural && procedural.children?.length >= 3);
+    return procedural?.userData?.tipoCooler === "aio";
 }
 
 function descartarObjetoCorrecao3D(objeto) {
@@ -391,6 +398,14 @@ function aplicarWaterCoolerNoTeto() {
     const coolerSnapshot = obterPecaSnapshot("cooler");
     const original = cena.getObjectByName("grupo-modelos-cooler");
     const existente = cena.getObjectByName(NOME_AIO_TETO_CORRIGIDO);
+
+    // O fallback atual já monta bomba, tubos e radiador a partir dos encaixes.
+    // Não o substitui por uma segunda maquete com medidas/posições diferentes.
+    if (original?.children?.some((objeto) => objeto.userData?.waterCoolerNoTeto)) {
+        if (existente) descartarObjetoCorrecao3D(existente);
+        original.visible = true;
+        return;
+    }
 
     if (!original || !ehWaterCoolerSnapshot()) {
         if (existente) descartarObjetoCorrecao3D(existente);

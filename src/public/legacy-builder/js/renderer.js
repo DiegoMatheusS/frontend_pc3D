@@ -273,9 +273,16 @@ if (!carregador) {
 const cacheModelos3D = new Map();
 
 function clonarCenaGltf(gltf) {
+    const scene = gltf.scene.clone(true);
+    const geometrias = new Map();
+    scene.traverse((objeto) => {
+        if (!objeto.isMesh || !objeto.geometry) return;
+        if (!geometrias.has(objeto.geometry)) geometrias.set(objeto.geometry, objeto.geometry.clone());
+        objeto.geometry = geometrias.get(objeto.geometry);
+    });
     return {
         ...gltf,
-        scene: gltf.scene.clone(true)
+        scene
     };
 }
 
