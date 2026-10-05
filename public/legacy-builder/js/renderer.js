@@ -1,6 +1,7 @@
 // ==========================================================================
 // RENDERER 3D — PC BUILDER
 // ==========================================================================
+import { dimensoesGabinete3D } from "./montador/model-placement.js?v=gabinete-unidades-2";
 
 if (typeof THREE === "undefined") {
     throw new Error(
@@ -309,20 +310,15 @@ function mmParaLayout3D(valor, fallbackMm, minimo, maximo) {
 
 function obterDimensoesGabineteSnapshot() {
     const gabinete = obterPecaSnapshot("gabinete");
-    const specs = gabinete?.especificacoes && typeof gabinete.especificacoes === "object"
-        ? gabinete.especificacoes
-        : {};
     const texto = `${textoPecaLayout3D(gabinete)} ${textoGrupoCena3D("grupo-modelos-gabinete")}`;
     const ehFractalNorth = /fractal.*north|north.*fractal/.test(texto);
 
     const fallback = ehFractalNorth
-        ? { largura: 215, altura: 469, profundidade: 447 }
-        : { largura: 240, altura: 460, profundidade: 450 };
+        ? { largura: 2.15, altura: 4.69, profundidade: 4.47 }
+        : { largura: 2.4, altura: 4.6, profundidade: 4.5 };
 
     return {
-        largura: mmParaLayout3D(specs.larguraMm ?? gabinete?.larguraMm, fallback.largura, 1.5, 4.5),
-        altura: mmParaLayout3D(specs.alturaMm ?? gabinete?.alturaMm, fallback.altura, 2.4, 7.2),
-        profundidade: mmParaLayout3D(specs.profundidadeMm ?? gabinete?.profundidadeMm, fallback.profundidade, 2.5, 7.6),
+        ...dimensoesGabinete3D(gabinete, fallback),
         ehFractalNorth,
     };
 }

@@ -73,6 +73,25 @@ test('posição absoluta padrão não empilha slots; calibração absoluta váli
   assert.deepEqual(placement.resolverPosicaoEncaixe3D(slot, { modoPosicao: 'absoluta', posicao: [1, 2, 3] }).toArray(), [1, 2, 3])
 })
 
+test('gabinetes em mm, slim e medidas parciais preservam a unidade e usam fallback só para dados ausentes', () => {
+  const dimensoes = (especificacoes) => placement.dimensoesGabinete3D({ especificacoes })
+  assert.deepEqual(dimensoes({ alturaMm: 469, larguraMm: 215, profundidadeMm: 447 }), { largura: 2.15, altura: 4.69, profundidade: 4.47 })
+  assert.deepEqual(dimensoes({ alturaMm: 300, larguraMm: 90, profundidadeMm: 250 }), { largura: 0.9, altura: 3, profundidade: 2.5 })
+  assert.deepEqual(dimensoes({ alturaMm: 39 }), { largura: 2.4, altura: 0.39, profundidade: 4.5 })
+  assert.deepEqual(dimensoes({ alturaMm: null, larguraMm: 0, profundidadeMm: -1 }), { largura: 2.4, altura: 4.6, profundidade: 4.5 })
+})
+
+test('renderer usa as mesmas medidas corrigidas do PC-240 para posicionar fans e water cooler', () => {
+  const source = fs.readFileSync(new URL('../public/legacy-builder/js/renderer.js', import.meta.url), 'utf8')
+  const trecho = source.slice(source.indexOf('function obterDimensoesGabineteSnapshot()'), source.indexOf('function ehWaterCoolerSnapshot()'))
+  const snapshot = vm.runInNewContext(`${trecho}\nobterDimensoesGabineteSnapshot()`, {
+    dimensoesGabinete3D: placement.dimensoesGabinete3D,
+    obterPecaSnapshot: () => ({ especificacoes: { alturaMm: 39, larguraMm: 24, profundidadeMm: 47 } }),
+    textoPecaLayout3D: () => '', textoGrupoCena3D: () => '',
+  })
+  proximo(snapshot.largura, 2.4); proximo(snapshot.altura, 3.9); proximo(snapshot.profundidade, 4.7)
+})
+
 for (const raiz of ['public', 'src/public']) {
   test(`${raiz}: remover um GLB não descarta a geometria do cache ou de outra peça`, () => {
     const source = fs.readFileSync(new URL(`../${raiz}/legacy-builder/js/renderer.js`, import.meta.url), 'utf8')
@@ -163,6 +182,38 @@ for (const raiz of ['public', 'src/public']) {
     const segunda = engine.modelos3DAtivos.placavideo
     assert.ok(caixa(segunda).getSize(new THREE.Vector3()).distanceTo(tamanho) < 0.0001)
     assert.ok(segunda.children[0].position.distanceTo(primeira.children[0].position) > 0.1)
+  })
+
+  test(`${raiz}: selecionar White PC-240 com medidas legadas em cm mantém a carcaça e os encaixes no tamanho real`, async () => {
+    const engine = motor(raiz)
+    const referencia = motor(raiz)
+    const config = configuracao()
+    config.placamae.especificacoes.formato = 'MICRO_ATX'
+    await engine.carregar(config)
+    const gabineteAnterior = engine.modelos3DAtivos.gabinete
+    // Payload público do hardware 139: valores em cm nos campos *Mm.
+    config.gabinete = {
+      id: '139', nome: 'Gabinete Gamer White Pc-240 Vidro Temperado M-atx 4 Fans',
+      especificacoes: { tamanho: 'MINI_TOWER', alturaMm: 39, larguraMm: 24, profundidadeMm: 47 },
+    }
+    await engine.carregar(config)
+    await referencia.carregar({ ...config, gabinete: { ...config.gabinete,
+      especificacoes: { tamanho: 'MINI_TOWER', alturaMm: 390, larguraMm: 240, profundidadeMm: 470 },
+    } })
+    engine.quadro(1000)
+    referencia.quadro(1000)
+    assert.equal(gabineteAnterior.parent, null)
+    const carcaça = caixa(engine.modelos3DAtivos.gabinete)
+    const tamanho = carcaça.getSize(new THREE.Vector3())
+    assert.ok(tamanho.x > 2.4 && tamanho.y > 3.9 && tamanho.z > 4.7)
+    for (const categoria of ['gabinete', 'placamae', 'processador', 'memoria', 'placavideo', 'fonte', 'ventoinhas']) {
+      const bounds = caixa(engine.modelos3DAtivos[categoria])
+      const esperado = caixa(referencia.modelos3DAtivos[categoria])
+      assert.ok(bounds.min.distanceTo(esperado.min) < 0.0001, `${categoria}: encaixe deslocado`)
+      assert.ok(bounds.max.distanceTo(esperado.max) < 0.0001, `${categoria}: dimensão errada`)
+      assert.ok(carcaça.clone().expandByScalar(0.01).containsBox(bounds), `${categoria}: fora do gabinete`)
+    }
+    assert.equal(config.gabinete.especificacoes.alturaMm, 39)
   })
 
   test(`${raiz}: E-ATX e mATX têm o mesmo formato no desenho e no encaixe`, () => {

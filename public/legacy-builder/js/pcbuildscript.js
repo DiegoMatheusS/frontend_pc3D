@@ -7,7 +7,7 @@ import {
   carregarModelo3D,
   alternarQualidade3D,
   obterQualidade3D,
-} from "./renderer.js?v=encaixes-hardware-1";
+} from "./renderer.js?v=gabinete-unidades-2";
 
 import {
   escala3DPositiva,
@@ -15,10 +15,11 @@ import {
   criarEncaixeModelo3D,
   formatoArmazenamento3D,
   dimensoesPlacaMae3D,
-} from "./montador/model-placement.js?v=encaixes-hardware-1";
+  dimensoesGabinete3D,
+} from "./montador/model-placement.js?v=gabinete-unidades-2";
 
 import { verificarCompatibilidade } from "./compatibilidade.js?v=react-v54-cooler-optional-case";
-import { api } from "./api.js?v=encaixes-hardware-1";
+import { api } from "./api.js?v=gabinete-unidades-2";
 import { mostrarToast, copiarTexto, definirEstadoContainer } from "./ui-feedback.js";
 import { confirmar, solicitarTexto } from "./dialogos.js?v=react-v40-1";
 import {
@@ -1531,11 +1532,7 @@ function obterDimensoesGabineteLayout3D(peca = estadoMontagem.gabinete) {
   }
 
   // Medidas confirmadas independem do conteúdo: o gabinete não cresce para caber peças.
-  return {
-    largura: numeroMmPara3DLayout(specs.larguraMm ?? peca.larguraMm, padrao.largura * 100, 1, 10),
-    altura: numeroMmPara3DLayout(specs.alturaMm ?? peca.alturaMm, padrao.altura * 100, 1, 12),
-    profundidade: numeroMmPara3DLayout(specs.profundidadeMm ?? peca.profundidadeMm, padrao.profundidade * 100, 1, 12),
-  };
+  return dimensoesGabinete3D(peca, padrao);
 }
 
 function obterDimensoesPlacaMaeLayout3D() {
@@ -1688,14 +1685,7 @@ function atualizarAncorasGabinete3D(pecaGabinete = estadoMontagem.gabinete) {
   botaoPower3D.position.set(meiaL * 0.58, Math.max(0.2, altura - 0.03), -meiaP * 0.90);
 
   const baseSemConteudo = pecaGabinete
-    ? (() => {
-        const specs = pecaGabinete?.especificacoes && typeof pecaGabinete.especificacoes === "object" ? pecaGabinete.especificacoes : {};
-        return {
-          largura: numeroMmPara3DLayout(specs.larguraMm ?? pecaGabinete.larguraMm, largura * 100, 1.55, 4.2),
-          altura: numeroMmPara3DLayout(specs.alturaMm ?? pecaGabinete.alturaMm, altura * 100, 2.4, 7.2),
-          profundidade: numeroMmPara3DLayout(specs.profundidadeMm ?? pecaGabinete.profundidadeMm, profundidade * 100, 2.5, 7.6),
-        };
-      })()
+    ? { largura, altura, profundidade }
     : DIMENSOES_GABINETE_PADRAO_3D;
   grupoMaquete.userData.dimensoesGabineteAtuais = {
     largura,

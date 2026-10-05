@@ -62,3 +62,17 @@ export function dimensoesPlacaMae3D(peca = {}) {
     profundidade: escala3DPositiva(specs.larguraMm, largura) * 0.01,
   };
 }
+
+export function dimensoesGabinete3D(peca = {}, padrao = { largura: 2.4, altura: 4.6, profundidade: 4.5 }) {
+  const specs = peca?.especificacoes || {};
+  const eixos = ["largura", "altura", "profundidade"];
+  const medidas = eixos.map((eixo) => Number(specs[`${eixo}Mm`] ?? peca?.[`${eixo}Mm`]));
+  // Cadastros legados, como o White PC-240, trazem 24/39/47 cm nos campos
+  // *Mm. Só converte quando o trio inteiro tem essa ordem de grandeza;
+  // uma largura pequena isolada pode ser um gabinete slim válido em mm.
+  const fatorUnidade = medidas.every((valor) => Number.isFinite(valor) && valor >= 10 && valor < 100) ? 10 : 1;
+  return Object.fromEntries(eixos.map((eixo, indice) => {
+    const valor = medidas[indice];
+    return [eixo, Number.isFinite(valor) && valor > 0 ? valor * fatorUnidade * 0.01 : padrao[eixo]];
+  }));
+}
