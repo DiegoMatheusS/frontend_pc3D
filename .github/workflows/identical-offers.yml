@@ -6,6 +6,9 @@ on:
       - 'src/admin/pages/AdminProducts.jsx'
       - 'src/admin/services/adminService.js'
       - 'src/admin/utils/identicalOffers.js'
+      - 'src/admin/components/IdenticalOffersReport.jsx'
+      - 'src/admin/Admin.css'
+      - 'src/src/admin/Admin.css'
       - 'src/src/admin/pages/AdminProducts.jsx'
       - 'src/src/admin/services/adminService.js'
       - 'tests/identicalOffers.test.mjs'
@@ -31,7 +34,7 @@ jobs:
       - run: node --test tests/identicalOffers.test.mjs
       - run: node --test tests/productImages.test.mjs
       - run: npx eslint src/admin/components/AdminProductImageFields.jsx src/admin/services/productImageService.js src/src/admin/components/AdminProductImageFields.jsx src/src/admin/services/productImageService.js
-      - run: npx eslint src/admin/pages/AdminProducts.jsx src/admin/services/adminService.js src/admin/utils/identicalOffers.js src/src/admin/pages/AdminProducts.jsx src/src/admin/services/adminService.js
+      - run: npx eslint src/admin/components/IdenticalOffersReport.jsx src/admin/pages/AdminProducts.jsx src/admin/services/adminService.js src/admin/utils/identicalOffers.js src/src/admin/pages/AdminProducts.jsx src/src/admin/services/adminService.js
       - run: npm run build
       - name: Compilar segunda raiz
         working-directory: src

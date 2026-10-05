@@ -6,8 +6,9 @@ import { AdminError, AdminLoading, AdminPageHeader, AdminStatus, EmptyRow, forma
 import { useAdminToast } from '../components/AdminToast'
 import { useAdminPermissions } from '../components/AdminAccess'
 import { getSpecializedProductTarget } from '../utils/productRouting'
-import { identicalOffersFeedback } from '../utils/identicalOffers'
 import { productImageService } from '../services/productImageService'
+import { identicalOffersFeedback, identicalOffersHasFailures } from '../utils/identicalOffers'
+import IdenticalOffersReport from '../components/IdenticalOffersReport'
 
 const PAGE_SIZE = 10
 
@@ -76,6 +77,7 @@ export default function AdminProducts() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [findingOffersFor, setFindingOffersFor] = useState(null)
   const findingOffersLock = useRef(false)
+  const [offersReport, setOffersReport] = useState(null)
   const [permanentDeleting, setPermanentDeleting] = useState(null)
   const [searchingImageFor, setSearchingImageFor] = useState(null)
   const imageSearchLock = useRef(false)
@@ -150,13 +152,17 @@ export default function AdminProducts() {
 
     findingOffersLock.current = true
     setFindingOffersFor(item.id)
+    setOffersReport(null)
     try {
       const result = await adminService.products.findAndRegisterIdenticalOffers(item.id)
       const created = Number(result?.quantidadeCadastrada || 0)
-      toast.show(identicalOffersFeedback(result, item.nome))
+      setOffersReport({ productName: item.nome, result })
+      toast.show(identicalOffersFeedback(result, item.nome), identicalOffersHasFailures(result) ? 'alerta' : 'sucesso')
       if (created > 0) await load()
     } catch (err) {
-      toast.show(err?.message || 'Não foi possível buscar ofertas idênticas.', 'erro')
+      const message = err?.message || 'Não foi possível buscar ofertas idênticas.'
+      setOffersReport({ productName: item.nome, error: message })
+      toast.show(message, 'erro')
     } finally {
       findingOffersLock.current = false
       setFindingOffersFor(null)
@@ -206,6 +212,7 @@ export default function AdminProducts() {
       <AdminPageHeader title="Produtos" description="Catálogo comercial. Produtos podem ser criados a partir de Hardware existente e receber a oferta afiliada no mesmo cadastro.">
         {canWriteCatalog && <Link className="btn btn-primario" to="/admin/produtos/novo">+ Cadastrar produto</Link>}
       </AdminPageHeader>
+      <IdenticalOffersReport report={offersReport} onClose={() => setOffersReport(null)} />
       <section className="admin-toolbar admin-toolbar--3">
         <label className="admin-toolbar-field"><span>Pesquisar</span><input className="admin-input" type="search" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE) }} placeholder="Nome, MPN, GTIN, marca ou modelo" /></label>
         <label className="admin-toolbar-field"><span>Categoria</span><select className="admin-select" value={category} onChange={(e) => { setCategory(e.target.value); setVisibleCount(PAGE_SIZE) }}><option value="">Todas</option>{categories.map((name) => <option key={name}>{name}</option>)}</select></label>

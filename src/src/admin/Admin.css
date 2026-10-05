@@ -1476,3 +1476,16 @@
 .admin-offer-check-result--erro { border-color:color-mix(in srgb, var(--admin-danger) 32%, var(--admin-border)); background:var(--admin-danger-soft); }
 .admin-offer-check-result a { color:var(--admin-primary); font-size:10px; font-weight:800; text-decoration:none; }
 .admin-offer-check-result a:hover { text-decoration:underline; }
+
+.admin-offers-report { margin-bottom: 20px; }
+.admin-offers-report .admin-card-header p { overflow-wrap: anywhere; }
+.admin-offers-report .admin-table td { white-space: normal; }
+@media (max-width: 640px) {
+  .admin-offers-report .admin-card-header { align-items: flex-start; flex-direction: column; }
+  .admin-offers-report .admin-table { min-width: 0; }
+  .admin-offers-report .admin-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .admin-offers-report .admin-table tbody, .admin-offers-report .admin-table tr { display: grid; }
+  .admin-offers-report .admin-table tr { padding: 12px 0; border-bottom: 1px solid var(--admin-border); }
+  .admin-offers-report .admin-table td { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 12px; border-bottom: 0; padding: 6px 15px; }
+  .admin-offers-report .admin-table td::before { content: attr(data-label); color: var(--admin-muted); font-size: 11px; font-weight: 700; }
+}

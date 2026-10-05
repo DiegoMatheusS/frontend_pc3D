@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 import { createServer } from 'vite'
-import { identicalOffersFeedback } from '../src/admin/utils/identicalOffers.js'
+import { identicalOffersFeedback, identicalOffersHasFailures, identicalOffersSources } from '../src/admin/utils/identicalOffers.js'
 
 const paths = ['/src/admin/services/adminService.js', '/src/src/admin/services/adminService.js']
 const originalFetch = globalThis.fetch
@@ -104,4 +104,38 @@ test('falha de coleta não é apresentada como ausência definitiva de ofertas',
   assert.match(identicalOffersFeedback({ quantidadeEncontrada: 0, fontes: { magalu: { falhasColeta: 2 } } }, 'Mouse'), /não puderam ser consultadas/)
   assert.match(identicalOffersFeedback({ quantidadeEncontrada: 0, fontes: { mercadoLivre: { erro: 'Indisponível' } } }, 'Mouse'), /não puderam ser consultadas/)
   assert.match(identicalOffersFeedback({ quantidadeEncontrada: 0, fontes: {} }, 'Mouse'), /Nenhum produto idêntico/)
+})
+
+for (const statusBusca of ['BLOQUEADO', 'FALHA_TEMPORARIA', 'TEMPO_LIMITE', 'ERRO']) {
+  test(`${statusBusca}: falha aparece mesmo quando outra loja cadastrou uma oferta`, () => {
+    const result = { quantidadeEncontrada: 1, quantidadeCadastrada: 1,
+      fontes: { mercadoLivre: { statusBusca, encontrados: 0 }, shopee: { configurada: true, encontrados: 1 } },
+      cadastradas: [{ parceiro: { nome: 'Shopee', slug: 'shopee' } }] }
+    assert.equal(identicalOffersHasFailures(result), true)
+    assert.match(identicalOffersFeedback(result, 'SSD'), /busca ficou incompleta/)
+    const sources = identicalOffersSources(result)
+    assert.equal(sources[0].partial, true)
+    assert.equal(sources[2].created, 1)
+    assert.equal(sources[2].found, 1)
+    assert.doesNotMatch(sources[0].message, /Nenhuma oferta idêntica/)
+  })
+}
+
+test('resultado por loja preserva ofertas confirmadas após tempo limite e conta duplicadas', () => {
+  const result = { fontes: { magalu: { encontrados: 2, statusBusca: 'TEMPO_LIMITE' } },
+    cadastradas: [{ parceiro: { nome: 'Magazine Luiza', slug: 'magazine-luiza' } }],
+    ignoradas: [{ marketplace: 'MAGALU', motivo: 'JA_CADASTRADA' }] }
+  const source = identicalOffersSources(result)[1]
+  assert.equal(source.found, 2)
+  assert.equal(source.created, 1)
+  assert.equal(source.duplicates, 1)
+  assert.match(source.message, /excedeu o tempo/)
+})
+
+test('resultado diferencia integração ausente, identidade rejeitada e preço ausente', () => {
+  const sources = identicalOffersSources({ fontes: { shopee: { configurada: false },
+    mercadoLivre: { rejeitadosPorIdentidade: 2 }, magalu: { semPreco: 1 } } })
+  assert.match(sources[0].message, /não confirmaram o mesmo/)
+  assert.match(sources[1].message, /sem uma oferta válida/)
+  assert.match(sources[2].message, /não configurada/)
 })
