@@ -3,6 +3,7 @@ import { AdminPageHeader } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 import { hardwareSchemaFor } from '../components/AdminTechnicalFields'
 import { adminService } from '../services/adminService'
+import { nextHardwareDiscoveryPage } from '../utils/hardwareDiscovery'
 
 const CATEGORIES = [
   ['PROCESSADOR', 'Processadores'],
@@ -468,6 +469,7 @@ export default function AdminHardwareDiscovery() {
   const toast = useAdminToast()
   const [categoria, setCategoria] = useState('PROCESSADOR')
   const [marca, setMarca] = useState('')
+  const [consulta, setConsulta] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [pagina, setPagina] = useState(1)
   const [limite, setLimite] = useState(50)
@@ -485,6 +487,7 @@ export default function AdminHardwareDiscovery() {
   const [metaAiError, setMetaAiError] = useState('')
   const [iaTecnicaBusyIds, setIaTecnicaBusyIds] = useState(new Set())
   const [iaTecnicaErrors, setIaTecnicaErrors] = useState({})
+  const [catalogChanged, setCatalogChanged] = useState(false)
 
   const items = useMemo(() => Array.isArray(result?.itens) ? result.itens : [], [result])
   const filteredItems = useMemo(() => items.filter((item) => !statusFilter || candidateStatus(item) === statusFilter), [items, statusFilter])
@@ -504,10 +507,12 @@ export default function AdminHardwareDiscovery() {
       const payload = await adminService.hardwares.discover({
         categoria,
         ...(marca.trim() ? { marca: marca.trim() } : {}),
+        ...(consulta.trim() ? { consulta: consulta.trim() } : {}),
         pagina: targetPage,
         limite: Number(limite),
       })
       setResult(payload || { itens: [] })
+      setCatalogChanged(false)
       setPagina(Number(payload?.pagina) || targetPage)
       if (!Array.isArray(payload?.itens) || !payload.itens.length) toast.show('Nenhum Hardware novo encontrado para estes filtros.', 'info')
     } catch (err) {
@@ -536,6 +541,7 @@ export default function AdminHardwareDiscovery() {
   }
 
   function removeCandidates(keys) {
+    if (keys.length) setCatalogChanged(true)
     const remove = new Set(keys)
     setResult((current) => {
       if (!current) return current
@@ -835,20 +841,21 @@ export default function AdminHardwareDiscovery() {
   const newCount = Number(result?.novos ?? items.length)
   const duplicateCount = Number(result?.duplicadosNaBusca ?? 0)
   const discardedCount = Number(result?.descartadosInvalidos ?? 0)
+  const nextPage = nextHardwareDiscoveryPage(result, { pagina, limite, catalogChanged })
 
   return <>
     <AdminPageHeader title="Descobrir Hardwares com IA" description="Encontre novos modelos em fontes técnicas. O backend remove os Hardwares que já existem e você decide quais deseja cadastrar." />
 
     <section className="admin-discovery-search-card">
-      <div className="admin-discovery-search-grid">
-        <label className="admin-toolbar-field"><span>Categoria *</span><select className="admin-select" value={categoria} onChange={(event) => { setCategoria(event.target.value); setPagina(1); setResult(null); setSelected(new Set()); setBatchErrors({}); setBatchSummary(null) }}>{CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <div className="admin-discovery-search-grid admin-hardware-discovery-search-grid">
+        <label className="admin-toolbar-field"><span>Categoria *</span><select className="admin-select" value={categoria} onChange={(event) => { setCategoria(event.target.value); setPagina(1); setResult(null); setCatalogChanged(false); setSelected(new Set()); setBatchErrors({}); setBatchSummary(null) }}>{CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className="admin-toolbar-field"><span>Marca</span><input className="admin-input" value={marca} onChange={(event) => setMarca(event.target.value)} placeholder="Ex.: Intel, AMD, ASUS" /></label>
-        <label className="admin-toolbar-field"><span>Limite</span><select className="admin-select" value={limite} onChange={(event) => setLimite(Number(event.target.value))}><option value="20">20</option><option value="30">30</option><option value="50">50</option></select></label>
-        <label className="admin-toolbar-field"><span>Página</span><input className="admin-input" type="number" min="1" step="1" value={pagina} onChange={(event) => setPagina(Math.max(1, Number(event.target.value) || 1))} /></label>
+        <label className="admin-toolbar-field"><span>Modelo ou família</span><input className="admin-input" value={consulta} maxLength={240} onChange={(event) => setConsulta(event.target.value)} placeholder="Ex.: i5-9500, Ryzen 5, RX 580" /></label>
+        <label className="admin-toolbar-field"><span>Resultados por página</span><select className="admin-select" value={limite} onChange={(event) => setLimite(Number(event.target.value))}><option value="20">20</option><option value="30">30</option><option value="50">50</option><option value="100">100</option></select></label>
       </div>
       <div className="admin-discovery-search-actions">
-        <div className="admin-discovery-source-note">O navegador chama somente o backend do CriaByte. A consulta às fontes técnicas e a deduplicação são feitas no servidor.</div>
-        <button className="btn btn-primario" type="button" onClick={() => search(pagina)} disabled={loading}>{loading ? 'Buscando com IA...' : 'Descobrir Hardwares'}</button>
+        <div className="admin-discovery-source-note">Busque modelos atuais e antigos. Após cadastrar um lote, faça uma nova busca para encontrar os próximos modelos disponíveis.</div>
+        <button className="btn btn-primario" type="button" onClick={() => search(1)} disabled={loading || batchBusy || addingIds.size > 0}>{loading ? 'Buscando com IA...' : 'Descobrir Hardwares'}</button>
       </div>
     </section>
 
@@ -867,6 +874,11 @@ export default function AdminHardwareDiscovery() {
 
       {(duplicateCount > 0 || discardedCount > 0) && <div className="admin-discovery-diagnostics">{duplicateCount > 0 && <span>{duplicateCount} duplicata(s) removida(s) da própria busca.</span>}{discardedCount > 0 && <span>{discardedCount} resultado(s) inválido(s) descartado(s).</span>}</div>}
 
+      {(result?.buscaParcial || result?.limiteBuscaAtingido) && <div className="admin-discovery-diagnostics" role="status">
+        {result.buscaParcial && <span>Algumas fontes não concluíram a consulta. O resultado é parcial; tente novamente ou busque por marca e modelo.</span>}
+        {result.limiteBuscaAtingido && <span>A busca alcançou o limite de {result.limiteCandidatos || 2000} candidatos. Use marca ou modelo para encontrar outras peças.</span>}
+      </div>}
+
       {batchSummary && <section className={`admin-discovery-batch-summary ${batchSummary.erros ? 'has-errors' : ''}`} aria-label="Resumo do cadastro em lote"><strong>Último lote</strong><span>Solicitados: {batchSummary.totalSolicitado}</span><span>Criados: {batchSummary.criados}</span><span>Já existiam: {batchSummary.jaExistiam}</span><span>Erros: {batchSummary.erros}</span></section>}
 
       <section className="admin-discovery-list-toolbar">
@@ -884,9 +896,9 @@ export default function AdminHardwareDiscovery() {
       })}</section> : <section className="admin-discovery-empty"><strong>Nenhum Hardware novo para exibir.</strong><p>{items.length ? 'Nenhum resultado corresponde ao filtro de status atual.' : 'Todos os modelos encontrados já estão cadastrados, foram descartados ou a IA não encontrou candidatos novos.'}</p></section>}
 
       <div className="admin-discovery-pagination">
-        <button type="button" className="btn btn-secundario btn-pequeno" disabled={loading || pagina <= 1} onClick={() => search(Math.max(1, pagina - 1))}>← Página anterior</button>
+        <button type="button" className="btn btn-secundario btn-pequeno" disabled={loading || batchBusy || addingIds.size > 0 || pagina <= 1} onClick={() => search(catalogChanged ? 1 : Math.max(1, pagina - 1))}>← Página anterior</button>
         <span>Página {pagina}</span>
-        <button type="button" className="btn btn-secundario btn-pequeno" disabled={loading || totalFound < limite} onClick={() => search(pagina + 1)}>Próxima página →</button>
+        <button type="button" className="btn btn-secundario btn-pequeno" disabled={loading || batchBusy || addingIds.size > 0 || nextPage === null} onClick={() => search(nextPage)}>{catalogChanged ? 'Buscar mais Hardwares →' : 'Próxima página →'}</button>
       </div>
     </>}
 
