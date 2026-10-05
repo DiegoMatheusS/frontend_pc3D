@@ -10,6 +10,7 @@ import { findExistingHardwareFromAi } from '../utils/hardwareMatching'
 import { clearAiImportPreview, readAiImportPreview, storeAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiConflicts, getAiDiagnostics, getAiOffer, getAiPayload, getAiReadiness, getAiReconciliation } from '../utils/aiImportContract'
 import { aiImportOfferRow } from '../components/AdminMultiOfferEditor.utils'
+import AdminProductImageFields from '../components/AdminProductImageFields'
 
 const EMPTY = {
   categoriaId: '', nome: '', marca: '', modelo: '', descricao: '', mpn: '', gtin: '',
@@ -1379,8 +1380,7 @@ export default function AdminProductForm() {
         <section className="admin-form-section">
           <h2>Imagens e metadados</h2>
           <div className="admin-form-grid">
-            <div className="admin-field full"><label>Imagem principal</label><input className="admin-input" value={form.imagemUrl} onChange={(event) => update('imagemUrl', event.target.value)} placeholder="https://..." /></div>
-            <div className="admin-field full"><label>Imagem hover</label><input className="admin-input" value={form.imagemHoverUrl} onChange={(event) => update('imagemHoverUrl', event.target.value)} placeholder="https://..." /></div>
+            <AdminProductImageFields product={form} onChange={update} disabled={saving} />
             <div className="admin-field full"><label>Metadados JSON</label><textarea className="admin-textarea admin-code-area" value={form.metadados} onChange={(event) => update('metadados', event.target.value)} /><small className="admin-help">Use para dados adicionais que ainda não possuem campo próprio.</small></div>
           </div>
         </section>
