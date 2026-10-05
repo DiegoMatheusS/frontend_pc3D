@@ -445,3 +445,10 @@
 .mounted-detail__components-note strong {
   color: var(--text, #0f172a);
 }
+
+.mounted-detail__intro .mounted-detail__3d-reason {
+  margin-top: 10px;
+  color: var(--color-text-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}

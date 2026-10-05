@@ -4,6 +4,7 @@ import { getMountedPcById, getMountedPcBuilderPath } from '../../services/mounte
 import ReviewsPanel from '../../components/ReviewsPanel/ReviewsPanel'
 import { asArray, asNumber, asText, formatCurrency, formatRating } from '../../utils/display'
 import { setDocumentMeta } from '../../utils/pageMeta'
+import { getBuilder3DUnavailableReason } from '../../utils/commercialBuild'
 import './MountedPcDetails.css'
 
 export default function MountedPcDetails() {
@@ -37,7 +38,8 @@ export default function MountedPcDetails() {
     )
   }
 
-  const builderPath = getMountedPcBuilderPath(pc)
+  const reason3DUnavailable = getBuilder3DUnavailableReason(pc)
+  const builderPath = reason3DUnavailable ? null : getMountedPcBuilderPath(pc)
   const purchaseSummary = pc.purchaseSummary || null
   const purchaseItems = asArray(purchaseSummary?.itens)
 
@@ -110,10 +112,12 @@ export default function MountedPcDetails() {
             </div>
 
             <div className="mounted-detail__actions">
-              <Link className="button button--primary" to={builderPath}>Abrir build completa no 3D</Link>
+              {builderPath ? <Link className="button button--primary" to={builderPath}>Abrir build completa no 3D</Link> :
+                <button className="button button--primary" type="button" disabled aria-describedby="mounted-pc-3d-unavailable">Abrir build completa no 3D</button>}
               <Link className="button button--secondary" to={`/montados?comparar=${pc.id}`}>Comparar</Link>
               <a className="button button--secondary" href="#ofertas">Onde comprar</a>
             </div>
+            {reason3DUnavailable && <p className="mounted-detail__3d-reason" id="mounted-pc-3d-unavailable">{reason3DUnavailable}</p>}
           </div>
         </div>
       </section>
