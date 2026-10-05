@@ -81,7 +81,9 @@ function expectedDestination(category) {
 function destinationRoute(destination) {
   if (destination === 'PC_MONTADO') return '/admin/montados/novo'
   if (destination === 'NOTEBOOK') return '/admin/notebooks/novo'
-  if (destination === 'HARDWARE') return '/admin/hardwares/novo'
+  // Produtos consulta a identidade da peça e reutiliza o Hardware existente.
+  // Só abre Novo Hardware após confirmar que a peça não está no catálogo.
+  if (destination === 'HARDWARE') return '/admin/produtos/novo'
   return '/admin/produtos/novo'
 }
 

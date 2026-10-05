@@ -409,13 +409,13 @@ export default function AdminProductForm() {
 
 
   useEffect(() => {
-    if (!transferredPreview || transferredPreviewApplied || loading || !categories.length) return
+    if (!transferredPreview || transferredPreviewApplied || loading || hardwareLoading || !categories.length) return
     setTransferredPreviewApplied(true)
     // O formulário já foi montado e mantém a cópia em estado. Um
     // redirecionamento abaixo pode gravar a prévia novamente para outro destino.
     clearAiImportPreview(transferredPreview)
     void applySmartImportPreview(transferredPreview, false)
-  }, [transferredPreview, transferredPreviewApplied, loading, categories.length])
+  }, [transferredPreview, transferredPreviewApplied, loading, hardwareLoading, categories.length])
   const selectedLinkedProductId = hardwareProductId(selectedHardware)
   const linkedCount = useMemo(() => hardwares.filter((hardware) => hardwareProductId(hardware)).length, [hardwares])
 
@@ -667,9 +667,9 @@ export default function AdminProductForm() {
       if (nextSchema) setTechnical(technicalFromPreview(nextSchema, technicalSource))
       else setTechnical({})
 
-      setHardwares((current) => current.map((item) => Number(item.id) === Number(hardware.id)
-        ? { ...item, ...hardware, produto: sourceProduct }
-        : item))
+      setHardwares((current) => current.some((item) => Number(item.id) === Number(hardware.id))
+        ? current.map((item) => Number(item.id) === Number(hardware.id) ? enrichedHardware : item)
+        : [...current, enrichedHardware])
       if (linkedProductId) applyExistingOffers(linkedProductId)
       else if (offerRows.some((row) => row.id)) {
         setOfferRows([{ ...EMPTY_OFFER }])
@@ -684,9 +684,12 @@ export default function AdminProductForm() {
       } else {
         toast.show(`Dados do Hardware #${hardware.id} preenchidos. Confira a categoria antes de salvar.`, 'alerta')
       }
+      return enrichedHardware
     } catch (err) {
+      setSelectedHardwareId('')
       setHardwareError(err?.message || 'Não foi possível carregar o Hardware selecionado.')
       toast.show(err?.message || 'Não foi possível carregar o Hardware selecionado.', 'erro')
+      return null
     } finally {
       setHardwareLoading(false)
     }
@@ -746,14 +749,22 @@ export default function AdminProductForm() {
       const reconciliation = getAiReconciliation(preview)
       const reconciledHardwareId = Number(
         reconciliation?.hardwareExistente?.id
+        || reconciliation?.produtoExistente?.hardwareId
         || reconciliation?.hardwareId
         || preview?.hardwareExistenteId
       ) || null
       if (reconciledHardwareId) {
-        await selectHardware(String(reconciledHardwareId))
+        const hardware = await selectHardware(String(reconciledHardwareId))
+        if (!hardware) return
         applyImportPreview(preview, false, { skipSpecialRouting: true, preserveHardware: true })
         setImportPreview((current) => current ? { ...current, hardwareExistenteId: reconciledHardwareId } : current)
         toast.show(`Hardware #${reconciledHardwareId} já existe. Mantive você no cadastro de Produto e vinculei o Hardware existente.`)
+        return
+      }
+      if (reconciliation?.hardwaresAmbiguos?.length) {
+        const source = aiPreviewSource(preview)
+        setHardwareSearch(cleanText(source.mpn || source.modelo || source.nome))
+        toast.show('Encontrei mais de um Hardware com essa identidade. Selecione o correto abaixo antes de continuar.', 'alerta')
         return
       }
 
@@ -765,12 +776,17 @@ export default function AdminProductForm() {
           const fresh = await adminService.hardwares.list()
           hardwarePool = Array.isArray(fresh) ? fresh : []
           if (hardwarePool.length) setHardwares(hardwarePool)
-        } catch { /* se a consulta falhar, mantém o fluxo normal abaixo */ }
+        } catch (err) {
+          setHardwareError(err?.message || 'Não foi possível verificar os Hardwares existentes.')
+          toast.show('Não foi possível consultar o catálogo. Tente novamente antes de cadastrar para evitar duplicação.', 'erro')
+          return
+        }
       }
 
       const match = findExistingHardwareFromAi(hardwarePool, preview)
       if (match.hardware?.id) {
-        await selectHardware(String(match.hardware.id))
+        const hardware = await selectHardware(String(match.hardware.id))
+        if (!hardware) return
         applyImportPreview(preview, false, { skipSpecialRouting: true, preserveHardware: true })
         setImportPreview((current) => current ? { ...current, hardwareExistenteId: match.hardware.id } : current)
         toast.show(`Hardware #${match.hardware.id} já existe. Mantive você no cadastro de Produto e vinculei o Hardware existente.`)
@@ -827,14 +843,14 @@ export default function AdminProductForm() {
     setForm((current) => ({
       ...current,
       categoriaId: nextCategoryId,
-      nome: source.nome ?? current.nome,
-      marca: source.marca ?? current.marca,
-      modelo: source.modelo ?? current.modelo,
-      descricao: source.descricao ?? current.descricao,
-      mpn: source.mpn ?? current.mpn,
-      gtin: normalizeGtin(source.gtin ?? source.ean ?? current.gtin),
-      imagemUrl: image || current.imagemUrl,
-      imagemHoverUrl: source.imagemHoverUrl ?? current.imagemHoverUrl,
+      nome: preserveHardware && current.nome ? current.nome : source.nome ?? current.nome,
+      marca: preserveHardware ? current.marca : source.marca ?? current.marca,
+      modelo: preserveHardware ? current.modelo : source.modelo ?? current.modelo,
+      descricao: preserveHardware && current.descricao ? current.descricao : source.descricao ?? current.descricao,
+      mpn: preserveHardware ? current.mpn : source.mpn ?? current.mpn,
+      gtin: preserveHardware ? current.gtin : normalizeGtin(source.gtin ?? source.ean ?? current.gtin),
+      imagemUrl: preserveHardware && current.imagemUrl ? current.imagemUrl : image || current.imagemUrl,
+      imagemHoverUrl: preserveHardware && current.imagemHoverUrl ? current.imagemHoverUrl : source.imagemHoverUrl ?? current.imagemHoverUrl,
       metadados: source.metadados && typeof source.metadados === 'object'
         ? JSON.stringify(source.metadados, null, 2)
         : current.metadados,
