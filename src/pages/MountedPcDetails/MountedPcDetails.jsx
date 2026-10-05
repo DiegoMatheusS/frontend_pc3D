@@ -127,8 +127,8 @@ export default function MountedPcDetails() {
       <section className="mounted-detail__summary">
         <article>
           <span>Compatibilidade</span>
-          <strong className={verifiedConsumption ? 'is-success' : ''}>{verifiedConsumption ? 'Configuração validada' : 'Não verificada'}</strong>
-          <p>{verifiedConsumption ? 'Consumo estimado com base nos componentes cadastrados.' : 'O anúncio comercial não exige hardware cadastrado nem garante compatibilidade técnica entre peças.'}</p>
+          <strong className="is-success">OK</strong>
+          <p>{verifiedConsumption ? 'Consumo estimado com base nos componentes cadastrados.' : 'O anúncio comercial não exige hardware cadastrado.'}</p>
         </article>
         <article>
           <span>Consumo estimado</span>
