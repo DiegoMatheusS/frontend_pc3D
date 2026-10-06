@@ -7,6 +7,8 @@ import { useAdminToast } from '../components/AdminToast'
 import { AdminTechnicalFields, hardwareSchemaFor, normalizeSpec, readSpec } from '../components/AdminTechnicalFields'
 import { readAiImportPreview, clearAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiConflicts, getAiDiagnostics, getAiOffer, getAiPayload, getAiReadiness, getAiReconciliation } from '../utils/aiImportContract'
+import { mergeResearchGaps, technicalResearchFromPreview } from '../utils/technicalResearch'
+import TechnicalResearchEvidence from '../components/TechnicalResearchEvidence'
 
 const CATEGORIES = ['PROCESSADOR','COOLER','PLACA_MAE','MEMORIA_RAM','PLACA_VIDEO','ARMAZENAMENTO','FONTE','GABINETE','VENTOINHA','MONITOR','MOUSE','TECLADO','FONE','HEADSET','MICROFONE']
 const EMPTY = { nome:'', categoria:'PROCESSADOR', marca:'', modelo:'', descricao:'', mpn:'', gtin:'', imagemUrl:'', imagemHoverUrl:'', especificacoes:'{}', publicado:false, ativo:true }
@@ -101,7 +103,8 @@ function hardwareInitialFromPreview(preview) {
   ])
   const identityKeys = new Set(['categoria','nome','marca','modelo','descricao','mpn','gtin','ean','imagemUrl','preco','evidencias', ...technicalKeys])
   const extras = Object.fromEntries(Object.entries(source).filter(([key, value]) => !identityKeys.has(key) && value !== null && value !== '' && typeof value !== 'object'))
-  return { ...EMPTY, categoria, nome: source.nome || '', marca: source.marca || '', modelo: source.modelo || '', descricao: source.descricao || '', mpn: source.mpn || '', gtin: normalizeGtin(source.gtin || source.ean || ''), imagemUrl: imagem || '', especificacoes: JSON.stringify({ ...(source.evidencias ? { evidencias: source.evidencias } : {}), ...extras }, null, 2) }
+  return { ...EMPTY, categoria, nome: source.nome || '', marca: source.marca || '', modelo: source.modelo || '', descricao: source.descricao || '', mpn: source.mpn || '', gtin: normalizeGtin(source.gtin || source.ean || ''), imagemUrl: imagem || '', especificacoes: JSON.stringify({ ...(source.especificacoes || {}), ...(source.evidencias ? { evidencias: source.evidencias } : {}), ...extras,
+    evidenciasPesquisa: technicalResearchFromPreview(preview)?.origemPorCampo || {} }, null, 2) }
 }
 
 function PreviewList({ title, items = [], tone = '' }) {
@@ -131,6 +134,7 @@ function AiImportContractInfo({ preview }) {
   const version = cleanText(diagnostics?.service?.versao)
   const price = Number(offer?.preco)
   return <>
+    <TechnicalResearchEvidence preview={preview} />
     {reconciliation?.produtoExistente && <p className="admin-inline-warning">Este produto já existe no CriaByte. O cadastro de Hardware deve ser revisado para evitar duplicidade.</p>}
     <PreviewList title="Campos que a IA pode completar" items={fillable} />
     <PreviewList title="Conflitos para revisão" items={aiConflictLabels(preview)} tone="warn" />
@@ -160,6 +164,10 @@ export default function AdminHardwareForm() {
   const [importUrl, setImportUrl] = useState(() => transferredPreview?.urlOrigem || '')
   const [importing, setImporting] = useState(false)
   const [importPreview, setImportPreview] = useState(transferredPreview)
+  const [researching, setResearching] = useState(false)
+  const [researchPreview, setResearchPreview] = useState(null)
+  const formRef = useRef(form)
+  useEffect(() => { formRef.current = form }, [form])
   const [dirty, setDirty] = useState(Boolean(transferredPreview))
   const originalFormRef = useRef(null)
   const originalTechnicalRef = useRef(null)
@@ -245,7 +253,8 @@ export default function AdminHardwareForm() {
       mpn: source.mpn ?? current.mpn,
       gtin: normalizeGtin(source.gtin || source.ean || current.gtin),
       imagemUrl: imagem ?? current.imagemUrl,
-      especificacoes: JSON.stringify({ ...(source.evidencias ? { evidencias: source.evidencias } : {}), ...extras }, null, 2),
+      especificacoes: JSON.stringify({ ...(source.especificacoes || {}), ...(source.evidencias ? { evidencias: source.evidencias } : {}), ...extras,
+        evidenciasPesquisa: technicalResearchFromPreview(preview)?.origemPorCampo || {} }, null, 2),
     }))
     if (importedSchema) setTechnical((current) => ({ ...current, ...technicalFromPreview(importedSchema, source) }))
     setDirty(true)
@@ -276,6 +285,35 @@ export default function AdminHardwareForm() {
     } finally {
       setImporting(false)
     }
+  }
+
+  async function researchByName() {
+    if (!canImportLink || !schema || !cleanText(form.nome)) return
+    const identity = (value) => JSON.stringify([value.nome, value.categoria, value.marca, value.modelo, value.mpn, value.gtin])
+    const snapshot = identity(form)
+    setResearching(true)
+    try {
+      const result = await adminService.hardwares.researchSpecifications({
+        categoria: form.categoria, nome: cleanText(form.nome),
+        payload: { nome: form.nome, categoria: form.categoria, marca: form.marca, modelo: form.modelo,
+          mpn: form.mpn, gtin: form.gtin, [schema.key]: technical },
+      })
+      if (identity(formRef.current) !== snapshot) {
+        toast.show('A identificação mudou durante a pesquisa. Pesquise novamente para preencher o produto correto.', 'alerta')
+        return
+      }
+      setResearchPreview(result)
+      const found = getAiPayload({ categoriaSugerida: form.categoria, payloadParcialBackend: result.payload })
+      setTechnical((current) => mergeResearchGaps(current, technicalFromPreview(schema, found)))
+      setForm((current) => {
+        let extras
+        try { extras = JSON.parse(current.especificacoes || '{}') } catch { return mergeResearchGaps(current, { marca: found.marca, modelo: found.modelo }) }
+        return { ...mergeResearchGaps(current, { marca: found.marca, modelo: found.modelo }),
+          especificacoes: JSON.stringify({ ...extras, evidenciasPesquisa: { ...(extras.evidenciasPesquisa || {}), ...(result.origemPorCampo || {}) } }, null, 2) }
+      })
+      setDirty(true)
+      toast.show(result.utilizado ? 'Especificações confirmadas preenchidas. Revise antes de salvar.' : 'Nenhuma especificação nova confirmada. Confira o modelo completo.', result.utilizado ? undefined : 'alerta')
+    } catch (cause) { toast.show(cause.message, 'erro') } finally { setResearching(false) }
   }
 
   async function submit(event, draft = false) {
@@ -399,7 +437,11 @@ export default function AdminHardwareForm() {
           <div className="admin-field full"><label>Descrição</label><textarea className="admin-textarea" value={form.descricao} onChange={(e) => update('descricao', e.target.value)} /></div>
         </div></section>
 
-        <section className="admin-form-section"><AdminTechnicalFields schema={schema} values={technical} onChange={updateTechnical} /></section>
+        <section className="admin-form-section">
+          {canImportLink && schema && <div className="admin-section-heading"><p>Pesquise pelo nome ou modelo em fabricantes e bases técnicas.</p><button className="btn btn-secundario" type="button" disabled={researching || importing || !cleanText(form.nome)} onClick={researchByName}>{researching ? 'Pesquisando especificações...' : 'Buscar especificações pelo nome'}</button></div>}
+          {researchPreview && <TechnicalResearchEvidence preview={researchPreview} />}
+          <AdminTechnicalFields schema={schema} values={technical} onChange={updateTechnical} />
+        </section>
 
         <section className="admin-form-section"><h2>Imagens e dados adicionais</h2><div className="admin-form-grid">
           <div className="admin-field full"><label>Imagem principal</label><input className="admin-input" value={form.imagemUrl} onChange={(e) => update('imagemUrl', e.target.value)} placeholder="https://..." /></div>

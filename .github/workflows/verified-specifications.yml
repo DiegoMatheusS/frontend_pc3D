@@ -1,0 +1,22 @@
+name: Specification forms
+on:
+  pull_request:
+    paths: ['src/admin/**', 'src/src/admin/**', 'tests/technicalResearch.test.mjs', '.github/workflows/verified-specifications.yml']
+  push:
+    branches: [main]
+    paths: ['src/admin/**', 'src/src/admin/**']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/technicalResearch.test.mjs tests/aiImportPreview.test.js tests/aiImportTransfer.test.js
+      - run: npx vite build
