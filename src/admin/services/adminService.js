@@ -286,7 +286,7 @@ export const adminService = {
       '/api/admin/ia/importar-link',
       'POST',
       { url, ...(categoriaEsperada ? { categoria: categoriaEsperada } : {}) },
-      { ...options, timeoutMs: options.timeoutMs ?? 90000 },
+      { ...options, timeoutMs: options.timeoutMs ?? 210000 },
     )),
     analyzeProduct: (produtoId) => oneRequest('/api/admin/ia/analisar-produto', 'POST', { produtoId: Number(produtoId) }),
     generateProductDescription: (produtoId) => oneRequest('/api/admin/ia/gerar-descricao', 'POST', { produtoId: Number(produtoId) }),

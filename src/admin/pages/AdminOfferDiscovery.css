@@ -168,6 +168,11 @@
   color: var(--admin-text, #202938);
 }
 
+.admin-discovery-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 860px) {
   .admin-discovery-search form {
     grid-template-columns: 1fr 110px;

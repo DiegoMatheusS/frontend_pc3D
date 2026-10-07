@@ -1,7 +1,7 @@
 name: Specification forms
 on:
   pull_request:
-    paths: ['src/admin/**', 'src/src/admin/**', 'tests/technicalResearch.test.mjs', '.github/workflows/verified-specifications.yml']
+    paths: ['src/admin/**', 'src/src/admin/**', 'tests/technicalResearch.test.mjs', 'tests/offerDescription.test.js', '.github/workflows/verified-specifications.yml']
   push:
     branches: [main]
     paths: ['src/admin/**', 'src/src/admin/**']
@@ -18,5 +18,5 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: node --test tests/technicalResearch.test.mjs tests/aiImportPreview.test.js tests/aiImportTransfer.test.js
+      - run: node --test tests/technicalResearch.test.mjs tests/aiImportPreview.test.js tests/aiImportTransfer.test.js tests/offerDescription.test.js
       - run: npx vite build
