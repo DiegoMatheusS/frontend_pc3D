@@ -24,7 +24,7 @@ export default function AdminHardwares() {
   const [includeArchived, setIncludeArchived] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [deleting, setDeleting] = useState(null)
-  const [searchingImage, setSearchingImage] = useState(null)
+  const [searchingImages, setSearchingImages] = useState(() => new Set())
 
   async function load() {
     const result = await adminService.hardwares.list()
@@ -58,8 +58,12 @@ export default function AdminHardwares() {
   }
 
   async function searchImage(item) {
-    if (searchingImage !== null) return
-    setSearchingImage(item.id)
+    if (searchingImages.has(item.id)) return
+    setSearchingImages((current) => {
+      const next = new Set(current)
+      next.add(item.id)
+      return next
+    })
     try {
       const result = await hardwareImageService.searchAndSave(item.id)
       const imagemUrl = result?.imagemUrl || result?.hardware?.imagemUrl
@@ -70,7 +74,11 @@ export default function AdminHardwares() {
     } catch (err) {
       toast.show(err?.message || 'Não foi possível encontrar uma imagem válida para este hardware.', 'erro')
     } finally {
-      setSearchingImage(null)
+      setSearchingImages((current) => {
+        const next = new Set(current)
+        next.delete(item.id)
+        return next
+      })
     }
   }
 
@@ -95,7 +103,7 @@ export default function AdminHardwares() {
       <label className="admin-toolbar-field"><span>Registros arquivados: {archivedCount}</span><span><input type="checkbox" checked={includeArchived} onChange={(e) => { setIncludeArchived(e.target.checked); setVisibleCount(PAGE_SIZE) }} /> Mostrar arquivados</span></label>
     </section>
     <section className="admin-table-card mobile-cards"><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Hardware</th><th>Categoria</th><th>Marca</th><th>Status</th><th>3D</th><th>Atualização</th><th>Ações</th></tr></thead><tbody>
-      {visibleItems.length ? visibleItems.map((item) => <tr key={item.id}><td data-label="Hardware"><div className="admin-product-cell"><img className="admin-product-thumb" src={item.imagemUrl || '/admin-assets/placeholder-produto.svg'} alt="" onLoad={(e) => { e.currentTarget.style.visibility = 'visible' }} onError={(e) => { e.currentTarget.style.visibility = 'hidden' }} /><span><strong>{item.nome}</strong><small>#{item.id} · {item.modelo || 'Sem modelo'}</small></span></div></td><td data-label="Categoria">{categoryOf(item.categoria)}</td><td data-label="Marca">{item.marca || '—'}</td><td data-label="Status">{item.ativo === false ? 'Arquivado' : <AdminStatus published={item.publicado} active={item.ativo} />}</td><td data-label="3D">{item.modelo3D || item.modelos3D?.length ? 'Sim' : '—'}</td><td data-label="Atualização">{formatDate(item.atualizadoEm)}</td><td data-label="Ações"><div className="admin-row-actions">{canWriteCatalog && <Link className="admin-action-button" to={`/admin/hardwares/${item.id}`} state={{ returnTo }}>Editar</Link>}{canWriteCatalog && <button className="admin-action-button" type="button" disabled={searchingImage !== null} onClick={() => searchImage(item)} title="Busca uma imagem técnica compatível e cadastra automaticamente neste hardware">{searchingImage === item.id ? 'Buscando imagem...' : 'Buscar imagem'}</button>}{canWriteCatalog && item.ativo !== false && <button className="admin-action-button" type="button" onClick={() => togglePublished(item)}>{item.publicado ? 'Despublicar' : 'Publicar'}</button>}{canWriteCatalog && <Link className="admin-action-button" to="/admin/produtos/novo" state={{ returnTo }}>+ Produto</Link>}{canDeleteCatalog && item.ativo !== false && <button className="admin-action-button" type="button" disabled={deleting !== null} onClick={() => remove(item)}>{deleting === item.id ? 'Arquivando...' : 'Arquivar'}</button>}{canDeleteCatalog && item.ativo === false && <AdminPermanentHardwareDelete hardware={item} onRefresh={load} />}{!canWriteCatalog && !canDeleteCatalog && <span className="admin-muted">Somente leitura</span>}</div></td></tr>) : <EmptyRow columns={7} />}
+      {visibleItems.length ? visibleItems.map((item) => <tr key={item.id}><td data-label="Hardware"><div className="admin-product-cell"><img className="admin-product-thumb" src={item.imagemUrl || '/admin-assets/placeholder-produto.svg'} alt="" onLoad={(e) => { e.currentTarget.style.visibility = 'visible' }} onError={(e) => { e.currentTarget.style.visibility = 'hidden' }} /><span><strong>{item.nome}</strong><small>#{item.id} · {item.modelo || 'Sem modelo'}</small></span></div></td><td data-label="Categoria">{categoryOf(item.categoria)}</td><td data-label="Marca">{item.marca || '—'}</td><td data-label="Status">{item.ativo === false ? 'Arquivado' : <AdminStatus published={item.publicado} active={item.ativo} />}</td><td data-label="3D">{item.modelo3D || item.modelos3D?.length ? 'Sim' : '—'}</td><td data-label="Atualização">{formatDate(item.atualizadoEm)}</td><td data-label="Ações"><div className="admin-row-actions">{canWriteCatalog && <Link className="admin-action-button" to={`/admin/hardwares/${item.id}`} state={{ returnTo }}>Editar</Link>}{canWriteCatalog && <button className="admin-action-button" type="button" disabled={searchingImages.has(item.id)} onClick={() => searchImage(item)} title="Busca uma imagem técnica compatível e cadastra automaticamente neste hardware">{searchingImages.has(item.id) ? 'Buscando imagem...' : 'Buscar imagem'}</button>}{canWriteCatalog && item.ativo !== false && <button className="admin-action-button" type="button" onClick={() => togglePublished(item)}>{item.publicado ? 'Despublicar' : 'Publicar'}</button>}{canWriteCatalog && <Link className="admin-action-button" to="/admin/produtos/novo" state={{ returnTo }}>+ Produto</Link>}{canDeleteCatalog && item.ativo !== false && <button className="admin-action-button" type="button" disabled={deleting !== null} onClick={() => remove(item)}>{deleting === item.id ? 'Arquivando...' : 'Arquivar'}</button>}{canDeleteCatalog && item.ativo === false && <AdminPermanentHardwareDelete hardware={item} onRefresh={load} />}{!canWriteCatalog && !canDeleteCatalog && <span className="admin-muted">Somente leitura</span>}</div></td></tr>) : <EmptyRow columns={7} />}
     </tbody></table></div><div className="admin-list-footer"><span>Mostrando {visibleItems.length} de {filtered.length} hardware(s)</span>{hasMore && <button className="btn btn-secundario btn-pequeno" type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Ver mais</button>}</div></section>
   </>
 }
