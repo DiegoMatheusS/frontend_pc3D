@@ -170,6 +170,10 @@ export const adminService = {
       { ...(body || {}), provedor: IA_TECNICA_PROVIDER },
       { timeoutMs: 150000 },
     ),
+    researchSpecifications: (body) => oneRequestWithTimeout(
+      IA_TECNICA_PROXY_PATH, 'POST', { ...(body || {}), provedor: 'PROJETO_IA', somentePreencheLacunas: true },
+      { timeoutMs: 150000 },
+    ),
     models: (hardwareId) => list(`/api/admin/hardwares/${hardwareId}/modelos-3d`),
     createModel: (hardwareId, body) => oneRequest(`/api/admin/hardwares/${hardwareId}/modelos-3d`, 'POST', body),
     setHomeModel: (modelId, mostrarNoHome) => oneRequest(`/api/admin/hardwares/modelos-3d/${modelId}/mostrar-no-home`, 'PATCH', { mostrarNoHome }),

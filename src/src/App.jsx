@@ -48,7 +48,7 @@ const AdminUsers = lazy(() => import('./admin/pages/AdminUsers'))
 const AdminNotebooks = lazy(() => import('./admin/pages/AdminNotebooks'))
 const AdminNotebookForm = lazy(() => import('./admin/pages/AdminNotebookForm'))
 const AdminMounted = lazy(() => import('./admin/pages/AdminMounted'))
-const AdminMountedForm = lazy(() => import('./admin/pages/AdminMountedForm'))
+const AdminMountedForm = lazy(() => import('./admin/pages/AdminMountedFlexibleForm'))
 const AdminAudit = lazy(() => import('./admin/pages/AdminAudit'))
 
 function RouteLoading() {
