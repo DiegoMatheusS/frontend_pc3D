@@ -8,6 +8,9 @@ import { storeAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiPayload, mergeAiImportPreview } from '../utils/aiImportContract'
 import { findExistingProductFromAi } from '../utils/catalogMatching'
 import { findExistingHardwareFromAi } from '../utils/hardwareMatching'
+import { hardwareSchemaFor } from '../components/AdminTechnicalFields'
+import { completeOfferDescription } from '../utils/offerDescription'
+import TechnicalResearchEvidence from '../components/TechnicalResearchEvidence'
 import './AdminOfferDiscovery.css'
 
 const CATEGORY_RULES = [
@@ -235,14 +238,17 @@ export default function AdminOfferDiscovery() {
       const listingTitle = extracted.nome || clean(item.nome)
       const listingDescription = extracted.descricao || clean(item.descricao)
 
-      let buildAnalysis = null
+      let buildAnalysis = preview?.analiseComputador || preview?.resultadoProdutoIa?.analiseComputador || null
       let buildWarning = ''
       if (resolvedDestination === 'PC_MONTADO' || detectedCategory === 'PC_MONTADO' || category === 'PC_MONTADO') {
         try {
-          buildAnalysis = await adminService.builds.analyzeListing({
-            titulo: listingTitle,
-            descricao: listingDescription,
-          })
+          if (!buildAnalysis?.pesquisaTecnicaExecutada || !buildAnalysis?.componentesDetectados?.length) {
+            buildAnalysis = await adminService.builds.analyzeListing({
+              titulo: listingTitle,
+              descricao: listingDescription,
+              pesquisarEspecificacoes: true,
+            })
+          }
           if (buildAnalysis?.tipoSugerido === 'PC_MONTADO') resolvedDestination = 'PC_MONTADO'
         } catch (cause) {
           buildWarning = cause?.message || 'Não foi possível sugerir vínculos de componentes.'
@@ -250,15 +256,20 @@ export default function AdminOfferDiscovery() {
       }
 
       const fallback = fallbackPreview(item, category)
-      const mergedPreview = {
+      let mergedPreview = {
         ...mergeAiImportPreview(fallback, preview),
         categoriaDetectada: detectedCategory || category,
         destinoSugerido: resolvedDestination,
+        ...(buildAnalysis ? { analiseComputador: buildAnalysis } : {}),
       }
-      if (!previewFields(mergedPreview).descricao) {
-        collectionWarning = [collectionWarning, 'A descrição não foi retornada pela loja. Os dados disponíveis da busca serão transferidos; complete a descrição antes de salvar.'].filter(Boolean).join(' ')
-      }
-      const result = { preview: mergedPreview, buildAnalysis, buildWarning, collectionWarning }
+      const completed = await completeOfferDescription(mergedPreview, {
+        category: resolvedDestination === 'PC_MONTADO' ? 'PC_MONTADO' : detectedCategory || category,
+        schemaFor: hardwareSchemaFor, buildAnalysis,
+        researchSpecifications: adminService.hardwares.researchSpecifications,
+      })
+      mergedPreview = completed.preview
+      collectionWarning = [collectionWarning, completed.descriptionWarning].filter(Boolean).join(' ')
+      const result = { preview: mergedPreview, buildAnalysis, buildWarning, collectionWarning, descriptionNotice: completed.descriptionNotice }
       setAnalyses((current) => ({ ...current, [key]: result }))
       return result
     } catch (cause) {
@@ -290,11 +301,11 @@ export default function AdminOfferDiscovery() {
       const productMatch = findExistingProductFromAi(products, latest)
       const hardwareMatch = destination === 'HARDWARE' ? findExistingHardwareFromAi(hardwares, latest) : { hardware: null, ambiguous: [] }
       const linkedProduct = hardwareMatch.hardware && products.find(product => Number(product.id) === Number(hardwareMatch.hardware.produtoId || hardwareMatch.hardware.produto?.id))
-      if (analysis?.collectionWarning) toast.show(analysis.collectionWarning, 'alerta')
       if (productMatch.product || linkedProduct) {
         openExistingProduct(latest, productMatch.product || linkedProduct)
         return
       }
+      if (analysis?.collectionWarning) toast.show(analysis.collectionWarning, 'alerta')
       if (productMatch.ambiguous.length) {
         setCatalogReviews(current => ({ ...current, [item._key]: { preview: latest, products: productMatch.ambiguous, destination } }))
         return
@@ -371,6 +382,12 @@ export default function AdminOfferDiscovery() {
 
             {analysis && <div className="admin-discovery-analysis">
               {analysis.collectionWarning && <small className="admin-inline-warning">{analysis.collectionWarning}</small>}
+              {analysis.descriptionNotice && <small>{analysis.descriptionNotice}</small>}
+              {previewFields(analysis.preview).descricao && <details>
+                <summary>Descrição para cadastro</summary>
+                <p className="admin-discovery-description">{previewFields(analysis.preview).descricao}</p>
+              </details>}
+              {analysis.preview?.descricaoPesquisa && destination !== 'PC_MONTADO' && <TechnicalResearchEvidence preview={analysis.preview} />}
               <div><span>Destino sugerido</span><strong>{CATEGORY_LABELS[analyzedCategory] || destination}</strong></div>
               {destination === 'PC_MONTADO' && <>
                 <div><span>Catálogo consultado</span><strong>{analysis.buildAnalysis?.catalogoConsultado ?? '—'}</strong></div>
