@@ -156,6 +156,7 @@ export default function AdminOfferDiscovery() {
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState(null)
   const [error, setError] = useState('')
+  const [searchWarnings, setSearchWarnings] = useState([])
   const [analyzingId, setAnalyzingId] = useState(null)
   const [analyses, setAnalyses] = useState({})
   const [checkingId, setCheckingId] = useState(null)
@@ -184,6 +185,7 @@ export default function AdminOfferDiscovery() {
     }
     setLoading(true)
     setError('')
+    setSearchWarnings([])
     setAnalyses({})
     setCatalogReviews({})
     try {
@@ -194,6 +196,7 @@ export default function AdminOfferDiscovery() {
       })
       const items = Array.isArray(payload?.itens) ? payload.itens : []
       setResults(items)
+      setSearchWarnings(Array.isArray(payload?.avisos) ? payload.avisos : [])
       if (!items.length) toast.show('Nenhuma oferta encontrada para essa pesquisa.', 'alerta')
     } catch (cause) {
       setResults([])
@@ -254,9 +257,10 @@ export default function AdminOfferDiscovery() {
         ...mergeAiImportPreview(fallback, preview),
         categoriaDetectada: detectedCategory || category,
         destinoSugerido: resolvedDestination,
+        ...(buildAnalysis ? { analiseComputador: buildAnalysis } : {}),
       }
       if (!previewFields(mergedPreview).descricao) {
-        collectionWarning = [collectionWarning, 'A descrição não foi retornada pela loja. Os dados disponíveis da busca serão transferidos; complete a descrição antes de salvar.'].filter(Boolean).join(' ')
+        collectionWarning = [collectionWarning, 'A loja não liberou a descrição do anúncio. Abra o anúncio e copie a descrição para o cadastro ou use a captura pela extensão.'].filter(Boolean).join(' ')
       }
       const result = { preview: mergedPreview, buildAnalysis, buildWarning, collectionWarning }
       setAnalyses((current) => ({ ...current, [key]: result }))
@@ -331,10 +335,11 @@ export default function AdminOfferDiscovery() {
     </section>
 
     {error && <div className="admin-form-error admin-discovery-error">{error}</div>}
+    {searchWarnings.map((warning, index) => <p className="admin-inline-warning" key={index}>{warning}</p>)}
 
     <section className="admin-discovery-summary">
       <strong>{normalizedResults.length} resultado(s)</strong>
-      <span>A classificação inicial só direciona o cadastro. Nenhum produto é salvo sem revisão.</span>
+      <span>A busca considera o produto principal e os detalhes pesquisados, como modelo e capacidade.</span>
     </section>
 
     <section className="admin-discovery-grid">
@@ -342,6 +347,7 @@ export default function AdminOfferDiscovery() {
         const analysis = analyses[item._key]
         const review = catalogReviews[item._key]
         const suggestions = componentSuggestions(analysis?.buildAnalysis)
+        const listingDescription = analysis ? previewFields(analysis.preview).descricao : ''
         const destination = clean(analysis?.preview?.destinoSugerido).toUpperCase() || expectedDestination(item._category)
         const analyzedCategory = clean(analysis?.preview?.categoriaDetectada).toUpperCase() || item._category
         return <article className="admin-discovery-card" key={item._key}>
@@ -371,6 +377,10 @@ export default function AdminOfferDiscovery() {
 
             {analysis && <div className="admin-discovery-analysis">
               {analysis.collectionWarning && <small className="admin-inline-warning">{analysis.collectionWarning}</small>}
+              {listingDescription && <details className="admin-discovery-description">
+                <summary>Descrição do anúncio ({listingDescription.length.toLocaleString('pt-BR')} caracteres)</summary>
+                <div>{listingDescription}</div>
+              </details>}
               <div><span>Destino sugerido</span><strong>{CATEGORY_LABELS[analyzedCategory] || destination}</strong></div>
               {destination === 'PC_MONTADO' && <>
                 <div><span>Catálogo consultado</span><strong>{analysis.buildAnalysis?.catalogoConsultado ?? '—'}</strong></div>

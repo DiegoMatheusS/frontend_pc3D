@@ -11,6 +11,7 @@ import { clearAiImportPreview, readAiImportPreview } from '../utils/aiImportTran
 import { getAiOffer, getAiPayload } from '../utils/aiImportContract'
 import { openHardwareResearchDraft } from '../utils/technicalResearch'
 import TechnicalResearchEvidence from '../components/TechnicalResearchEvidence'
+import { mergeConfirmedListingComponents } from '../utils/listingComponents'
 
 const EMPTY = {
   nome: '', marca: '', modelo: '', descricao: '', categoria: 'PC_MONTADO',
@@ -142,6 +143,11 @@ export default function AdminMountedFlexibleForm() {
         }))
       }
       setAnalysis(result)
+      setComponentes(previous => mergeConfirmedListingComponents(previous, result.componentesDetectados, hardwares))
+      if (clean(result.descricaoSugerida)) {
+        setForm(previous => previous.descricao === clean(description)
+          ? { ...previous, descricao: clean(result.descricaoSugerida) } : previous)
+      }
       if (result?.tipoSugerido === 'KIT_UPGRADE') update('categoria', 'KIT_UPGRADE')
       if (result?.tipoSugerido === 'PC_MONTADO' && !clean(form.categoria)) update('categoria', 'PC_MONTADO')
       if (result?.confirmacaoObrigatoria) setAnalysisWarning('A classificação é uma sugestão. Confirme se o anúncio é PC montado ou kit de upgrade.')
@@ -158,8 +164,8 @@ export default function AdminMountedFlexibleForm() {
   async function applyImportPreview(preview, url) {
     const source = getAiPayload(preview) || {}
     const capturedDescription = [
-      preview?.coleta?.descricao, preview?.coleta?.description,
-      preview?.coleta?.meta?.description, source.descricao,
+      source.descricao, preview?.coleta?.descricao, preview?.coleta?.description,
+      preview?.coleta?.meta?.description,
     ].find((value) => typeof value === 'string' && value.trim()) || ''
     const name = clean(source.nome || preview?.coleta?.titulo || preview?.coleta?.meta?.title)
     const description = clean(capturedDescription)
@@ -182,8 +188,7 @@ export default function AdminMountedFlexibleForm() {
         ? previous
         : [...previous, aiImportOfferRow({ ...offer, urlOriginal: originalUrl }, partners)])
     }
-    // Não confiar em hardwareId gerado pela IA no payload; sempre consultar
-    // a descrição e o catálogo atual e pedir confirmação de cada vínculo.
+    // Revalida os vínculos no catálogo atual; IDs do payload bruto não são usados.
     await analyzeDescription(name || form.nome, description || form.descricao, preview?.analiseComputador || preview?.resultadoProdutoIa?.analiseComputador)
   }
 
@@ -303,11 +308,11 @@ export default function AdminMountedFlexibleForm() {
           <div className="admin-form-grid">
             <div className="admin-field full"><label>Nome do anúncio</label><input className="admin-input" required maxLength={200} value={form.nome} onChange={(event) => update('nome', event.target.value)} /></div>
             <div className="admin-field"><label>Tipo de anúncio</label><select className="admin-select" value={typeFromCategory(form.categoria)} onChange={(event) => update('categoria', event.target.value)}><option value="PC_MONTADO">PC montado</option><option value="KIT_UPGRADE">Kit de upgrade</option></select></div>
-            <div className="admin-field"><label>Marca (opcional)</label><input className="admin-input" maxLength={100} value={form.marca} onChange={(event) => update('marca', event.target.value)} /></div>
-            <div className="admin-field"><label>Modelo (opcional)</label><input className="admin-input" maxLength={150} value={form.modelo} onChange={(event) => update('modelo', event.target.value)} /></div>
+            <div className="admin-field"><label>Marca do PC/kit (opcional)</label><input className="admin-input" maxLength={100} value={form.marca} onChange={(event) => update('marca', event.target.value)} /></div>
+            <div className="admin-field"><label>Modelo do PC/kit (opcional)</label><input className="admin-input" maxLength={150} value={form.modelo} onChange={(event) => update('modelo', event.target.value)} /></div>
             <div className="admin-field"><label>Finalidade (opcional)</label><input className="admin-input" maxLength={150} value={form.finalidade} onChange={(event) => update('finalidade', event.target.value)} /></div>
             <div className="admin-field"><label>Resolução recomendada (opcional)</label><input className="admin-input" maxLength={80} value={form.resolucaoRecomendada} onChange={(event) => update('resolucaoRecomendada', event.target.value)} /></div>
-            <div className="admin-field full"><label>Descrição completa do vendedor</label><textarea className="admin-textarea" style={{ minHeight: 210 }} maxLength={4000} value={form.descricao} onChange={(event) => update('descricao', event.target.value)} placeholder="Cole a descrição completa. Ex.: 16 GB de RAM sem marca; acompanha teclado e mouse. Esses itens não precisam ser vinculados." /><small className="admin-help">Itens sem marca/modelo ficam descritos aqui; nenhuma vinculação é obrigatória.</small></div>
+            <div className="admin-field full"><label>Descrição do PC e detalhes importantes</label><textarea className="admin-textarea" style={{ minHeight: 210 }} maxLength={30000} value={form.descricao} onChange={(event) => update('descricao', event.target.value)} placeholder="Cole a descrição completa. Ex.: 16 GB de RAM sem marca; acompanha teclado e mouse. Esses itens não precisam ser vinculados." /><small className="admin-help">Configuração, acessórios e garantia ficam na descrição. Marca/modelo do processador pertencem ao componente, não à identificação do PC.</small></div>
             <div className="admin-field full"><button className="btn btn-secundario" type="button" disabled={analyzing || (!clean(form.nome) && !clean(form.descricao))} onClick={() => analyzeDescription()}>{analyzing ? 'Pesquisando componentes e especificações...' : 'Identificar peças e buscar especificações'}</button></div>
             <div className="admin-field full"><label>Imagem principal</label><input type="url" className="admin-input" value={form.imagemUrl} onChange={(event) => update('imagemUrl', event.target.value)} /></div>
             <div className="admin-field full"><label>Imagem secundária</label><input type="url" className="admin-input" value={form.imagemHoverUrl} onChange={(event) => update('imagemHoverUrl', event.target.value)} /></div>
@@ -318,17 +323,18 @@ export default function AdminMountedFlexibleForm() {
           <h2>Resultado da análise (sugestões)</h2>
           {analysisWarning && <p className="admin-inline-warning">{analysisWarning}</p>}
           {analysis && <>
+            {analysis.descricaoOriginal && <details><summary>Ver descrição original do anúncio</summary><p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 320, overflowY: 'auto' }}>{analysis.descricaoOriginal}</p></details>}
             <p><strong>Tipo sugerido:</strong> {analysis.tipoSugerido === 'KIT_UPGRADE' ? 'Kit de upgrade' : analysis.tipoSugerido === 'PC_MONTADO' ? 'PC montado' : 'Revisar tipo'} — {analysis.motivo}</p>
             {Array.isArray(analysis.acessoriosNaDescricao) && analysis.acessoriosNaDescricao.length > 0 && <p className="admin-help">Acessórios mencionados, mantidos somente na descrição: {analysis.acessoriosNaDescricao.join(', ')}.</p>}
             <div className="admin-mounted-hardware-results">
               {(analysis.componentesDetectados || []).map((item) => <div key={item.categoria}><div className="admin-mounted-hardware-result">
-                <span><strong>{LABELS[item.categoria] || item.categoria}</strong><small>{(item.trechos || []).join(' | ').slice(0, 280)}</small></span>
+                <span><strong>{LABELS[item.categoria] || item.categoria}</strong><small>{[item.marca, item.modelo].filter(Boolean).join(' · ')}</small><small>{(item.trechos || []).join(' | ').slice(0, 280)}</small></span>
                 {Number(item.hardwareId) > 0 ? <button className="btn btn-secundario" type="button" disabled={componentes.some((linked) => linked.hardwareId === Number(item.hardwareId))} onClick={() => linkHardware({ hardwareId: item.hardwareId, categoria: item.categoria })}>{componentes.some((linked) => linked.hardwareId === Number(item.hardwareId)) ? 'Vinculado' : `Vincular #${item.hardwareId}`}</button> : <span className="admin-muted">Somente na descrição</span>}
                 {canImport && !item.hardwareId && item.cadastroHardwareSugerido && <button type="button" className="btn btn-secundario" onClick={() => { if (!openHardwareResearchDraft(item)) toast.show('Permita abrir uma nova aba para revisar o cadastro da peça.', 'alerta') }}>Abrir cadastro da peça</button>}
               </div>{item.pesquisaTecnica && <TechnicalResearchEvidence preview={item.pesquisaTecnica} />}
               {item.statusPesquisa === 'MODELO_EXATO_NAO_IDENTIFICADO' && <p className="admin-help">Modelo exato não informado. Os detalhes disponíveis permanecem na descrição.</p>}</div>)}
             </div>
-            <p className="admin-help">A IA não cadastra peças faltantes nem vincula modelos genéricos. Revise cada sugestão.</p>
+            <p className="admin-help">Peças identificadas com correspondência segura no catálogo são vinculadas na prévia. Revise os vínculos antes de salvar; peças genéricas ficam na descrição.</p>
           </>}
         </section>}
 

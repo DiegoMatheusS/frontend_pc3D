@@ -60,7 +60,11 @@ export function findExistingProductFromAi(products = [], preview = {}) {
   const source = getAiPayload(preview)
   const exact = []
   const candidates = []
+  const isBuild = preview.destinoSugerido === 'PC_MONTADO'
+    || ['PC_MONTADO', 'KIT_UPGRADE'].includes(preview.categoriaDetectada)
   for (const product of products) {
+    // O nome do PC contém suas peças, mas não identifica o Produto de uma peça.
+    if (isBuild && product.tipo !== 'BUILD') continue
     const result = compareCatalogIdentity(source, product)
     if (result === 'exact') exact.push(product)
     else if (result === 'candidate') candidates.push(product)

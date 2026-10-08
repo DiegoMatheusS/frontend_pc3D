@@ -445,3 +445,5 @@
 .mounted-detail__components-note strong {
   color: var(--text, #0f172a);
 }
+
+.mounted-detail__description { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }

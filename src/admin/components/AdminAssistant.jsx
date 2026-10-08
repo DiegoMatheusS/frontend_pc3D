@@ -766,7 +766,7 @@ function BuildRegistrationPreview({ flow, onConfirm, onCancel, onChange, sending
           <option value="PC_MONTADO">PC montado</option><option value="KIT_UPGRADE">Kit de upgrade</option>
         </select></label>
       </div>
-      <label>Descrição do anúncio<textarea className="admin-textarea" value={build.descricao || ''} maxLength={4000} onChange={e => onChange('descricao', e.target.value)} /></label>
+      <label>Descrição do anúncio<textarea className="admin-textarea" value={build.descricao || ''} maxLength={30000} onChange={e => onChange('descricao', e.target.value)} /></label>
       {flow.analysisWarning && <p role="alert">{flow.analysisWarning}</p>}
       {flow.analysis?.confirmacaoObrigatoria && <p>Confira o tipo: o anúncio não deixa claro se é PC montado ou kit.</p>}
       {(flow.suggestedComponents || []).map(component => <label key={`${component.categoria}-${component.hardwareId}`}>

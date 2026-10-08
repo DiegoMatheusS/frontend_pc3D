@@ -96,7 +96,7 @@ export default function MountedPcDetails() {
             <Link className="mounted-detail__back" to="/montados">← Voltar para Montados</Link>
             <span className="eyebrow">{pc.category}</span>
             <h1>{pc.name}</h1>
-            <p>{pc.description}</p>
+            {pc.description && <><p>{pc.description.length > 300 ? `${pc.description.slice(0, 300).trim()}…` : pc.description}</p>{pc.description.length > 300 && <a href="#descricao-anuncio">Ver descrição completa</a>}</>}
 
             <div className="mounted-detail__signals">
               <span className="mounted-detail__rating">★ {formatRating(pc.rating)} <small>{asNumber(pc.reviewsCount, 0)} avaliações</small></span>
@@ -119,6 +119,10 @@ export default function MountedPcDetails() {
       </section>
 
       <main className="page-container mounted-detail__main">
+      {pc.description && <section id="descricao-anuncio" className="mounted-detail__section">
+        <header><span className="eyebrow">Detalhes do vendedor</span><h2>Descrição do anúncio</h2></header>
+        <div className="mounted-detail__description">{pc.description}</div>
+      </section>}
         <section className="mounted-detail__section">
           <header>
             <span className="eyebrow">Configuração</span>

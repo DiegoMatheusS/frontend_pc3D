@@ -94,7 +94,7 @@ export default function MountedPcDetails() {
           <Link className="mounted-detail__back" to="/montados">← Voltar para Montados</Link>
           <span className="eyebrow">{buildCategoryLabel(pc)}</span>
           <h1>{pc.name}</h1>
-          <p>{pc.description}</p>
+          {pc.description && <><p>{pc.description.length > 300 ? `${pc.description.slice(0, 300).trim()}…` : pc.description}</p>{pc.description.length > 300 && <a href="#descricao-anuncio">Ver descrição completa</a>}</>}
           <div className="mounted-detail__signals">
             <span className="mounted-detail__rating">★ {formatRating(pc.rating)} <small>{asNumber(pc.reviewsCount, 0)} avaliações</small></span>
             <span>{pc.offersCount} ofertas disponíveis</span>
@@ -114,11 +114,15 @@ export default function MountedPcDetails() {
     </section>
 
     <main className="page-container mounted-detail__main">
+      {pc.description && <section id="descricao-anuncio" className="mounted-detail__section">
+        <header><span className="eyebrow">Detalhes do vendedor</span><h2>Descrição do anúncio</h2></header>
+        <div className="mounted-detail__description">{pc.description}</div>
+      </section>}
       <section className="mounted-detail__section">
         <header><span className="eyebrow">Informações do anúncio</span><h2>{kit ? 'Componentes do kit' : 'Componentes do PC'}</h2></header>
         {specs.length > 0 ? <dl className="mounted-detail__specs">
           {specs.map(([, label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-        </dl> : <p>O vendedor não informou modelos suficientes para vincular hardwares individualmente. Consulte a descrição original acima.</p>}
+        </dl> : <p>O vendedor não informou modelos suficientes para vincular hardwares individualmente. Consulte a descrição do anúncio acima.</p>}
         {linked.length > 0 && <p className="mounted-detail__offers-note">A lista vinculada inclui apenas modelos confirmados. Memória sem marca e periféricos que acompanham o anúncio permanecem na descrição.</p>}
       </section>
 
