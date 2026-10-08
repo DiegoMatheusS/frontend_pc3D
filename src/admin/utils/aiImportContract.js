@@ -208,11 +208,17 @@ export function getAiPayload(response = {}) {
   }
   if (specKey && Object.keys(normalizedSpec).length) merged[specKey] = normalizedSpec
 
-  // Facilita o preenchimento dos formulários atuais sem transformar texto bruto em descrição.
+  // A descrição original coletada tem prioridade sobre resumos de normalização/IA.
+  const listingDescription = safeText(response?.descricaoAnuncio)
+    || safeText(response?.resultadoProdutoIa?.descricaoAnuncio)
+    || safeText(response?.detalhesPaginaShopee?.descricao)
+    || safeText(response?.resultadoProdutoIa?.detalhesPagina?.descricao)
+
+  // O texto é exibido como texto pelo React, nunca como HTML do vendedor.
   return {
     ...merged,
     ...normalizedSpec,
-    descricao: merged.descricao ?? '',
+    descricao: listingDescription || merged.descricao || '',
   }
 }
 

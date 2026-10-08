@@ -96,3 +96,14 @@ for (const [name, contract, offerRow] of [
     assert.equal(offerRow({ urlOriginal: 'https://shopee.com.br.example/product' }, partners).parceiroId, '')
   })
 }
+
+for (const [name, contract] of [['raiz', rootContract], ['segunda raiz', nestedContract]]) {
+  test(`${name}: descrição original longa prevalece sobre resumo técnico`, () => {
+    const original = 'Configuração completa, acessórios e garantia.\n\n'.repeat(350).trim()
+    const response = { cadastroSugerido: { payload: { descricao: 'Resumo curto' } },
+      resultadoProdutoIa: { descricaoAnuncio: original } }
+    const normalized = contract.normalizeAiResponse(response)
+    assert.equal(contract.getAiPayload(normalized).descricao, original)
+    assert.equal(contract.getAiPayload(JSON.parse(JSON.stringify(contract.mergeAiImportPreview(fallback, normalized)))).descricao, original)
+  })
+}

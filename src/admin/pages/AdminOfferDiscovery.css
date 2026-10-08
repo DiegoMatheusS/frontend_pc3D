@@ -192,3 +192,7 @@
     grid-template-columns: 1fr;
   }
 }
+
+.admin-discovery-description { min-width: 0; }
+.admin-discovery-description summary { cursor: pointer; font-weight: 600; }
+.admin-discovery-description > div { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; margin-top: 10px; }
