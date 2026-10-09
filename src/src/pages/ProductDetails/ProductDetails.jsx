@@ -133,8 +133,8 @@ export default function ProductDetails() {
           <div className="product-offers-list">
             {!asArray(product.offers).length && <p className="product-detail-state">Nenhuma oferta ativa cadastrada para este produto.</p>}
             {asArray(product.offers).map((offer, index) => (
-              <article className="product-offer-row" key={`${offer.store}-${offer.price}`}>
-                <div><strong>{offer.store}</strong><span>{index === 0 ? 'Melhor preço disponível' : 'Oferta disponível'}</span>{offer.registeredBy && <span>Cadastrado por {offer.registeredBy}</span>}</div>
+              <article className="product-offer-row" key={offer.id ?? `${offer.url}-${index}`}>
+                <div><strong>{offer.store}</strong>{offer.seller && <span>Vendido por {offer.seller}</span>}<span>{index === 0 ? 'Melhor preço disponível' : 'Oferta disponível'}</span>{offer.registeredBy && <span>Cadastrado por {offer.registeredBy}</span>}</div>
                 <strong>{formatCurrency(offer.price)}</strong>
                 {offer.url && offer.url !== '#' ? (
                   <a className="button button--primary" href={offer.url} target="_blank" rel="sponsored noopener noreferrer">Comprar</a>
