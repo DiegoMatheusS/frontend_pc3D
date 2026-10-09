@@ -8,6 +8,7 @@ import { storeAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiPayload, mergeAiImportPreview } from '../utils/aiImportContract'
 import { findExistingProductFromAi } from '../utils/catalogMatching'
 import { findExistingHardwareFromAi } from '../utils/hardwareMatching'
+import { useDiscoverySession } from '../hooks/useDiscoverySession'
 import './AdminOfferDiscovery.css'
 
 const CATEGORY_RULES = [
@@ -149,18 +150,16 @@ function previewFields(preview) {
 export default function AdminOfferDiscovery() {
   const navigate = useNavigate()
   const toast = useAdminToast()
-  const [query, setQuery] = useState('')
-  const [onlyPromotions, setOnlyPromotions] = useState(false)
-  const [limit, setLimit] = useState(24)
-  const [results, setResults] = useState([])
-  const [loading, setLoading] = useState(false)
+  const { state, setters } = useDiscoverySession('offers')
+  const {
+    query, onlyPromotions, limit, results, loading, error, searchWarnings,
+    analyzingId, analyses, checkingId, catalogReviews,
+  } = state
+  const {
+    setQuery, setOnlyPromotions, setLimit, setResults, setLoading, setError,
+    setSearchWarnings, setAnalyzingId, setAnalyses, setCheckingId, setCatalogReviews,
+  } = setters
   const [status, setStatus] = useState(null)
-  const [error, setError] = useState('')
-  const [searchWarnings, setSearchWarnings] = useState([])
-  const [analyzingId, setAnalyzingId] = useState(null)
-  const [analyses, setAnalyses] = useState({})
-  const [checkingId, setCheckingId] = useState(null)
-  const [catalogReviews, setCatalogReviews] = useState({})
 
   useEffect(() => {
     let active = true
@@ -185,9 +184,6 @@ export default function AdminOfferDiscovery() {
     }
     setLoading(true)
     setError('')
-    setSearchWarnings([])
-    setAnalyses({})
-    setCatalogReviews({})
     try {
       const payload = await offerDiscoveryService.search({
         consulta: term,
@@ -197,9 +193,10 @@ export default function AdminOfferDiscovery() {
       const items = Array.isArray(payload?.itens) ? payload.itens : []
       setResults(items)
       setSearchWarnings(Array.isArray(payload?.avisos) ? payload.avisos : [])
+      setAnalyses({})
+      setCatalogReviews({})
       if (!items.length) toast.show('Nenhuma oferta encontrada para essa pesquisa.', 'alerta')
     } catch (cause) {
-      setResults([])
       setError(cause?.message || 'Não foi possível consultar a Shopee.')
     } finally {
       setLoading(false)

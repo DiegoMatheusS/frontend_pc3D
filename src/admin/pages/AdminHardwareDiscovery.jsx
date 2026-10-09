@@ -3,6 +3,7 @@ import { AdminPageHeader } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 import { hardwareSchemaFor } from '../components/AdminTechnicalFields'
 import { adminService } from '../services/adminService'
+import { useDiscoverySession } from '../hooks/useDiscoverySession'
 
 const CATEGORIES = [
   ['PROCESSADOR', 'Processadores'],
@@ -466,25 +467,20 @@ function MetaAiWhatsappModal({ item, busy, error, onClose, onApply, onNotify }) 
 
 export default function AdminHardwareDiscovery() {
   const toast = useAdminToast()
-  const [categoria, setCategoria] = useState('PROCESSADOR')
-  const [marca, setMarca] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [pagina, setPagina] = useState(1)
-  const [limite, setLimite] = useState(50)
-  const [result, setResult] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [selected, setSelected] = useState(new Set())
-  const [addingIds, setAddingIds] = useState(new Set())
-  const [batchBusy, setBatchBusy] = useState(false)
+  const { state, setters } = useDiscoverySession('hardware')
+  const {
+    categoria, marca, statusFilter, pagina, limite, result, loading, error, selected,
+    addingIds, batchBusy, batchErrors, batchSummary, metaAiBusyIds,
+    iaTecnicaBusyIds, iaTecnicaErrors,
+  } = state
+  const {
+    setCategoria, setMarca, setStatusFilter, setPagina, setLimite, setResult,
+    setLoading, setError, setSelected, setAddingIds, setBatchBusy, setBatchErrors,
+    setBatchSummary, setMetaAiBusyIds, setIaTecnicaBusyIds, setIaTecnicaErrors,
+  } = setters
   const [detailItem, setDetailItem] = useState(null)
-  const [batchErrors, setBatchErrors] = useState({})
-  const [batchSummary, setBatchSummary] = useState(null)
   const [metaAiItem, setMetaAiItem] = useState(null)
-  const [metaAiBusyIds, setMetaAiBusyIds] = useState(new Set())
   const [metaAiError, setMetaAiError] = useState('')
-  const [iaTecnicaBusyIds, setIaTecnicaBusyIds] = useState(new Set())
-  const [iaTecnicaErrors, setIaTecnicaErrors] = useState({})
 
   const items = useMemo(() => Array.isArray(result?.itens) ? result.itens : [], [result])
   const filteredItems = useMemo(() => items.filter((item) => !statusFilter || candidateStatus(item) === statusFilter), [items, statusFilter])
