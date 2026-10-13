@@ -354,10 +354,11 @@ export default function Header() {
     setNotificacoesAbertas(false)
   }
 
-  function toggleStore() {
-    setLojaAberta((value) => !value)
+  function abrirMenuLoja() {
+    setLojaAberta(true)
     setContaAberta(false)
     setBuscaAberta(false)
+    setNotificacoesAbertas(false)
   }
 
   function toggleAccount() {
@@ -434,16 +435,23 @@ export default function Header() {
           <NavLink to="/" onClick={fecharMenus}>Início</NavLink>
           <NavLink to="/montados" onClick={fecharMenus}>Montados</NavLink>
 
-          <div className={`store-menu ${lojaAberta ? 'store-menu--open' : ''}`} ref={storeRef}>
-            <button
-              type="button"
+          <div
+            className={`store-menu ${lojaAberta ? 'store-menu--open' : ''}`}
+            ref={storeRef}
+            onMouseEnter={abrirMenuLoja}
+            onMouseLeave={() => setLojaAberta(false)}
+          >
+            <NavLink
+              to="/loja"
               className={`store-menu__trigger ${lojaAtiva ? 'active' : ''}`}
               aria-controls="menu-loja"
               aria-expanded={lojaAberta}
-              onClick={toggleStore}
+              aria-haspopup="true"
+              onFocus={abrirMenuLoja}
+              onClick={fecharMenus}
             >
               <span className="store-menu__label">{lojaLabel}</span> <span aria-hidden="true">▾</span>
-            </button>
+            </NavLink>
             <div id="menu-loja" className="store-menu__dropdown store-menu__mega">
               {STORE_MENU_SECTIONS.map((section) => (
                 <section className="store-menu__section" key={section.title}>
