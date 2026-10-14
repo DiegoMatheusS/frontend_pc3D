@@ -342,3 +342,11 @@ A tela de cadastro exibe **Cadastrar com Google**. Para ativar o redirecionament
 - `public/_headers` adiciona headers de hardening em provedores compatíveis.
 - A autenticação continua baseada em cookie de sessão HttpOnly emitido pelo backend; não armazenar tokens de sessão em `localStorage`.
 
+
+### Especificações e descrição do Produto
+
+Na edição de **Produtos**, o bloco **IA administrativa** oferece **Buscar especificações**. A busca apresenta uma prévia; **Aplicar ao formulário** preenche as lacunas e o administrador salva o Produto. A opção de IA complementa a coleta das páginas. Em Produtos vinculados a Hardware, o botão de aplicação informa explicitamente que grava a ficha do Hardware.
+
+Em **Metadados JSON**, use **Copiar pergunta para o Chat**, cole a resposta JSON e clique em **Aplicar JSON**. Campos existentes, inclusive valores `false`, são preservados. **Descrição pelas especificações** monta um resumo editável. Nos celulares, o resumo contém até quatro destaques; a ficha completa permanece separada.
+
+Requer as atualizações correspondentes de `backend_pc3D` e `ProjetoIA`.

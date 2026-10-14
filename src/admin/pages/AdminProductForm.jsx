@@ -1,3 +1,5 @@
+import { buildSpecificationPrompt, mergeSpecificationGaps, metadataSpecifications, parseSpecificationReply, specificationDescription } from '../utils/productSpecifications'
+import { publicSpecLabel, publicSpecValue } from '../../utils/productSpecPresentation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
@@ -273,6 +275,9 @@ export default function AdminProductForm() {
   const [importPreview, setImportPreview] = useState(transferredPreview)
   const [aiBusy, setAiBusy] = useState('')
   const [aiAnalysis, setAiAnalysis] = useState('')
+  const [specificationPreview, setSpecificationPreview] = useState(null)
+  const [useSpecificationAi, setUseSpecificationAi] = useState(true)
+  const [manualPrompt, setManualPrompt] = useState('')
   const [suggestionPrefill, setSuggestionPrefill] = useState(null)
   const [originMode, setOriginMode] = useState(fromOfferSuggestion ? 'SUGESTAO' : 'ADMIN')
   const [originSuggestionSearch, setOriginSuggestionSearch] = useState('')
@@ -843,6 +848,78 @@ export default function AdminProductForm() {
     if (notify) toast.show('Prévia do Produto IA aplicada. Revise os dados e a oferta antes de salvar.')
   }
 
+  const isPhone = schema?.key === 'especificacaoCelular'
+
+  async function findSpecifications() {
+    setAiBusy('specifications')
+    setSpecificationPreview(null)
+    try {
+      const result = await adminService.products.findSpecifications(id, useSpecificationAi)
+      setSpecificationPreview(result)
+      if (!result?.camposPreenchidos?.length && !result?.descricao) toast.show('Nenhuma informação nova confirmada. Você pode usar o JSON do Chat.', 'info')
+    } catch (err) {
+      toast.show(err?.message || 'Não foi possível buscar especificações.', 'erro')
+    } finally { setAiBusy('') }
+  }
+
+  async function applySpecificationPreview() {
+    const result = specificationPreview
+    if (!result) return
+    const found = result.especificacoes || {}
+    if (result.hardwareId) {
+      setAiBusy('apply-specifications')
+      try {
+        const hardware = await adminService.hardwares.get(result.hardwareId)
+        const current = hardware?.[result.campoEspecificacao] || {}
+        await adminService.hardwares.update(result.hardwareId, {
+          [result.campoEspecificacao]: mergeSpecificationGaps(current, found),
+        })
+        toast.show('Especificações aplicadas ao Hardware vinculado.')
+      } catch (err) { toast.show(err?.message || 'Não foi possível aplicar a ficha.', 'erro'); return }
+      finally { setAiBusy('') }
+    } else {
+      let metadata
+      try { metadata = parseSpecificationReply(form.metadados || '{}').data } catch (err) { toast.show(err.message, 'erro'); return }
+      const specs = mergeSpecificationGaps({ ...metadataSpecifications(metadata), ...technical }, found)
+      setTechnical((current) => mergeSpecificationGaps(current, found))
+      const description = isPhone ? specificationDescription(specs, true) : result.descricao || specificationDescription(specs)
+      setForm((current) => ({ ...current, metadados: JSON.stringify({ ...metadata, especificacoes: specs, fontesEspecificacoes: result.origemPorCampo }, null, 2), descricao: current.descricao.trim() ? current.descricao : description }))
+      setDirty(true)
+      toast.show('Ficha preenchida. Revise e salve o Produto.')
+    }
+    setSpecificationPreview(null)
+  }
+
+  async function copySpecificationPrompt() {
+    const prompt = buildSpecificationPrompt(form, schema, isPhone)
+    setManualPrompt(prompt)
+    try { await navigator.clipboard.writeText(prompt); toast.show('Pergunta copiada. Envie ao Chat e cole o JSON da resposta abaixo.') }
+    catch { toast.show('Selecione e copie a pergunta exibida abaixo.', 'info') }
+  }
+
+  function applyMetadataReply() {
+    try {
+      const reply = parseSpecificationReply(form.metadados, schema)
+      if (selectedHardwareId) throw new Error('Aplique especificações técnicas na ficha do Hardware vinculado.')
+      const specs = mergeSpecificationGaps(technical, reply.especificacoes)
+      const description = isPhone ? specificationDescription(specs, true) || reply.descricao : reply.descricao || specificationDescription(specs)
+      setTechnical(specs)
+      setForm((current) => ({ ...current, metadados: JSON.stringify({ ...reply.data, especificacoes: specs, origemEspecificacoes: 'RESPOSTA_MANUAL_CHAT' }, null, 2), descricao: current.descricao.trim() ? current.descricao : description }))
+      setDirty(true)
+      toast.show('JSON aplicado. Revise a ficha e a descrição antes de salvar.')
+    } catch (err) { toast.show(err.message, 'erro') }
+  }
+
+  function describeSpecifications() {
+    try {
+      const metadata = parseSpecificationReply(form.metadados || '{}').data
+      const description = specificationDescription({ ...metadataSpecifications(metadata), ...technical }, isPhone)
+      if (!description) throw new Error('Preencha ou aplique as especificações antes de gerar a descrição.')
+      update('descricao', description)
+      toast.show('Descrição curta preenchida. Revise e salve.')
+    } catch (err) { toast.show(err.message, 'erro') }
+  }
+
   async function analyzeWithAi() {
     if (!editing) return
     setAiBusy('analyze')
@@ -857,6 +934,7 @@ export default function AdminProductForm() {
   }
 
   async function generateDescriptionWithAi() {
+    if (isPhone) { describeSpecifications(); return }
     if (!editing || !canWriteAi) return
     setAiBusy('description')
     try {
@@ -1381,7 +1459,14 @@ export default function AdminProductForm() {
           <h2>Imagens e metadados</h2>
           <div className="admin-form-grid">
             <AdminProductImageFields product={form} onChange={update} disabled={saving} />
-            <div className="admin-field full"><label>Metadados JSON</label><textarea className="admin-textarea admin-code-area" value={form.metadados} onChange={(event) => update('metadados', event.target.value)} /><small className="admin-help">Use para dados adicionais que ainda não possuem campo próprio.</small></div>
+            <div className="admin-field full"><label>Metadados JSON</label><textarea className="admin-textarea admin-code-area" value={form.metadados} onChange={(event) => update('metadados', event.target.value)} /><small className="admin-help">Copie a pergunta, envie ao Chat, cole aqui o JSON da resposta e clique em Aplicar JSON. A ficha completa fica separada da descrição curta. Revise as fontes antes de salvar.</small>
+              <div className="admin-ai-product-actions">
+                <button className="btn btn-secundario" type="button" onClick={copySpecificationPrompt}>Copiar pergunta para o Chat</button>
+                <button className="btn btn-secundario" type="button" onClick={applyMetadataReply} disabled={!canWriteAi || Boolean(selectedHardwareId)}>Aplicar JSON</button>
+                <button className="btn btn-secundario" type="button" onClick={describeSpecifications} disabled={!canWriteAi}>Descrição pelas especificações</button>
+              </div>
+              {manualPrompt && <details><summary>Ver pergunta para o Chat</summary><textarea className="admin-textarea admin-code-area" value={manualPrompt} readOnly aria-label="Pergunta para copiar e enviar ao Chat" onFocus={(event) => event.target.select()} /></details>}
+            </div>
           </div>
         </section>
 
@@ -1412,12 +1497,20 @@ export default function AdminProductForm() {
         </div>
 
         {editing && <div className="admin-card admin-ai-product-card">
-          <header className="admin-card-header"><div><h2>IA administrativa</h2><p>Analisa os dados já cadastrados do Produto.</p></div><span className="admin-stat-icon">✦</span></header>
+          <header className="admin-card-header"><div><h2>IA administrativa</h2><p>Busca especificações nas páginas e usa a IA para ajudar nas informações que faltarem.</p></div><span className="admin-stat-icon">✦</span></header>
           <div className="admin-card-body">
+            {canWriteAi && <label className="admin-switch"><input type="checkbox" checked={useSpecificationAi} onChange={(event) => setUseSpecificationAi(event.target.checked)} disabled={Boolean(aiBusy)} /> Usar IA se faltar informação nos sites</label>}
             <div className="admin-ai-product-actions">
+              {canWriteAi && <button className="btn btn-primario" type="button" disabled={Boolean(aiBusy) || saving} onClick={findSpecifications}>{aiBusy === 'specifications' ? 'Buscando especificações...' : 'Buscar especificações'}</button>}
               <button className="btn btn-secundario" type="button" disabled={Boolean(aiBusy)} onClick={analyzeWithAi}>{aiBusy === 'analyze' ? 'Analisando...' : 'Analisar cadastro'}</button>
               {canWriteAi && <button className="btn btn-secundario" type="button" disabled={Boolean(aiBusy)} onClick={generateDescriptionWithAi}>{aiBusy === 'description' ? 'Gerando...' : 'Gerar descrição'}</button>}
             </div>
+            {specificationPreview && <div className="admin-import-preview" aria-live="polite">
+              <strong>{specificationPreview.camposPreenchidos?.length || 0} especificação(ões) nova(s)</strong>
+              <div className="admin-import-preview-grid">{Object.entries(specificationPreview.especificacoes || {}).map(([key, value]) => <div key={key}><span>{publicSpecLabel(key)}</span><strong>{publicSpecValue(key, value)}</strong>{specificationPreview.origemPorCampo?.[key]?.url && <a href={specificationPreview.origemPorCampo[key].url} target="_blank" rel="noopener noreferrer">Ver fonte</a>}</div>)}</div>
+              {specificationPreview.avisos?.map((warning, index) => <p className="admin-help" key={index}>{warning}</p>)}
+              {(specificationPreview.camposPreenchidos?.length > 0 || specificationPreview.descricao) && <button className="btn btn-secundario" type="button" onClick={applySpecificationPreview} disabled={Boolean(aiBusy)}>{specificationPreview.hardwareId ? 'Aplicar ao Hardware vinculado' : 'Aplicar ao formulário'}</button>}
+            </div>}
             {aiAnalysis && <div className="admin-ai-analysis">{aiAnalysis}</div>}
             <small className="admin-help">A IA não salva alterações automaticamente.</small>
           </div>

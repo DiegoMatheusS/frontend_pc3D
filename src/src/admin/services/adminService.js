@@ -135,6 +135,7 @@ export const adminService = {
 
   products: {
     list: () => list('/api/admin/produtos'),
+    findSpecifications: (id, usarIa = true) => oneRequestWithTimeout(`/api/admin/produtos/${id}/buscar-especificacoes`, 'POST', { usarIa }, { timeoutMs: 300000 }),
     categories: () => list('/api/admin/categorias-produto'),
     get: (id) => one(`/api/admin/produtos/${id}`),
     create: (body) => oneRequest('/api/admin/produtos', 'POST', body),

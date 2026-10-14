@@ -1,3 +1,4 @@
+import { PHONE_FIELDS, metadataSpecifications } from '../utils/productSpecifications'
 /* eslint-disable react-refresh/only-export-components */
 const POSICOES_REFRIGERACAO = ['FRENTE', 'TOPO', 'TRASEIRA', 'INFERIOR', 'LATERAL']
 
@@ -165,6 +166,7 @@ const HARDWARE_SCHEMAS = {
 }
 
 const PRODUCT_SCHEMAS = {
+  celular: { key: 'especificacaoCelular', title: 'Celular', fields: PHONE_FIELDS },
   monitor: { key: 'especificacaoMonitor', title: 'Monitor', fields: [
     ['tamanhoPolegadas','Tamanho (pol.)','number'], ['resolucao','Resolução','text'], ['taxaAtualizacaoHz','Taxa de atualização (Hz)','number'], ['tipoPainel','Painel','text'],
     ['tempoRespostaMs','Tempo de resposta (ms)','number'], ['brilhoNits','Brilho (nits)','number'], ['hdr','HDR','boolean'], ['adaptiveSync','Adaptive Sync','boolean'],
@@ -196,6 +198,8 @@ export function productSchemaFor(category) {
   const isMonitorSupport = (token.includes('suporte') || token.includes('braco')) && token.includes('monitor')
   if (isMonitorSupport) return null
 
+  if (token.includes('celular') || token.includes('smartphone')) return PRODUCT_SCHEMAS.celular
+  if (token.includes('mousepad')) return null
   if (token.includes('monitor')) return PRODUCT_SCHEMAS.monitor
   if (token.includes('mouse')) return PRODUCT_SCHEMAS.mouse
   if (token.includes('teclado')) return PRODUCT_SCHEMAS.teclado
@@ -209,7 +213,7 @@ export function hardwareSchemaFor(category) {
 
 export function readSpec(item, schema) {
   if (!schema || !item) return {}
-  return { ...(item[schema.key] || {}) }
+  return { ...(item[schema.key] || (schema.key === 'especificacaoCelular' ? metadataSpecifications(item.metadados || {}) : {})) }
 }
 
 function normalizeValue(type, raw) {
