@@ -1,3 +1,4 @@
+import { apiRequest } from '../../services/httpClient'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { adminService } from '../services/adminService'
@@ -16,6 +17,19 @@ function hasImage(item) {
 export default function AdminDashboard() {
   const { canWriteCatalog, canCreateHardware, isAdmin } = useAdminPermissions()
   const location = useLocation()
+  const [agentMetrics, setAgentMetrics] = useState(null)
+  const [agentError, setAgentError] = useState('')
+  const [deviceName, setDeviceName] = useState('Meu computador')
+  const [deviceKey, setDeviceKey] = useState('')
+  const [deviceKeys, setDeviceKeys] = useState([])
+  const [keyBusy, setKeyBusy] = useState(false)
+  useEffect(() => { if (isAdmin) apiRequest('/api/admin/ia/extensao/chaves').then(setDeviceKeys).catch(() => {}) }, [isAdmin])
+  useEffect(() => {
+    if (!isAdmin) return
+    let active = true
+    apiRequest('/api/admin/ia/operacoes/resumo').then(data => { if (active) setAgentMetrics(data) }).catch(error => { if (active) setAgentError(error.message) })
+    return () => { active = false }
+  }, [isAdmin])
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
 
@@ -110,7 +124,29 @@ export default function AdminDashboard() {
             {quality.map((item) => (
               <Link className="admin-health-row" to={item.to} key={item.label}>
                 <span className="admin-health-copy"><strong>{item.label}</strong><small>{item.detail}</small></span>
-                <span className="admin-health-progress" aria-label={`${item.value}%`}><i style={{ width: `${item.value}%` }} /></span>
+                <span className="admin-health-progress" aria-label={`${item.value}%`}><i style={{ width: `${item.value}%` }} />
+      {isAdmin && <section className="admin-form-card" aria-label="Métricas do agente">
+        <h2>Agente de IA · últimos 30 dias</h2>
+        {agentError && <p role="status">Métricas indisponíveis: {agentError}</p>}
+        <details><summary>Chaves da extensão</summary>
+          <p>Crie uma chave para cada dispositivo. A primeira chave própria encerra o acesso pela chave antiga do serviço.</p>
+          <label className="admin-field"><span>Nome do dispositivo</span><input className="admin-input" value={deviceName} onChange={e => setDeviceName(e.target.value)} minLength={2} maxLength={80} /></label>
+          <button className="btn btn-secundario" disabled={keyBusy || deviceName.trim().length < 2} type="button" onClick={async () => {
+            setKeyBusy(true)
+            try { const result = await apiRequest('/api/admin/ia/extensao/chaves', { method: 'POST', body: { nome: deviceName.trim() } }); setDeviceKey(result.chave); setDeviceKeys(await apiRequest('/api/admin/ia/extensao/chaves')) }
+            catch (e) { setAgentError(e.message) } finally { setKeyBusy(false) }
+          }}>Criar chave da extensão</button>
+          {deviceKey && <label className="admin-field"><span>Copie para a configuração da extensão. Esta chave aparece somente agora.</span><input className="admin-input" readOnly value={deviceKey} onFocus={event => event.target.select()} /></label>}
+          <ul>{deviceKeys.map(key => <li key={key.id}>{key.label} · {key.active ? 'Ativa' : 'Revogada'} {Boolean(key.active) && <button className="btn btn-secundario" type="button" onClick={async () => { try { await apiRequest(`/api/admin/ia/extensao/chaves/${key.id}/revogar`, { method: 'POST' }); setDeviceKeys(await apiRequest('/api/admin/ia/extensao/chaves')); setDeviceKey('') } catch (e) { setAgentError(e.message) } }}>Revogar</button>}</li>)}</ul>
+        </details>
+        {agentMetrics && <>
+          <p>{(agentMetrics.operacoes || []).map(row => `${row.estado}: ${row.total}`).join(' · ') || 'Nenhuma operação registrada.'}</p>
+          <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Modelo</th><th>Chamadas</th><th>Tokens entrada / saída</th><th>Custo estimado</th></tr></thead><tbody>{(agentMetrics.usoIA || []).map(row => <tr key={`${row.provider}/${row.model}`}><td>{row.provider} / {row.model}</td><td>{row.chamadas}</td><td>{row.entrada} / {row.saida}</td><td>{row.custo == null ? 'Sem tabela de preços' : `US$ ${Number(row.custo).toFixed(4)}`}{row.desconhecidos > 0 && ' · parcial'}</td></tr>)}</tbody></table></div>
+          <p>Estimativas por tokens. Cobranças adicionais do provedor são conferidas na fatura.</p>
+          <p>{(agentMetrics.qualidade || []).map(row => `${row.category}: ${row.pesquisas} pesquisas, ${row.preenchidos} campos preenchidos, ${row.conflitos} conflitos, ${Math.round(row.duracao_media_ms)} ms em média`).join(' · ')}</p>
+        </>}
+      </section>}
+</span>
                 <strong className="admin-health-value">{item.value}%</strong>
               </Link>
             ))}

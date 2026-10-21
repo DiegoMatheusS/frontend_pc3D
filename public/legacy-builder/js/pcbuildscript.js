@@ -3686,9 +3686,15 @@ function conectarCanvas() {
 const objetosAnimadosProcedurais = new Set();
 const ESCALA_MM_3D = 0.01;
 
+const perfilDesempenho3D = { inicio: 0, ultimoQuadro: 0, quadros: 0, tempoRenderMs: 0 };
 function animar() {
   requestAnimationFrame(animar);
-  if (document.hidden) return;
+  if (document.hidden || !renderizador.domElement?.isConnected) return;
+  const agoraQuadro = performance.now();
+  const intervaloQuadro = (obterQualidade3D() === "baixa" ? 1000 / 30 : 1000 / 60) - 1;
+  if (agoraQuadro - perfilDesempenho3D.ultimoQuadro < intervaloQuadro) return;
+  perfilDesempenho3D.inicio ||= agoraQuadro;
+  perfilDesempenho3D.ultimoQuadro = agoraQuadro;
 
   controles.update();
   // Slots são referências fixas. Girar o placeholder também girava a moldura
@@ -3718,7 +3724,10 @@ function animar() {
 
     if (estadoMontagem.placavideo) slotGpu.material.color.setRGB(r, g, b);
   }
+  const inicioRender = performance.now();
   renderizador.render(cena, camera);
+  perfilDesempenho3D.quadros++;
+  perfilDesempenho3D.tempoRenderMs += performance.now() - inicioRender;
 }
 
 /* Integração com o assistente de IA */
@@ -3876,6 +3885,13 @@ globalThis.PCBuilderLegacyBridge = {
   desfazer: desfazerUltimaAlteracao,
   alternarQualidade3D() {
     return alternarQualidade3D();
+  },
+  obterDesempenho3D() {
+    return { qualidade: obterQualidade3D(), quadros: perfilDesempenho3D.quadros,
+      renderMedioMs: perfilDesempenho3D.quadros ? perfilDesempenho3D.tempoRenderMs / perfilDesempenho3D.quadros : 0,
+      geometrias: renderizador.info?.memory?.geometries ?? 0,
+      texturas: renderizador.info?.memory?.textures ?? 0,
+      triangulos: renderizador.info?.render?.triangles ?? 0 };
   },
   obterQualidade3D() {
     return obterQualidade3D();

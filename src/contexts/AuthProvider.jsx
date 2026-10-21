@@ -3,10 +3,17 @@ import { authService } from '../services/authService'
 import { AuthContext } from './authContext'
 import { userInitials } from '../utils/userInitials'
 import './user-avatar.css'
+import { connectBuildAccount } from '../services/savedBuildsService'
 
 export default function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    void connectBuildAccount(user?.email || null)
+    const online = () => { void connectBuildAccount(user?.email || null) }
+    window.addEventListener('online', online)
+    return () => window.removeEventListener('online', online)
+  }, [user?.email])
 
   useEffect(() => {
     let active = true
@@ -63,18 +70,24 @@ export default function AuthProvider({ children }) {
 
   const login = useCallback(async (credentials) => {
     const profile = await authService.login(credentials)
-    setUser(profile)
+    if (!profile?.requires2fa) setUser(profile)
     return profile
   }, [])
 
   const register = useCallback(async (data) => {
     const profile = await authService.register(data)
-    setUser(profile)
+    if (!profile?.requires2fa) setUser(profile)
     return profile
   }, [])
 
   const googleLogin = useCallback(async (credential) => {
     const profile = await authService.google(credential)
+    if (!profile?.requires2fa) setUser(profile)
+    return profile
+  }, [])
+
+  const completeMfa = useCallback(async (desafio, codigo) => {
+    const profile = await authService.completeMfa(desafio, codigo)
     setUser(profile)
     return profile
   }, [])
@@ -94,9 +107,10 @@ export default function AuthProvider({ children }) {
     login,
     register,
     googleLogin,
+    completeMfa,
     logout,
     refresh,
-  }), [user, loading, login, register, googleLogin, logout, refresh])
+  }), [user, loading, login, register, googleLogin, completeMfa, logout, refresh])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

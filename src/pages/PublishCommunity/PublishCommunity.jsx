@@ -1,3 +1,4 @@
+import { useBuildUpdates } from '../../hooks/useBuildUpdates'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
@@ -71,7 +72,8 @@ export default function PublishCommunity() {
   const editId = searchParams.get('editar')?.trim() || ''
   const editMode = Boolean(editId)
   const pendingBuild = useMemo(() => readPendingPublication(), [])
-  const savedBuilds = useMemo(() => savedBuildsService.list(user?.email || ''), [user?.email])
+  const buildRevision = useBuildUpdates(user?.email || '')
+  const savedBuilds = useMemo(() => savedBuildsService.list(user?.email || ''), [user?.email, buildRevision])
   const selectableBuilds = useMemo(() => (
     pendingBuild
       ? [pendingBuild, ...savedBuilds.filter((item) => String(item.id) !== String(pendingBuild.id))]

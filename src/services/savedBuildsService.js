@@ -1,6 +1,14 @@
+import { createBuildSync } from './buildSync'
+import { apiRequest } from './httpClient'
+let sync
+export function connectBuildAccount(email) {
+  sync ??= createBuildSync({ request: apiRequest, storage: localStorage,
+    changed: (owner, error) => window.dispatchEvent(new CustomEvent('criabyte:builds-updated', { detail: { owner, error } })) })
+  return sync.connect(email)
+}
 const DRAFT_KEY = 'pcBuilderRascunhoBuild'
 const SAVED_PREFIX = 'pcBuilderBuildsSalvas:'
-const MAX_BUILDS = 60
+const MAX_BUILDS = 500
 
 const categoryLabels = {
   gabinete: 'Gabinete',
@@ -32,8 +40,11 @@ function readBuilds(email) {
 }
 
 function writeBuilds(email, builds) {
+  const previous = readBuilds(email)
   const limited = Array.isArray(builds) ? builds.slice(0, MAX_BUILDS) : []
   localStorage.setItem(storageKey(email), JSON.stringify(limited))
+  sync?.enqueue(String(email).trim().toLowerCase(), previous, limited)
+  window.dispatchEvent(new CustomEvent('criabyte:builds-updated', { detail: { owner: email } }))
   return limited
 }
 
@@ -121,6 +132,14 @@ function buildFromConfiguration(configuration, name = 'Build importada', metadat
 }
 
 export const savedBuildsService = {
+  conflicts(email) {
+    return sync?.conflicts(String(email).trim().toLowerCase()) || []
+  },
+
+  resolveConflict(email, id, mode) {
+    return sync?.resolveConflict(String(email).trim().toLowerCase(), id, mode)
+  },
+
   list(email) {
     return readBuilds(email)
   },

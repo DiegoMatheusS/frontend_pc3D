@@ -1,3 +1,4 @@
+import { useBuildUpdates } from '../../hooks/useBuildUpdates'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
@@ -372,6 +373,7 @@ export default function Builder() {
   const [mensagemLocal, setMensagemLocal] = useState('')
   const [qualidade3D, setQualidade3D] = useState('alta')
   const storageOwner = user?.email || '__local__'
+  useBuildUpdates(storageOwner)
   const editBuildId = searchParams.get('editar')
   const buildEmEdicao = editBuildId ? savedBuildsService.get(storageOwner, editBuildId) : null
 

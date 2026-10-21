@@ -1,3 +1,4 @@
+import { useBuildUpdates } from '../../hooks/useBuildUpdates'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
 import { savedBuildsService } from '../../services/savedBuildsService'
@@ -19,6 +20,7 @@ export default function SavedBuildDetails() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const storageOwner = user?.email || '__local__'
+  useBuildUpdates(storageOwner)
   const build = savedBuildsService.get(storageOwner, id)
 
   if (!build) return <Navigate to="/minhas-builds" replace />

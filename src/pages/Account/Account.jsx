@@ -49,6 +49,7 @@ export default function Account() {
         </section>
 
         <div className="account-grid">
+          <article className="account-card"><h2>Autenticação em duas etapas</h2><p>Proteja sua conta com um aplicativo autenticador e códigos de recuperação.</p><Link className="button button--secondary" to="/conta/seguranca">Configurar segurança</Link></article>
           <article className="account-card"><span className="account-card__icon" aria-hidden="true">◎</span><h2>Perfil e segurança</h2><p>Altere nome, e-mail ou senha em uma página separada de configurações.</p><Link className="button button--secondary" to="/conta/editar">Editar cadastro</Link></article>
           <article className="account-card"><span className="account-card__icon" aria-hidden="true">▦</span><h2>Minhas builds</h2><p>Organize suas configurações salvas, compartilhe links e volte ao Montador 3D.</p><Link className="button button--secondary" to="/minhas-builds">Abrir minhas builds</Link></article>
           <article className="account-card"><span className="account-card__icon" aria-hidden="true">◌</span><h2>Comunidade</h2><p>Você tem {communityStats.published} build(s) publicada(s) e {communityStats.drafts} rascunho(s) na comunidade.</p><div className="account-card__actions"><Link className="button button--secondary" to="/comunidade">Abrir comunidade</Link><Link className="button button--secondary" to="/comunidade/publicar">Publicar build</Link></div></article>

@@ -66,15 +66,17 @@ async function createAccount(data) {
 }
 
 export const authService = {
+  async completeMfa(desafio, codigo) { return normalizeProfile(await apiRequest("/api/auth/login-2fa", { method: "POST", body: { desafio, codigo } })) },
   async profile() {
     return normalizeProfile(await apiRequest('/api/auth/perfil'))
   },
 
   async login(credentials) {
-    await apiRequest('/api/auth/login', {
+    const result = await apiRequest('/api/auth/login', {
       method: 'POST',
       body: credentials,
     })
+    if (result?.requires2fa) return result
     return this.profile()
   },
 
@@ -83,6 +85,7 @@ export const authService = {
       method: 'POST',
       body: { credential: String(credential || '').trim() },
     })
+    if (response?.requires2fa) return response
     return normalizeProfile(response) || this.profile()
   },
 

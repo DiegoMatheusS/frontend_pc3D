@@ -3,7 +3,7 @@ const sessions = new Map()
 
 function initialState(type) {
   if (type === 'hardware') return {
-    categoria: 'PROCESSADOR', marca: '', statusFilter: '', pagina: 1, limite: 50,
+    categoria: 'PROCESSADOR', marca: '', consulta: '', catalogChanged: false, statusFilter: '', pagina: 1, limite: 50,
     result: null, selected: new Set(), error: '', batchErrors: {}, batchSummary: null,
     iaTecnicaErrors: {}, loading: false, addingIds: new Set(), batchBusy: false,
     metaAiBusyIds: new Set(), iaTecnicaBusyIds: new Set(),

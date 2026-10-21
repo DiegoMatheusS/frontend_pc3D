@@ -5,6 +5,8 @@ import RequireAuth from './components/Layout/RequireAuth'
 import RequireRole from './components/Layout/RequireRole'
 import Home from './pages/Home/Home'
 
+const AccountSecurity = lazy(() => import('./pages/AccountSecurity/AccountSecurity'))
+const PasswordRecovery = lazy(() => import('./pages/PasswordRecovery/PasswordRecovery'))
 const Offers = lazy(() => import('./pages/Offers/Offers'))
 const Community = lazy(() => import('./pages/Community/Community'))
 const CommunityBuild = lazy(() => import('./pages/CommunityBuild/CommunityBuild'))
@@ -97,6 +99,9 @@ export default function App() {
           )}
         />
         <Route path="/comunidade/:slug" element={<Lazy><CommunityBuild /></Lazy>} />
+        <Route path="/recuperar-senha" element={<Lazy><PasswordRecovery /></Lazy>} />
+        <Route path="/redefinir-senha" element={<Lazy><PasswordRecovery reset /></Lazy>} />
+        <Route path="/conta/seguranca" element={<RequireAuth><Lazy><AccountSecurity /></Lazy></RequireAuth>} />
         <Route path="/entrar" element={<Lazy><Login /></Lazy>} />
         <Route path="/cadastro" element={<Lazy><Register /></Lazy>} />
         <Route path="/sobre" element={<Lazy><Institutional page="sobre" /></Lazy>} />

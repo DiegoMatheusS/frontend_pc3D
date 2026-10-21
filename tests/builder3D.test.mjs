@@ -92,7 +92,7 @@ test('renderer usa as mesmas medidas corrigidas do PC-240 para posicionar fans e
   proximo(snapshot.largura, 2.4); proximo(snapshot.altura, 3.9); proximo(snapshot.profundidade, 4.7)
 })
 
-for (const raiz of ['public', 'src/public']) {
+for (const raiz of ['public']) {
   test(`${raiz}: remover um GLB não descarta a geometria do cache ou de outra peça`, () => {
     const source = fs.readFileSync(new URL(`../${raiz}/legacy-builder/js/renderer.js`, import.meta.url), 'utf8')
     const cloneSource = source.slice(source.indexOf('function clonarCenaGltf('), source.indexOf('function carregarModelo3D('))

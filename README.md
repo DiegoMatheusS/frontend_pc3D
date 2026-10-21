@@ -1,3 +1,9 @@
+## Atualização integrada de cadastro, conta e agente
+
+Builds autenticadas agora sincronizam com a conta; sem login, continuam locais. Cadastro de PC com ofertas, 2FA, recuperação de senha, painel do agente, pré-renderização pública e a consolidação das fontes estão descritos no [guia de atualização](docs/platform-upgrade-20261021.md).
+
+As notas de versões anteriores abaixo registram o comportamento antes desta atualização.
+
 
 ## Ajuste v8.1 — Builds sem login durante a migração
 

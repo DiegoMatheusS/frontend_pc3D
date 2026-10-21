@@ -34,6 +34,8 @@ export default function SavedBuilds() {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState('recentes')
   const [message, setMessage] = useState('')
+  const [conflicts, setConflicts] = useState(() => savedBuildsService.conflicts(storageOwner))
+  const [resolving, setResolving] = useState(null)
   const [importOpen, setImportOpen] = useState(false)
   const [importUrl, setImportUrl] = useState('')
   const [importName, setImportName] = useState('')
@@ -93,6 +95,27 @@ export default function SavedBuilds() {
       document.body.style.overflow = previousOverflow
     }
   }, [importOpen])
+
+  useEffect(() => {
+    const update = event => {
+      if (event && event.detail?.owner !== storageOwner) return
+      setBuilds(savedBuildsService.list(storageOwner))
+      setConflicts(savedBuildsService.conflicts(storageOwner))
+      if (event?.detail?.error) setMessage(`Alterações locais preservadas. Sincronização pendente: ${event.detail.error}`)
+    }
+    update()
+    window.addEventListener('criabyte:builds-updated', update)
+    return () => window.removeEventListener('criabyte:builds-updated', update)
+  }, [storageOwner])
+
+  async function resolveConflict(id, mode) {
+    setResolving(id)
+    try {
+      await savedBuildsService.resolveConflict(storageOwner, id, mode)
+      setMessage(mode === 'copy' ? 'Sua cópia foi preservada como outra build.' : 'Versão da conta recuperada.')
+    } catch (error) { setMessage(error.message) }
+    finally { setResolving(null) }
+  }
 
   const visibleBuilds = useMemo(() => {
     const term = normalize(search.trim())
@@ -261,6 +284,16 @@ export default function SavedBuilds() {
         </section>
 
         {message && <p className="saved-builds-message" role="status">{message}</p>}
+
+        {conflicts.map(conflict => (
+          <section className="saved-builds-draft" key={conflict.id} aria-label={`Resolver ${conflict.nome}`}>
+            <div><h2>{conflict.nome}</h2><p>Esta build mudou em outro aparelho. Escolha qual versão guardar.</p></div>
+            <div>
+              {!conflict.removed && <button className="button button--primary" type="button" disabled={Boolean(resolving)} onClick={() => resolveConflict(conflict.id, 'copy')}>Guardar minha cópia</button>}
+              <button className="button button--secondary" type="button" disabled={Boolean(resolving)} onClick={() => resolveConflict(conflict.id, 'remote')}>Usar versão da conta</button>
+            </div>
+          </section>
+        ))}
 
         {builds.length === 0 ? (
           <section className="saved-builds-empty">

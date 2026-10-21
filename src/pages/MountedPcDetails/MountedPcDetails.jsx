@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { getMountedPcById, getMountedPcBuilderPath } from '../../services/mountedPcsService'
 import CommercialBuildHardware from '../../components/CommercialBuildHardware/CommercialBuildHardware'
 import ReviewsPanel from '../../components/ReviewsPanel/ReviewsPanel'
-import { buildCategoryLabel, hasCompleteBuilderConfiguration, hasVerifiedConsumption, isUpgradeKit } from '../../utils/commercialBuild'
+import { buildCategoryLabel, getBuilder3DUnavailableReason, hasVerifiedConsumption, isUpgradeKit } from '../../utils/commercialBuild'
 import { asArray, asNumber, asText, formatCurrency, formatRating } from '../../utils/display'
 import { setDocumentMeta } from '../../utils/pageMeta'
 import './MountedPcDetails.css'
@@ -38,9 +38,9 @@ export default function MountedPcDetails() {
   }
 
   const kit = isUpgradeKit(pc)
-  const has3D = hasCompleteBuilderConfiguration(pc)
+  const reason3DUnavailable = getBuilder3DUnavailableReason(pc)
   const verifiedConsumption = hasVerifiedConsumption(pc)
-  const builderPath = has3D ? getMountedPcBuilderPath(pc) : null
+  const builderPath = reason3DUnavailable ? null : getMountedPcBuilderPath(pc)
   const purchaseSummary = pc.purchaseSummary || null
   const purchaseItems = asArray(purchaseSummary?.itens)
   const linked = asArray(pc.components).filter((component) => component?.hardware?.id || component?.hardwareId)
@@ -105,10 +105,12 @@ export default function MountedPcDetails() {
             <strong>{asNumber(pc.price, 0) > 0 ? formatCurrency(pc.price) : 'Sem oferta ativa'}</strong>
           </div>
           <div className="mounted-detail__actions">
-            {builderPath && <Link className="button button--primary" to={builderPath}>Abrir build completa no 3D</Link>}
+            {builderPath ? <Link className="button button--primary" to={builderPath}>Abrir build completa no 3D</Link> :
+              <button className="button button--primary" type="button" disabled aria-describedby="mounted-pc-3d-unavailable">Abrir build completa no 3D</button>}
             <Link className="button button--secondary" to={`/montados?comparar=${pc.id}`}>Comparar</Link>
             <a className="button button--secondary" href="#ofertas">Onde comprar</a>
           </div>
+          {reason3DUnavailable && <p className="mounted-detail__3d-reason" id="mounted-pc-3d-unavailable">{reason3DUnavailable}</p>}
         </div>
       </div>
     </section>

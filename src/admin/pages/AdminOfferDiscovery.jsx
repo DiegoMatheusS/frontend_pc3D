@@ -6,8 +6,7 @@ import { adminService } from '../services/adminService'
 import { offerDiscoveryService } from '../services/offerDiscoveryService'
 import { storeAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiPayload, mergeAiImportPreview } from '../utils/aiImportContract'
-import { findExistingProductFromAi } from '../utils/catalogMatching'
-import { findExistingHardwareFromAi } from '../utils/hardwareMatching'
+import { resolveOfferRegistration } from '../utils/offerRegistration'
 import { useDiscoverySession } from '../hooks/useDiscoverySession'
 import './AdminOfferDiscovery.css'
 
@@ -230,7 +229,7 @@ export default function AdminOfferDiscovery() {
         || category,
       ).toUpperCase()
       const previewDestination = clean(preview?.destinoSugerido).toUpperCase()
-      let resolvedDestination = previewDestination || expectedDestination(detectedCategory || category) || initialDestination
+      let resolvedDestination = category === 'PC_MONTADO' ? 'PC_MONTADO' : previewDestination || expectedDestination(detectedCategory || category) || initialDestination
       const extracted = previewFields(preview)
       const listingTitle = extracted.nome || clean(item.nome)
       const listingDescription = extracted.descricao || clean(item.descricao)
@@ -287,21 +286,18 @@ export default function AdminOfferDiscovery() {
       const latest = analysis?.preview || fallbackPreview(item, item._category)
       const destination = clean(latest?.destinoSugerido).toUpperCase() || expectedDestination(item._category)
       // A consulta também funciona quando a coleta/IA só conseguiu retornar o título.
-      const [products, hardwares] = await Promise.all([adminService.products.list(), adminService.hardwares.list()])
-      const productMatch = findExistingProductFromAi(products, latest)
-      const hardwareMatch = destination === 'HARDWARE' ? findExistingHardwareFromAi(hardwares, latest) : { hardware: null, ambiguous: [] }
-      const linkedProduct = hardwareMatch.hardware && products.find(product => Number(product.id) === Number(hardwareMatch.hardware.produtoId || hardwareMatch.hardware.produto?.id))
+      const productMatch = await resolveOfferRegistration(latest, destination, adminService)
       if (analysis?.collectionWarning) toast.show(analysis.collectionWarning, 'alerta')
-      if (productMatch.product || linkedProduct) {
-        openExistingProduct(latest, productMatch.product || linkedProduct)
+      if (productMatch.product) {
+        openExistingProduct(latest, productMatch.product)
         return
       }
       if (productMatch.ambiguous.length) {
         setCatalogReviews(current => ({ ...current, [item._key]: { preview: latest, products: productMatch.ambiguous, destination } }))
         return
       }
-      if (hardwareMatch.hardware) {
-        openRegistration({ ...latest, hardwareExistenteId: hardwareMatch.hardware.id }, '/admin/produtos/novo')
+      if (productMatch.hardware) {
+        openRegistration({ ...latest, hardwareExistenteId: productMatch.hardware.id }, '/admin/produtos/novo')
         return
       }
       openRegistration(latest, destinationRoute(destination))
