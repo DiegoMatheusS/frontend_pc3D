@@ -1,7 +1,7 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 
 const SITE_URL = 'https://criabyte.com.br'
-const RAW_API = String(process.env.VITE_API_BASE_URL || 'https://api.criabyte.com.br').trim().replace(/\/+$/, '')
+const RAW_API = String(process.env.PUBLIC_CATALOG_API_URL || process.env.VITE_API_BASE_URL || 'https://api.criabyte.com.br').trim().replace(/\/+$/, '')
 const API_URL = RAW_API.replace(/\/api$/i, '')
 const output = new URL('../public/sitemap.xml', import.meta.url)
 
@@ -83,11 +83,14 @@ async function loadProducts() {
 }
 
 let products = []
+let preservePrevious = false
 try {
   products = await loadProducts()
   console.log(`[sitemap] ${products.length} produtos públicos adicionados.`)
 } catch (error) {
-  console.warn(`[sitemap] API indisponível; gerando sitemap apenas com páginas estáticas: ${error?.message || error}`)
+  const previous = await readFile(output, 'utf8').catch(() => '')
+  preservePrevious = previous.includes('<urlset')
+  console.warn(`[sitemap] API indisponível; ${preservePrevious ? 'preservando o sitemap existente' : 'gerando páginas estáticas'}: ${error?.message || error}`)
 }
 
 const today = new Date().toISOString().slice(0, 10)
@@ -118,4 +121,4 @@ ${entries.map((entry) => `  <url>
 `
 
 await mkdir(new URL('../public/', import.meta.url), { recursive: true })
-await writeFile(output, xml, 'utf8')
+if (!preservePrevious) await writeFile(output, xml, 'utf8')

@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
     root: projectRoot,
     envDir: projectRoot,
     build: { outDir: resolve(process.cwd(), 'dist') },
+    resolve: { dedupe: ['react', 'react-dom', 'react-router', 'react-router-dom'] },
     plugins: [react()],
     server: {
       proxy: {

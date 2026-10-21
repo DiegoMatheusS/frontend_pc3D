@@ -26,7 +26,7 @@ export function renderProduct(template, product, site = 'https://criabyte.com.br
     .replace('<div id="root"></div>', `<div id="root">${body}</div>`)
 }
 
-export async function prerender({ dist = resolve('dist'), api = process.env.VITE_API_BASE_URL || 'https://api.criabyte.com.br', request = fetch } = {}) {
+export async function prerender({ dist = resolve('dist'), api = process.env.PUBLIC_CATALOG_API_URL || process.env.VITE_API_BASE_URL || 'https://api.criabyte.com.br', request = fetch } = {}) {
   const template = await readFile(resolve(dist, 'index.html'), 'utf8')
   let count = 0
   const base = api.replace(/\/api\/?$/, '').replace(/\/$/, '')

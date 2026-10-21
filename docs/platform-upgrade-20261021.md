@@ -16,6 +16,8 @@ Edite somente `src/`. Os módulos em `src/src/` encaminham importações à impl
 
 O pós-build gera HTML de produtos públicos com descrição, ficha, canonical e dados estruturados, permitindo leitura antes de executar JavaScript. `PRERENDER_REQUIRED=true` faz a publicação falhar se o catálogo não puder ser consultado; sem essa opção, o build mantém a SPA e informa a falha no log.
 
+Com a API fora do ar, o sitemap existente é preservado. `PUBLIC_CATALOG_API_URL` permite escolher a origem da coleta durante o build sem mudar a URL da API usada pela aplicação. O CI usa uma origem local indisponível para verificar esse comportamento e executar os testes sem depender do Railway. A validação em produção fica pendente enquanto o serviço estiver indisponível.
+
 ## Implantação e validação
 
 Publicar ProjetoIA, backend_pc3D e este frontend, nessa ordem. O backend deve ter a migração de builds pessoais e segurança aplicada. SMTP, `AUTH_PUBLIC_URL` e `AUTH_ENCRYPTION_KEY` são configurados no backend; o ProjetoIA precisa de armazenamento persistente para operações e chaves. Consulte os documentos correspondentes nesses repositórios antes do merge.
