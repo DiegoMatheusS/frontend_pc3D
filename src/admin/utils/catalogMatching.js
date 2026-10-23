@@ -65,7 +65,7 @@ export function findExistingProductFromAi(products = [], preview = {}) {
   for (const product of products) {
     // O nome do PC contém suas peças, mas não identifica o Produto de uma peça.
     if (isBuild && product.tipo !== 'BUILD') continue
-    const result = compareCatalogIdentity(source, product)
+    const result = compareCatalogIdentity(isBuild ? { ...source, modelo: null } : source, isBuild ? { ...product, modelo: null } : product)
     if (result === 'exact') exact.push(product)
     else if (result === 'candidate') candidates.push(product)
   }

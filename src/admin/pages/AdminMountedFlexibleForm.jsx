@@ -12,6 +12,7 @@ import { getAiOffer, getAiPayload } from '../utils/aiImportContract'
 import { openHardwareResearchDraft } from '../utils/technicalResearch'
 import TechnicalResearchEvidence from '../components/TechnicalResearchEvidence'
 import { mergeConfirmedListingComponents } from '../utils/listingComponents'
+import { newBuildOffers } from '../utils/offerRegistration'
 
 const EMPTY = {
   nome: '', marca: '', modelo: '', descricao: '', categoria: 'PC_MONTADO',
@@ -53,6 +54,7 @@ function offerPayload(row, produtoId) {
     urlOriginal: clean(row.urlOriginal), urlAfiliada: clean(row.urlAfiliada) || null,
     vendedorNome: clean(row.vendedorNome) || null,
     vendedorIdentificador: clean(row.vendedorIdentificador) || null,
+    codigoMarketplace: clean(row.codigoMarketplace) || null,
     validoAte: row.validoAte && !Number.isNaN(Date.parse(row.validoAte))
       ? new Date(row.validoAte).toISOString() : null,
   }
@@ -189,7 +191,12 @@ export default function AdminMountedFlexibleForm() {
         : [...previous, aiImportOfferRow({ ...offer, urlOriginal: originalUrl }, partners)])
     }
     // Revalida os vínculos no catálogo atual; IDs do payload bruto não são usados.
-    await analyzeDescription(name || form.nome, description || form.descricao, preview?.analiseComputador || preview?.resultadoProdutoIa?.analiseComputador)
+    const imported = preview?.analiseComputador || preview?.resultadoProdutoIa?.analiseComputador
+    if (Array.isArray(imported?.componentesDetectados)) {
+      setAnalysis(imported)
+      setComponentes(previous => mergeConfirmedListingComponents(previous, imported.componentesDetectados, hardwares))
+      if (imported.tipoSugerido === 'KIT_UPGRADE') update('categoria', 'KIT_UPGRADE')
+    } else await analyzeDescription(name || form.nome, description || form.descricao)
   }
 
   useEffect(() => {
@@ -267,10 +274,11 @@ export default function AdminMountedFlexibleForm() {
         resolucaoRecomendada: clean(form.resolucaoRecomendada) || (editing ? null : undefined),
         configuracao3D, componentes: componentes.map((item, index) => ({ ...item, ordem: index })),
         publicado: Boolean(form.publicado), ativo: Boolean(form.ativo),
+        ...(!editing && { ofertas: newBuildOffers(offerRows, offerPayload) }),
       }
       const saved = editing ? await adminService.builds.update(id, payload) : await adminService.builds.create(payload)
       const produtoId = Number(saved?.produtoId ?? saved?.produto?.id)
-      if (offerRows.length) {
+      if (editing && offerRows.length) {
         if (Number.isInteger(produtoId) && produtoId > 0) {
           try { await saveOffers(produtoId) } catch (cause) {
             toast.show(`Cadastro salvo, mas ocorreu um problema nas ofertas: ${cause?.message || cause}`, 'alerta')

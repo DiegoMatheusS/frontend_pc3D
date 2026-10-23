@@ -10,10 +10,12 @@ function safeReturnPath(value) {
 }
 
 export default function Login() {
-  const { user, loading, login, googleLogin } = useAuth()
+  const { user, loading, login, googleLogin, completeMfa } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
+  const [challenge, setChallenge] = useState(null)
+  const [otp, setOtp] = useState('')
   const [email, setEmail] = useState(() => localStorage.getItem('pcBuilderEmailLembrado') || '')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(Boolean(localStorage.getItem('pcBuilderEmailLembrado')))
@@ -31,7 +33,8 @@ export default function Login() {
 
   async function handleGoogleCredential(credential) {
     setError('')
-    await googleLogin(credential)
+    const result = await googleLogin(credential)
+    if (result?.requires2fa) { setChallenge(result.desafio); return }
     navigate(returnPath, { replace: true })
   }
 
@@ -45,7 +48,8 @@ export default function Login() {
     setSubmitting(true)
 
     try {
-      await login({ email: email.trim(), senha: password })
+      const result = challenge ? await completeMfa(challenge, otp) : await login({ email: email.trim(), senha: password })
+      if (result?.requires2fa) { setChallenge(result.desafio); setPassword(''); return }
       if (remember) localStorage.setItem('pcBuilderEmailLembrado', email.trim())
       else localStorage.removeItem('pcBuilderEmailLembrado')
       navigate(returnPath, { replace: true })
@@ -107,7 +111,7 @@ export default function Login() {
               <div className="auth-password">
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
+                  disabled={Boolean(challenge)} autoComplete="current-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   onFocus={() => setPasswordFocused(true)}
@@ -130,9 +134,10 @@ export default function Login() {
                 />
                 <span>Lembrar meu e-mail</span>
               </label>
-              <Link to="/contato">Precisa de ajuda?</Link>
+              <Link to="/recuperar-senha">Esqueci minha senha</Link>
             </div>
 
+            {challenge && <label className="auth-field"><span>Código do autenticador ou de recuperação</span><input autoComplete="one-time-code" value={otp} onChange={e => setOtp(e.target.value)} minLength={6} maxLength={32} required /></label>}
             {passwordChanged && <p className="auth-message auth-message--success" role="status">Senha alterada. Entre novamente com a nova senha.</p>}
             {error && <p className="auth-message auth-message--error" role="alert">{error}</p>}
 

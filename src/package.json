@@ -1,13 +1,15 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.40.7",
+  "version": "0.41.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "vite --config ../vite.config.js",
+    "build": "vite build --config ../vite.config.js",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prebuild": "npm --prefix .. ci && node ../scripts/sync-compatibility.mjs && node ../scripts/generate-sitemap.mjs",
+    "postbuild": "node ../scripts/prerender-public.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",
@@ -23,6 +25,6 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.7.0",
-    "vite": "^8.2.0"
+    "vite": "^8.3.5"
   }
 }

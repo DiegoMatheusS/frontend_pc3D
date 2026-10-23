@@ -78,7 +78,7 @@ export default function RouteEffects() {
     upsertMeta('meta[property="og:description"]', { property: 'og:description' }, description)
     upsertMeta('meta[property="og:type"]', { property: 'og:type' }, 'website')
 
-    const privateRoute = /^(\/entrar|\/cadastro|\/conta(?:\/|$)|\/minhas-builds(?:\/|$)|\/comunidade\/publicar)/.test(location.pathname)
+    const privateRoute = /^(\/entrar|\/cadastro|\/recuperar-senha|\/redefinir-senha|\/conta(?:\/|$)|\/minhas-builds(?:\/|$)|\/comunidade\/publicar)/.test(location.pathname)
     upsertMeta('meta[name="robots"]', { name: 'robots' }, privateRoute ? 'noindex,nofollow' : 'index,follow')
 
     const canonicalUrl = `${window.location.origin}${location.pathname}`

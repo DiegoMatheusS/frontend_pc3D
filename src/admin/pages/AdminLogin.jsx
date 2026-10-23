@@ -5,9 +5,11 @@ import { ADMIN_ROLES } from '../components/AdminAccess'
 import '../Admin.css'
 
 export default function AdminLogin() {
-  const { user, loading, login } = useAuth()
+  const { user, loading, login, completeMfa } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
+  const [challenge, setChallenge] = useState(null)
+  const [otp, setOtp] = useState('')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [error, setError] = useState('')
@@ -31,7 +33,8 @@ export default function AdminLogin() {
     setSending(true)
     setError('')
     try {
-      const profile = await login({ email, senha })
+      const profile = challenge ? await completeMfa(challenge, otp) : await login({ email, senha })
+      if (profile?.requires2fa) { setChallenge(profile.desafio); setSenha(''); return }
       if (!ADMIN_ROLES.includes(String(profile?.papel || '').toUpperCase())) {
         setError('Esta conta não possui acesso ao painel administrativo.')
         return
@@ -58,7 +61,8 @@ export default function AdminLogin() {
           <p>Use uma conta com papel ADMIN, EDITOR ou REVISOR.</p>
           <form className="admin-login-form" onSubmit={submit}>
             <div className="admin-field"><label htmlFor="admin-email">E-mail</label><input className="admin-input" id="admin-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required /></div>
-            <div className="admin-field"><label htmlFor="admin-senha">Senha</label><input className="admin-input" id="admin-senha" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" required /></div>
+            <div className="admin-field"><label htmlFor="admin-senha">Senha</label><input className="admin-input" id="admin-senha" type="password" disabled={Boolean(challenge)} value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" required /></div>
+            {challenge && <label className="admin-field">Código do autenticador ou de recuperação<input className="admin-input" autoComplete="one-time-code" value={otp} onChange={e => setOtp(e.target.value)} minLength={6} maxLength={32} required /></label>}
             {error && <p className="admin-form-error">{error}</p>}
             <button className="btn btn-primario" type="submit" disabled={sending}>{sending ? 'Entrando...' : 'Entrar no painel'}</button>
           </form>

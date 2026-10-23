@@ -42,7 +42,7 @@ camera.position.set(7, 5, 8);
 const renderizador = new THREE.WebGLRenderer({
     antialias: true,
     alpha: false,
-    preserveDrawingBuffer: true
+    preserveDrawingBuffer: false
 });
 
 const ambienteMobile = window.matchMedia("(max-width: 768px), (pointer: coarse)").matches;

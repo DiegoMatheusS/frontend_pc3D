@@ -64,13 +64,13 @@ export async function apiRequest(path, options = {}) {
   let response
   try {
     response = await fetch(url, {
+      ...options,
       credentials: 'include',
       headers: {
         Accept: 'application/json',
         ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
         ...(options.headers || {}),
       },
-      ...options,
       method,
       // Dados do Admin mudam com frequência (arquivar, publicar, descontinuar etc.).
       // Evita que uma navegação de volta reaproveite uma resposta GET antiga.

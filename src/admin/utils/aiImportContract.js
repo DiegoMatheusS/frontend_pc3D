@@ -9,7 +9,17 @@ const SPEC_KEY_BY_CATEGORY = {
   VENTOINHA: 'especificacaoVentoinha',
   GABINETE: 'especificacaoGabinete',
   NOTEBOOK: 'especificacaoNotebook',
+  CELULAR: 'especificacaoCelular',
+  MONITOR: 'especificacaoMonitor',
+  MOUSE: 'especificacaoMouse',
+  TECLADO: 'especificacaoTeclado',
+  HEADSET: 'especificacaoHeadset',
 }
+
+const HARDWARE_CATEGORIES = new Set([
+  'PROCESSADOR', 'PLACA_VIDEO', 'PLACA_MAE', 'MEMORIA_RAM', 'ARMAZENAMENTO',
+  'FONTE', 'COOLER', 'VENTOINHA', 'GABINETE',
+])
 
 function object(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
@@ -207,6 +217,13 @@ export function getAiPayload(response = {}) {
     delete merged.releaseDate
   }
   if (specKey && Object.keys(normalizedSpec).length) merged[specKey] = normalizedSpec
+  if (category && !specKey && category !== 'PC_MONTADO' && Object.keys(foundSpecs).length) {
+    const metadata = object(merged.metadados)
+    merged.metadados = {
+      ...metadata,
+      especificacoesEncontradas: mergeFilledFields(foundSpecs, metadata.especificacoesEncontradas),
+    }
+  }
 
   // A descrição original coletada tem prioridade sobre resumos de normalização/IA.
   const listingDescription = safeText(response?.descricaoAnuncio)
@@ -320,7 +337,7 @@ export function normalizeAiResponse(response) {
     else if (route.includes('/notebooks')) destination = 'NOTEBOOK'
     else if (route.includes('/builds') || route.includes('/montados')) destination = 'PC_MONTADO'
     else if (route.includes('/produtos')) destination = 'PRODUTO'
-    else if (SPEC_KEY_BY_CATEGORY[category] && category !== 'NOTEBOOK') destination = 'HARDWARE'
+    else if (HARDWARE_CATEGORIES.has(category)) destination = 'HARDWARE'
     else destination = 'PRODUTO'
   }
 
