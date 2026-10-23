@@ -1,3 +1,7 @@
+## Nomes e descrições técnicas
+
+As melhorias de cadastro, pesquisa de especificações e extensão estão no [guia do catálogo técnico](docs/technical-catalog-20261023.md).
+
 ## Atualização integrada de cadastro, conta e agente
 
 Builds autenticadas agora sincronizam com a conta; sem login, continuam locais. Cadastro de PC com ofertas, 2FA, recuperação de senha, painel do agente, pré-renderização pública e a consolidação das fontes estão descritos no [guia de atualização](docs/platform-upgrade-20261021.md).

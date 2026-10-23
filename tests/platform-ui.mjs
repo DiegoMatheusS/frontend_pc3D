@@ -14,7 +14,10 @@ const description = 'Ryzen 5 5600G, RAM 16 GB sem marca, SSD 512 GB. Acompanha t
 const original = 'https://shopee.com.br/product/123/456'
 const offer = { parceiroNome: 'Shopee', parceiroId: 4, preco: 2399.9, urlOriginal: original, urlAfiliada: 'https://s.shopee.com.br/teste', vendedorNome: 'Loja PC', vendedorIdentificador: '123' }
 const user = { id: 1, nome: 'Administrador QA', email: 'qa@example.test', papel: 'ADMIN' }
+const oldTitle = 'Mouse Logitech G502 HERO foi desenvolvido para vencer. Conheça toda a história.'
+const technicalDescription = 'Mouse Logitech G502 HERO\nDPI máximo: 25600\nPeso: 121 g\nWireless: Não'
 let savedBodies = [], logged = true, failSave = true
+let productWrites = 0
 const errors = []
 try {
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 393, height: 852 }]) {
@@ -34,6 +37,12 @@ try {
       else if (path === '/api/admin/builds/analisar-anuncio') body = { tipoSugerido: 'PC_MONTADO', componentesDetectados: [], descricaoOriginal: description }
       else if (path === '/api/admin/hardwares') { status = 503; body = { message: 'Catálogo de peças temporariamente indisponível' } }
       else if (path === '/api/admin/ofertas/parceiros') body = [{ id: 4, nome: 'Shopee', dominio: 'shopee.com.br', ativo: true }]
+      else if (path === '/api/admin/categorias-produto') body = [{ id: 5, nome: 'Mouses', slug: 'mouses' }]
+      else if (path === '/api/admin/produtos/101/buscar-especificacoes') body = { nomeTecnico: 'Mouse Logitech G502 HERO', descricaoTecnica: technicalDescription, especificacoes: { dpiMaximo: 25600, pesoGramas: 121, wireless: false }, camposPreenchidos: ['dpiMaximo', 'pesoGramas'], origemPorCampo: {} }
+      else if (path === '/api/admin/produtos/101') {
+        if (method !== 'GET') productWrites++
+        body = { id: 101, categoriaId: 5, categoria: { id: 5, nome: 'Mouses', slug: 'mouses' }, nome: oldTitle, marca: 'Logitech', modelo: 'G502 HERO', descricao: 'História comercial do mouse.', metadados: {}, publicado: false, ativo: true }
+      }
       else if (path === '/api/admin/builds' && method === 'POST') {
         const data = route.request().postDataJSON(); savedBodies.push(data)
         assert.equal(data.publicado, true); assert.equal(data.nome, name); assert.equal(data.descricao, description); assert.deepEqual(data.componentes, [])
@@ -55,6 +64,18 @@ try {
     if (viewport.width === 1440) { await page.getByText('Falha de teste: dados preservados', { exact: false }).waitFor(); await save.click() }
     await page.waitForURL('**/admin/montados/10')
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2), 'Interface não pode exceder a largura da tela')
+    await page.goto(`${base}/admin/produtos/101`)
+    const technicalName = page.getByLabel('Nome técnico', { exact: true })
+    await technicalName.waitFor()
+    assert.equal(await technicalName.inputValue(), oldTitle)
+    await page.getByRole('button', { name: 'Limpar nome', exact: true }).click()
+    assert.equal(await technicalName.inputValue(), 'Mouse Logitech G502 HERO')
+    await page.getByRole('button', { name: 'Buscar especificações', exact: true }).click()
+    await page.getByRole('button', { name: 'Aplicar descrição técnica', exact: true }).click()
+    assert.equal(await page.getByLabel('Descrição', { exact: true }).inputValue(), technicalDescription)
+    assert.equal(productWrites, 0, 'A prévia só modifica o formulário antes de salvar')
+    await page.getByText('Alterações não salvas', { exact: true }).waitFor()
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2))
     if (viewport.width === 393) {
       for (const [pattern, path] of [
         ['https://cdnjs.cloudflare.com/**', 'build/three.min.js'],
@@ -97,6 +118,6 @@ try {
   assert.equal(new URL(page.url()).hash, '')
   assert.deepEqual(errors, [])
   assert.equal(savedBodies.length, 3)
-  console.log('Fluxos desktop/móvel, cadastro com falha e reenvio, 2FA e redefinição: OK')
+  console.log('Fluxos desktop/móvel, PC com reenvio, nome e descrição técnica, 2FA e redefinição: OK')
   await context.close()
 } finally { await browser.close(); await new Promise(resolve => server.httpServer.close(resolve)) }

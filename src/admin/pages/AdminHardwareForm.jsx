@@ -1,3 +1,4 @@
+import { normalizarNomeTecnico } from '../utils/catalogContent.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/authContext'
@@ -428,13 +429,13 @@ export default function AdminHardwareForm() {
         </section>}
 
         <section className="admin-form-section"><h2>Identificação</h2><div className="admin-form-grid">
-          <div className="admin-field full"><label>Nome</label><input className="admin-input" required value={form.nome} onChange={(e) => update('nome', e.target.value)} /></div>
+          <div className="admin-field full"><label htmlFor="hardware-nome">Nome técnico</label><input id="hardware-nome" className="admin-input" required value={form.nome} onChange={(e) => update('nome', e.target.value)} /><button className="btn btn-secundario btn-pequeno" type="button" onClick={() => { const name = normalizarNomeTecnico(form.nome, form); if (name) update('nome', name) }}>Limpar nome</button></div>
           <div className="admin-field"><label>Categoria</label><select className="admin-select" value={form.categoria} disabled={Boolean(editing)} onChange={(e) => changeCategory(e.target.value)}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>{editing && <small className="admin-help">A categoria não pode ser alterada depois do cadastro.</small>}</div>
           <div className="admin-field"><label>Marca</label><input className="admin-input" required value={form.marca} onChange={(e) => update('marca', e.target.value)} /></div>
           <div className="admin-field"><label>Modelo</label><input className="admin-input" required value={form.modelo} onChange={(e) => update('modelo', e.target.value)} /></div>
           <div className="admin-field"><label>MPN</label><input className="admin-input" value={form.mpn} onChange={(e) => update('mpn', e.target.value)} /></div>
           <div className="admin-field"><label>GTIN/EAN</label><input className="admin-input" aria-invalid={form.gtin && !validGtin(form.gtin) ? 'true' : 'false'} inputMode="numeric" value={form.gtin} onChange={(e) => update('gtin', normalizeGtin(e.target.value))} />{form.gtin && !validGtin(form.gtin) && <small className="admin-inline-warning">GTIN/EAN inválido.</small>}</div>
-          <div className="admin-field full"><label>Descrição</label><textarea className="admin-textarea" value={form.descricao} onChange={(e) => update('descricao', e.target.value)} /></div>
+          <div className="admin-field full"><label htmlFor="hardware-descricao">Descrição</label><textarea id="hardware-descricao" className="admin-textarea" value={form.descricao} onChange={(e) => update('descricao', e.target.value)} /></div>
         </div></section>
 
         <section className="admin-form-section">

@@ -1,3 +1,4 @@
+import { normalizarNomeTecnico } from './catalogContent.js'
 const SPEC_KEY_BY_CATEGORY = {
   PROCESSADOR: 'especificacaoProcessador',
   PLACA_VIDEO: 'especificacaoPlacaVideo',
@@ -225,7 +226,7 @@ export function getAiPayload(response = {}) {
     }
   }
 
-  // A descrição original coletada tem prioridade sobre resumos de normalização/IA.
+  // O anúncio integral continua na resposta; o cadastro usa o resumo técnico.
   const listingDescription = safeText(response?.descricaoAnuncio)
     || safeText(response?.resultadoProdutoIa?.descricaoAnuncio)
     || safeText(response?.detalhesPaginaShopee?.descricao)
@@ -235,7 +236,8 @@ export function getAiPayload(response = {}) {
   return {
     ...merged,
     ...normalizedSpec,
-    descricao: listingDescription || merged.descricao || '',
+    ...(typeof merged.nome === 'string' ? { nome: normalizarNomeTecnico(merged.nome, { ...merged, categoria: category }) } : {}),
+    descricao: !category || category === 'PC_MONTADO' ? listingDescription || merged.descricao || '' : merged.descricao || listingDescription || '',
   }
 }
 
