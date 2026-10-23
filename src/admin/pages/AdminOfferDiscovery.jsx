@@ -8,6 +8,9 @@ import { storeAiImportPreview } from '../utils/aiImportTransfer'
 import { getAiPayload, mergeAiImportPreview } from '../utils/aiImportContract'
 import { resolveOfferRegistration } from '../utils/offerRegistration'
 import { useDiscoverySession } from '../hooks/useDiscoverySession'
+import { hardwareSchemaFor } from '../components/AdminTechnicalFields'
+import { completeOfferDescription } from '../utils/offerDescription'
+import TechnicalResearchEvidence from '../components/TechnicalResearchEvidence'
 import './AdminOfferDiscovery.css'
 
 const CATEGORY_RULES = [
@@ -234,14 +237,17 @@ export default function AdminOfferDiscovery() {
       const listingTitle = extracted.nome || clean(item.nome)
       const listingDescription = extracted.descricao || clean(item.descricao)
 
-      let buildAnalysis = null
+      let buildAnalysis = preview?.analiseComputador || preview?.resultadoProdutoIa?.analiseComputador || null
       let buildWarning = ''
       if (resolvedDestination === 'PC_MONTADO' || detectedCategory === 'PC_MONTADO' || category === 'PC_MONTADO') {
         try {
-          buildAnalysis = await adminService.builds.analyzeListing({
-            titulo: listingTitle,
-            descricao: listingDescription,
-          })
+          if (!buildAnalysis?.pesquisaTecnicaExecutada || !buildAnalysis?.componentesDetectados?.length) {
+            buildAnalysis = await adminService.builds.analyzeListing({
+              titulo: listingTitle,
+              descricao: listingDescription,
+              pesquisarEspecificacoes: true,
+            })
+          }
           if (buildAnalysis?.tipoSugerido === 'PC_MONTADO') resolvedDestination = 'PC_MONTADO'
         } catch (cause) {
           buildWarning = cause?.message || 'Não foi possível sugerir vínculos de componentes.'
@@ -249,16 +255,20 @@ export default function AdminOfferDiscovery() {
       }
 
       const fallback = fallbackPreview(item, category)
-      const mergedPreview = {
+      let mergedPreview = {
         ...mergeAiImportPreview(fallback, preview),
         categoriaDetectada: detectedCategory || category,
         destinoSugerido: resolvedDestination,
         ...(buildAnalysis ? { analiseComputador: buildAnalysis } : {}),
       }
-      if (!previewFields(mergedPreview).descricao) {
-        collectionWarning = [collectionWarning, 'A loja não liberou a descrição do anúncio. Abra o anúncio e copie a descrição para o cadastro ou use a captura pela extensão.'].filter(Boolean).join(' ')
-      }
-      const result = { preview: mergedPreview, buildAnalysis, buildWarning, collectionWarning }
+      const completed = await completeOfferDescription(mergedPreview, {
+        category: resolvedDestination === 'PC_MONTADO' ? 'PC_MONTADO' : detectedCategory || category,
+        schemaFor: hardwareSchemaFor, buildAnalysis,
+        researchSpecifications: adminService.hardwares.researchSpecifications,
+      })
+      mergedPreview = completed.preview
+      collectionWarning = [collectionWarning, completed.descriptionWarning].filter(Boolean).join(' ')
+      const result = { preview: mergedPreview, buildAnalysis, buildWarning, collectionWarning, descriptionNotice: completed.descriptionNotice }
       setAnalyses((current) => ({ ...current, [key]: result }))
       return result
     } catch (cause) {
@@ -292,6 +302,7 @@ export default function AdminOfferDiscovery() {
         openExistingProduct(latest, productMatch.product)
         return
       }
+      if (analysis?.collectionWarning) toast.show(analysis.collectionWarning, 'alerta')
       if (productMatch.ambiguous.length) {
         setCatalogReviews(current => ({ ...current, [item._key]: { preview: latest, products: productMatch.ambiguous, destination } }))
         return
@@ -370,10 +381,16 @@ export default function AdminOfferDiscovery() {
 
             {analysis && <div className="admin-discovery-analysis">
               {analysis.collectionWarning && <small className="admin-inline-warning">{analysis.collectionWarning}</small>}
-              {listingDescription && <details className="admin-discovery-description">
+              {listingDescription && listingDescription !== previewFields(analysis.preview).descricao && <details className="admin-discovery-description">
                 <summary>Descrição do anúncio ({listingDescription.length.toLocaleString('pt-BR')} caracteres)</summary>
                 <div>{listingDescription}</div>
               </details>}
+              {analysis.descriptionNotice && <small>{analysis.descriptionNotice}</small>}
+              {previewFields(analysis.preview).descricao && <details>
+                <summary>Descrição para cadastro</summary>
+                <p className="admin-discovery-description">{previewFields(analysis.preview).descricao}</p>
+              </details>}
+              {analysis.preview?.descricaoPesquisa && destination !== 'PC_MONTADO' && <TechnicalResearchEvidence preview={analysis.preview} />}
               <div><span>Destino sugerido</span><strong>{CATEGORY_LABELS[analyzedCategory] || destination}</strong></div>
               {destination === 'PC_MONTADO' && <>
                 <div><span>Catálogo consultado</span><strong>{analysis.buildAnalysis?.catalogoConsultado ?? '—'}</strong></div>

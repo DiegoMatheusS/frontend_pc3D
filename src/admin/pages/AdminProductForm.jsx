@@ -1,3 +1,4 @@
+import { normalizarNomeTecnico } from '../utils/catalogContent.js'
 import { buildSpecificationPrompt, mergeSpecificationGaps, metadataSpecifications, parseSpecificationReply, specificationDescription } from '../utils/productSpecifications'
 import { publicSpecLabel, publicSpecValue } from '../../utils/productSpecPresentation'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -934,7 +935,10 @@ export default function AdminProductForm() {
   }
 
   async function generateDescriptionWithAi() {
-    if (isPhone) { describeSpecifications(); return }
+    let metadata
+    try { metadata = parseSpecificationReply(form.metadados || '{}').data }
+    catch (error) { toast.show(error.message, 'erro'); return }
+    if (Object.keys(technical || {}).length || Object.keys(metadataSpecifications(metadata)).length) { describeSpecifications(); return }
     if (!editing || !canWriteAi) return
     setAiBusy('description')
     try {
@@ -1390,13 +1394,13 @@ export default function AdminProductForm() {
         <section className="admin-form-section">
           <h2>Identificação</h2>
           <div className="admin-form-grid">
-            <div className="admin-field full"><label>Nome</label><input className="admin-input" required value={form.nome} onChange={(event) => update('nome', event.target.value)} /></div>
+            <div className="admin-field full"><label htmlFor="produto-nome">Nome técnico</label><input id="produto-nome" className="admin-input" required value={form.nome} onChange={(event) => update('nome', event.target.value)} /><button className="btn btn-secundario btn-pequeno" type="button" onClick={() => { const name = normalizarNomeTecnico(form.nome, form); if (name) update('nome', name); else toast.show('Informe marca e modelo para identificar o produto.', 'alerta') }}>Limpar nome</button></div>
             <div className="admin-field"><label>Categoria</label><select className="admin-select" required={!selectedHardwareId} disabled={Boolean(selectedHardwareId)} value={form.categoriaId} onChange={(event) => changeCategory(event.target.value)}><option value="">{selectedHardwareId ? 'Definida pelo Hardware' : 'Selecione'}</option>{categories.map((cat) => <option value={cat.id} key={cat.id}>{cat.nome || cat.slug || `Categoria ${cat.id}`}</option>)}</select></div>
             <div className="admin-field"><label>Marca</label><input className="admin-input" value={form.marca} readOnly={Boolean(selectedHardwareId)} onChange={(event) => update('marca', event.target.value)} /></div>
             <div className="admin-field"><label>Modelo</label><input className="admin-input" value={form.modelo} readOnly={Boolean(selectedHardwareId)} onChange={(event) => update('modelo', event.target.value)} /></div>
             <div className="admin-field"><label>MPN</label><input className="admin-input" value={form.mpn} readOnly={Boolean(selectedHardwareId)} onChange={(event) => update('mpn', event.target.value)} /></div>
             <div className="admin-field"><label>GTIN/EAN</label><input className="admin-input" aria-invalid={!selectedHardwareId && form.gtin && !validGtin(form.gtin) ? 'true' : 'false'} inputMode="numeric" value={form.gtin} readOnly={Boolean(selectedHardwareId)} onChange={(event) => update('gtin', normalizeGtin(event.target.value))} />{!selectedHardwareId && form.gtin && !validGtin(form.gtin) && <small className="admin-inline-warning">GTIN/EAN inválido.</small>}</div>
-            <div className="admin-field full"><label>Descrição</label><textarea className="admin-textarea" value={form.descricao} onChange={(event) => update('descricao', event.target.value)} /></div>
+            <div className="admin-field full"><label htmlFor="produto-descricao">Descrição</label><textarea id="produto-descricao" className="admin-textarea" value={form.descricao} onChange={(event) => update('descricao', event.target.value)} /></div>
           </div>
         </section>
 
@@ -1510,6 +1514,8 @@ export default function AdminProductForm() {
               <div className="admin-import-preview-grid">{Object.entries(specificationPreview.especificacoes || {}).map(([key, value]) => <div key={key}><span>{publicSpecLabel(key)}</span><strong>{publicSpecValue(key, value)}</strong>{specificationPreview.origemPorCampo?.[key]?.url && <a href={specificationPreview.origemPorCampo[key].url} target="_blank" rel="noopener noreferrer">Ver fonte</a>}</div>)}</div>
               {specificationPreview.avisos?.map((warning, index) => <p className="admin-help" key={index}>{warning}</p>)}
               {(specificationPreview.camposPreenchidos?.length > 0 || specificationPreview.descricao) && <button className="btn btn-secundario" type="button" onClick={applySpecificationPreview} disabled={Boolean(aiBusy)}>{specificationPreview.hardwareId ? 'Aplicar ao Hardware vinculado' : 'Aplicar ao formulário'}</button>}
+              {specificationPreview.nomeTecnico && specificationPreview.nomeTecnico !== form.nome && <button className="btn btn-secundario" type="button" onClick={() => update('nome', specificationPreview.nomeTecnico)}>Aplicar nome técnico</button>}
+              {specificationPreview.descricaoTecnica && <button className="btn btn-secundario" type="button" onClick={() => update('descricao', specificationPreview.descricaoTecnica)}>Aplicar descrição técnica</button>}
             </div>}
             {aiAnalysis && <div className="admin-ai-analysis">{aiAnalysis}</div>}
             <small className="admin-help">A IA não salva alterações automaticamente.</small>
