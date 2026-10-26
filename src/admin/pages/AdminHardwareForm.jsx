@@ -12,7 +12,7 @@ import { mergeResearchGaps, technicalResearchFromPreview } from '../utils/techni
 import TechnicalResearchEvidence from '../components/TechnicalResearchEvidence'
 
 const CATEGORIES = ['PROCESSADOR','COOLER','PLACA_MAE','MEMORIA_RAM','PLACA_VIDEO','ARMAZENAMENTO','FONTE','GABINETE','VENTOINHA','MONITOR','MOUSE','TECLADO','FONE','HEADSET','MICROFONE']
-const EMPTY = { nome:'', categoria:'PROCESSADOR', marca:'', modelo:'', descricao:'', mpn:'', gtin:'', imagemUrl:'', imagemHoverUrl:'', especificacoes:'{}', publicado:false, ativo:true }
+const EMPTY = { mediaPrecoHardware:'', nome:'', categoria:'PROCESSADOR', marca:'', modelo:'', descricao:'', mpn:'', gtin:'', imagemUrl:'', imagemHoverUrl:'', especificacoes:'{}', publicado:false, ativo:true }
 
 function cleanText(value) {
   return String(value ?? '').trim()
@@ -27,6 +27,7 @@ function normalizeHardwareForm(item = {}) {
     marca: String(item.marca ?? ''),
     modelo: String(item.modelo ?? ''),
     descricao: String(item.descricao ?? ''),
+    mediaPrecoHardware: item.mediaPrecoHardware == null ? '' : String(item.mediaPrecoHardware),
     mpn: String(item.mpn ?? ''),
     gtin: normalizeGtin(item.gtin),
     imagemUrl: String(item.imagemUrl ?? ''),
@@ -328,10 +329,13 @@ export default function AdminHardwareForm() {
     try {
       let specs = {}
       try { specs = cleanText(form.especificacoes) ? JSON.parse(cleanText(form.especificacoes)) : {} } catch { throw new Error('O JSON de especificações adicionais está inválido.') }
+      const averagePrice = String(form.mediaPrecoHardware ?? '').trim() === '' ? null : Number(String(form.mediaPrecoHardware).replace(',', '.'))
+      if (averagePrice !== null && (!Number.isFinite(averagePrice) || averagePrice < 0.01 || averagePrice > 100000000 || Math.abs(averagePrice * 100 - Math.round(averagePrice * 100)) > 0.000001)) throw new Error('Informe um preço médio válido, com até duas casas decimais.')
       const fullBody = {
         nome: cleanText(form.nome), categoria: form.categoria, marca: cleanText(form.marca), modelo: cleanText(form.modelo),
         descricao: cleanText(form.descricao) || undefined, mpn: cleanText(form.mpn) || undefined, gtin: cleanText(form.gtin) || undefined,
         imagemUrl: cleanText(form.imagemUrl) || undefined, imagemHoverUrl: cleanText(form.imagemHoverUrl) || undefined,
+        mediaPrecoHardware: averagePrice,
         especificacoes: specs, publicado: draft ? false : Boolean(form.publicado), ativo: Boolean(form.ativo),
       }
       if (schema) fullBody[schema.key] = normalizeSpec(schema, technical)
@@ -366,6 +370,7 @@ export default function AdminHardwareForm() {
         for (const key of ['imagemUrl', 'imagemHoverUrl']) {
           if (currentText[key] !== originalText[key] && currentText[key]) body[key] = currentText[key]
         }
+        if (averagePrice !== (original.mediaPrecoHardware === '' || original.mediaPrecoHardware == null ? null : Number(original.mediaPrecoHardware))) body.mediaPrecoHardware = averagePrice
         if (JSON.stringify(specs) !== JSON.stringify(originalSpecsRef.current || {})) body.especificacoes = specs
 
         const nextPublished = draft ? false : Boolean(form.publicado)
@@ -435,6 +440,7 @@ export default function AdminHardwareForm() {
           <div className="admin-field"><label>Modelo</label><input className="admin-input" required value={form.modelo} onChange={(e) => update('modelo', e.target.value)} /></div>
           <div className="admin-field"><label>MPN</label><input className="admin-input" value={form.mpn} onChange={(e) => update('mpn', e.target.value)} /></div>
           <div className="admin-field"><label>GTIN/EAN</label><input className="admin-input" aria-invalid={form.gtin && !validGtin(form.gtin) ? 'true' : 'false'} inputMode="numeric" value={form.gtin} onChange={(e) => update('gtin', normalizeGtin(e.target.value))} />{form.gtin && !validGtin(form.gtin) && <small className="admin-inline-warning">GTIN/EAN inválido.</small>}</div>
+          <div className="admin-field"><label htmlFor="hardware-preco-medio">Preço médio estimado (R$)</label><input id="hardware-preco-medio" className="admin-input" type="number" min="0.01" max="100000000" step="0.01" inputMode="decimal" value={form.mediaPrecoHardware} onChange={(event) => update('mediaPrecoHardware', event.target.value)} /><small className="admin-help">Valor por unidade usada no montador quando não houver oferta ativa. Deixe vazio para não estimar.</small></div>
           <div className="admin-field full"><label htmlFor="hardware-descricao">Descrição</label><textarea id="hardware-descricao" className="admin-textarea" value={form.descricao} onChange={(e) => update('descricao', e.target.value)} /></div>
         </div></section>
 
