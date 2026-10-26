@@ -470,7 +470,10 @@ function normalizarHardwareParaBuilder(hardware) {
   const tiposMemoria = Array.isArray(hardware?.especificacaoPlacaMae?.tiposMemoriaSuportados)
     ? hardware.especificacaoPlacaMae.tiposMemoriaSuportados
     : [];
-  const preco = precoOfertaHardware(oferta);
+  const precoOferta = precoOfertaHardware(oferta);
+  const media = numeroPrecoComercial(hardware.mediaPrecoHardware);
+  const precoEstimado = precoOferta === null && media !== null && media > 0;
+  const preco = precoOferta ?? (precoEstimado ? media : null);
   const modelos3D = Array.isArray(hardware?.modelos3D) ? hardware.modelos3D : [];
   const modelo3DAtivo = hardware?.modelo3DAtivo
     || hardware?.modelo3D
@@ -539,6 +542,8 @@ function normalizarHardwareParaBuilder(hardware) {
     modelo3D: modelo3dUrl,
     ...(transform3D ? { transform3D } : {}),
     preco,
+    precoEstimado,
+    mediaPrecoHardware: media,
     precoIndisponivel: preco === null || preco === undefined,
     loja: oferta?.parceiro?.nome || "",
     linkCompra: oferta?.urlAfiliada || oferta?.urlOriginal || "",

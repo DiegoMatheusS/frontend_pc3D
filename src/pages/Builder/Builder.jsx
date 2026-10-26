@@ -291,7 +291,7 @@ function ModalResumoFinal({ estado, onClose, onSave, onPublish, onShare, onPrint
 
         <div className="modal-resumo-corpo">
           <div className="resumo-final-metricas">
-            <article className="resumo-final-metrica"><span>{estado.precoCompleto === false ? 'Preço parcial' : 'Preço total'}</span><strong id="modal-resumo-preco">{formatarPrecoReact(estado.precoTotal)}</strong>{estado.pecasSemPreco > 0 && <small>{estado.pecasSemPreco} peça(s) sem preço no catálogo</small>}</article>
+            <article className="resumo-final-metrica"><span>{estado.precoCompleto === false ? 'Preço parcial' : estado.precoEstimado ? 'Total estimado' : 'Preço total'}</span><strong id="modal-resumo-preco">{formatarPrecoReact(estado.precoTotal)}</strong>{estado.pecasSemPreco > 0 && <small>{estado.pecasSemPreco} peça(s) sem preço no catálogo</small>}</article>
             <article className="resumo-final-metrica"><span>Consumo estimado</span><strong id="modal-resumo-consumo">{estado.consumoTotal || 0} W</strong></article>
             <article className="resumo-final-metrica"><span>Fonte recomendada</span><strong id="modal-resumo-fonte">{estado.fonteRecomendada || 0} W</strong></article>
             <article className="resumo-final-metrica"><span>Componentes</span><strong id="modal-resumo-quantidade">{resumo.itens?.length || 0}</strong></article>
@@ -550,6 +550,7 @@ export default function Builder() {
         marca: item.peca.marca ?? '',
         modelo: item.peca.modelo ?? '',
         preco: item.peca.preco,
+        precoEstimado: Boolean(item.peca.precoEstimado),
         origem: item.peca.origem || (item.peca.hardwareId ? 'CATALOGO' : undefined),
         especificacoes: item.peca.especificacoes || undefined,
         fonteDadosUrl: item.peca.fonteDadosUrl || undefined,
@@ -776,7 +777,7 @@ export default function Builder() {
             <div className="resumo-status-linha"><span className="status-build" data-tipo={estadoMontadorReact.status?.tipo || 'neutro'} id="status-build">{estadoMontadorReact.status?.texto || 'Build vazia'}</span><button className="btn-limpar-build" id="btn-limpar-build" type="button" onClick={() => bridge()?.limparBuild?.()}>Limpar build</button></div>
             <small aria-live="polite" className="status-salvamento-builder" data-tipo="neutro" id="status-salvamento-build">Salvamento automático ativo neste navegador.</small>
             <div className="resumo-info">
-              <div className="resumo-metrica"><span>{estadoMontadorReact.precoCompleto === false ? 'Preço parcial' : 'Preço total'}</span><strong aria-live="polite" id="preco-total-montagem">{formatarPrecoReact(estadoMontadorReact.precoTotal)}</strong>{estadoMontadorReact.pecasSemPreco > 0 && <small>{estadoMontadorReact.pecasSemPreco} sem preço</small>}</div>
+              <div className="resumo-metrica"><span>{estadoMontadorReact.precoCompleto === false ? 'Preço parcial' : estadoMontadorReact.precoEstimado ? 'Total estimado' : 'Preço total'}</span><strong aria-live="polite" id="preco-total-montagem">{formatarPrecoReact(estadoMontadorReact.precoTotal)}</strong>{estadoMontadorReact.pecasSemPreco > 0 && <small>{estadoMontadorReact.pecasSemPreco} sem preço</small>}</div>
               <div className="resumo-metrica resumo-metrica-menor"><span>Consumo</span><strong aria-live="polite" id="consumo-watts">{estadoMontadorReact.consumoTotal || 0} W</strong></div>
               <div className="resumo-metrica resumo-metrica-menor"><span>Fonte ideal</span><strong aria-live="polite" id="fonte-recomendada">{estadoMontadorReact.fonteRecomendada || 0} W</strong></div>
             </div>

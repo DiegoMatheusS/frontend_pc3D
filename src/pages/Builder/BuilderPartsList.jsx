@@ -65,7 +65,7 @@ export default function BuilderPartsList({ estado, termoPesquisa, somenteCompati
               <small className="categoria-peca-mini">{item.nomeSlot}</small>
               <h4>{item.peca?.nome || 'Slot vazio'}</h4>
               <span className="preco-peca-mini">
-                {item.peca ? formatarPreco(item.peca.preco) : 'Escolher componente'}
+                {item.peca ? item.peca.precoFormatado || formatarPreco(item.peca.preco) : 'Escolher componente'}
               </span>
 
               {item.peca?.linkCompra && (
@@ -172,7 +172,7 @@ export default function BuilderPartsList({ estado, termoPesquisa, somenteCompati
             <div className="info-peca-mini">
               <small className="categoria-peca-mini">{item.nomeCategoria}</small>
               <h4>{item.nome}</h4>
-              <span className="preco-peca-mini">{formatarPreco(item.preco)}</span>
+              <span className="preco-peca-mini">{item.precoFormatado || `${item.precoEstimado ? 'Estimado: ' : ''}${formatarPreco(item.preco)}`}</span>
 
               <span
                 className="compatibilidade-card-builder"
