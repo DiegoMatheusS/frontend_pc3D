@@ -1,7 +1,8 @@
-import { normalizeNotebookSpecs } from '../utils/notebookSpecs'
-import { getCommunityOfferCreatorName, getOfferCreatorId } from '../utils/offerCreator'
-import { configurationFromComponents, inferMountedPcConfiguration } from '../utils/builderConfiguration'
-import { safeHttpUrl } from '../utils/safeUrl'
+import { isTechnicalAttribute } from '../utils/technicalAttributes.js'
+import { normalizeNotebookSpecs } from '../utils/notebookSpecs.js'
+import { getCommunityOfferCreatorName, getOfferCreatorId } from '../utils/offerCreator.js'
+import { configurationFromComponents, inferMountedPcConfiguration } from '../utils/builderConfiguration.js'
+import { safeHttpUrl } from '../utils/safeUrl.js'
 
 const CATEGORY_META = {
   PROCESSADOR: ['hardwares', 'Processador', 'processador'],
@@ -387,7 +388,7 @@ function genericSpecs(item) {
     item.especificacaoMouse,
     item.especificacaoTeclado,
   ].filter(Boolean)
-  return Object.assign({}, ...candidates)
+  return Object.fromEntries(Object.entries(Object.assign({}, ...candidates)).filter(([key, value]) => isTechnicalAttribute(key, value)))
 }
 
 function specValue(raw, ...keys) {
