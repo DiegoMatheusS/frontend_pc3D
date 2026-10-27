@@ -1,3 +1,7 @@
+import AdminOfferDiscovery from '../../admin/pages/AdminOfferDiscovery'
+import { AdminToastProvider } from '../../admin/components/AdminToast'
+import { matchesOfferSearch, OFFER_STORES } from '../../admin/utils/offerSearchIntent.js'
+import '../../admin/Admin.css'
 import { useEffect, useMemo, useState } from 'react'
 import { atualizarBuscaOfertas, listarBuscaOfertas, statusVerificacaoPrecos, verificarPrecosOfertas } from '../../services/affiliateOffersService'
 import { getOfferCreatorName } from '../../utils/offerCreator'
@@ -77,6 +81,8 @@ function formatVariation(value) {
 }
 
 export default function AffiliateOffers() {
+  const [discovering, setDiscovering] = useState(false)
+  const [store, setStore] = useState('TODAS')
   const [offers, setOffers] = useState([])
   const [lastUpdated, setLastUpdated] = useState(null)
   const [search, setSearch] = useState('')
@@ -127,9 +133,9 @@ export default function AffiliateOffers() {
     const result = offers.filter((offer) => {
       if (tag !== 'TODOS' && offer?.tag !== tag) return false
       if (discount > 0 && (offer?.descontoPercentual == null || asNumber(offer.descontoPercentual, -1) < discount)) return false
+      if (store !== 'TODAS' && !String(offer.parceiro?.nome || '').toLowerCase().includes(store === 'MERCADO_LIVRE' ? 'mercado' : store === 'MAGALU' ? 'mag' : 'shopee')) return false
       if (term) {
-        const haystack = `${offer?.nome || ''} ${offer?.descricao || ''} ${offer?.parceiro?.nome || ''}`.toLocaleLowerCase('pt-BR')
-        if (!haystack.includes(term)) return false
+        if (!matchesOfferSearch(term, offer?.nome)) return false
       }
       return true
     })
@@ -140,7 +146,7 @@ export default function AffiliateOffers() {
       if (sort === 'MAIS_RECENTES') return String(b.atualizadoEm || '').localeCompare(String(a.atualizadoEm || ''))
       return asNumber(b.descontoPercentual, -1) - asNumber(a.descontoPercentual, -1)
     })
-  }, [discount, offers, search, sort, tag])
+  }, [discount, offers, search, sort, tag, store])
 
   async function handleRefresh() {
     setRefreshing(true)
@@ -194,6 +200,9 @@ export default function AffiliateOffers() {
           </div>
         </header>
 
+        <nav className="affiliate-offers-modes" aria-label="Tipo de busca"><button type="button" className="button button--secondary" aria-pressed={!discovering} onClick={()=>setDiscovering(false)}>Ofertas cadastradas</button><button type="button" className="button button--primary" aria-pressed={discovering} onClick={()=>setDiscovering(true)}>Descobrir novas ofertas</button></nav>
+        {discovering ? <div className="admin-root affiliate-discovery-panel"><AdminToastProvider><AdminOfferDiscovery embedded /></AdminToastProvider></div> : <>
+        <label>Loja <select aria-label="Filtrar ofertas por loja" value={store} onChange={event=>setStore(event.target.value)}><option value="TODAS">Todas as lojas</option>{Object.entries(OFFER_STORES).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
         <section className="affiliate-offers-toolbar" aria-label="Filtros da busca de ofertas">
           <label className="affiliate-offers-search">
             <span className="sr-only">Pesquisar produto</span>
@@ -289,6 +298,7 @@ export default function AffiliateOffers() {
         )}
 
         <p className="affiliate-offers-note">Esta página não faz scraping no navegador. A verificação é solicitada ao backend do CriaByte, que usa a URL original e, quando necessário, a URL afiliada como fallback.</p>
+        </>}
       </div>
     </section>
   )
