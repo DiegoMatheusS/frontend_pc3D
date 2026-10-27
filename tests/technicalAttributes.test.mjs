@@ -11,6 +11,7 @@ test('ficha antiga oculta dados de loja e código, mantendo dados técnicos',()=
  for(const row of rows.slice(3)) assert.equal(Object.hasOwn(item.specs,row.name),false)
 })
 test('filtro público mantém false/zero e rejeita avaliação e parcelas mesmo numéricas',()=>{
+ for (const [key, value] of [['Rank','Dual Rank'],['IP rating','IP67'],['Power rating','650 W'],['OPERATING_SYSTEM','Linux']]) assert.equal(isPublicSpec(key,value),true)
  assert.equal(isPublicSpec('Duplex',false),true)
  assert.equal(isPublicSpec('Consumo',0),true)
  for(const key of ['Preço','Avaliações de clientes','Customer Reviews','Best Sellers Rank','Parcelas','shippingCost']) assert.equal(isPublicSpec(key,4.7),false)
