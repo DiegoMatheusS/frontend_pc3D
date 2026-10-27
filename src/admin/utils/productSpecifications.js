@@ -1,4 +1,4 @@
-import { publicSpecLabel, publicSpecValue } from '../../utils/productSpecPresentation.js'
+import { isPublicSpec, publicSpecLabel, publicSpecValue } from '../../utils/productSpecPresentation.js'
 
 export const PHONE_FIELDS = [
   ['processadorNome', 'Processador', 'text'], ['ramGb', 'Memória RAM (GB)', 'number'],
@@ -34,7 +34,7 @@ export function specificationDescription(specs, phone = false) {
   const entries = phone
     ? ['ramGb', 'armazenamentoGb', 'tamanhoTelaPolegadas', 'bateriaMah', 'processadorNome', 'cameraPrincipalMp', 'sistemaOperacional']
       .filter((key) => !missingSpec(specs?.[key])).slice(0, 4).map((key) => [key, specs[key]])
-    : Object.entries(object(specs)).filter(([key, value]) => !missingSpec(value) &&
+    : Object.entries(object(specs)).filter(([key, value]) => !missingSpec(value) && isPublicSpec(key, value) &&
       !/^(?:id|produtoId|hardwareId|criadoEm|atualizadoEm|nome|descricao|origem|fontes|url|metodo|__proto__|constructor|prototype)$|pre[cç]o|price|frete|shipping|hist[oó]ria|history/i.test(key) &&
       (typeof value !== 'object' || (Array.isArray(value) && value.every(item => typeof item !== 'object'))) &&
       !/(?:conhe[cç]a|descubra|hist[oó]ria|melhor pre[cç]o|frete gr[aá]tis|foi desenvolvid[oa])/i.test(String(value)) &&

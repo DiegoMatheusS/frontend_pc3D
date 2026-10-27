@@ -1,3 +1,4 @@
+import { isTechnicalAttribute } from './technicalAttributes.js'
 const LABELS = {
   socket: 'Encaixe do processador', generation: 'Geração', architecture: 'Arquitetura', cores: 'Núcleos', threads: 'Threads',
   baseClockGhz: 'Frequência base', boostClockGhz: 'Frequência turbo', cacheL3Mb: 'Cache L3', tdpWatts: 'Consumo (TDP)', integratedGraphics: 'Vídeo integrado', memory: 'Memória compatível', pcie: 'PCIe',
@@ -44,7 +45,7 @@ function normalizedKey(key) {
 }
 
 export function isPublicSpec(key, value) {
-  return !internalKeys.has(normalizedKey(key)) && value !== null && value !== undefined && value !== ''
+  return isTechnicalAttribute(key, value) && !internalKeys.has(normalizedKey(key)) && value !== null && value !== undefined && value !== ''
 }
 
 export function publicSpecLabel(key) {
