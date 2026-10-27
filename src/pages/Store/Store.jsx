@@ -7,6 +7,7 @@ import { getProductById, getProductGroups, getProducts } from '../../services/pr
 import { getNotebooks } from '../../services/notebooksService'
 import useAccessibleDialog from '../../hooks/useAccessibleDialog'
 import { setDocumentMeta } from '../../utils/pageMeta'
+import { STORE_CATEGORY_LABELS } from '../../data/storeNavigation'
 import './Store.css'
 
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', {
@@ -191,16 +192,38 @@ function findNotebookForProduct(notebooks, product) {
     || null
 }
 
+const DEFAULT_FILTERS = { brand: 'todos', maxPrice: 'todos', sortBy: 'relevancia', visibleCount: 20 }
+
 export default function Store({ defaultGroup = 'todos' }) {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedSectionId = String(searchParams.get('secao') || '')
+  const sectionId = requestedSectionId && STORE_SECTION_FILTERS[requestedSectionId] ? requestedSectionId : ''
+  const group = defaultGroup === 'hardwares' ? 'hardwares' : String(searchParams.get('grupo') || defaultGroup)
+  const category = String(searchParams.get('categoria') || 'todos')
+  const query = String(searchParams.get('busca') || '')
+  const filterScope = JSON.stringify([defaultGroup, group, category, sectionId])
+  const [filters, setFilters] = useState(() => ({ ...DEFAULT_FILTERS, scope: filterScope }))
+  if (filters.scope !== filterScope) setFilters({ ...DEFAULT_FILTERS, scope: filterScope })
+  // Ao mudar de tópico, os filtros anteriores deixam de valer já na primeira renderização.
+  const { brand, maxPrice, sortBy, visibleCount } = filters.scope === filterScope ? filters : DEFAULT_FILTERS
+  const setFilter = (key, value) => setFilters((current) => {
+    const previous = current.scope === filterScope ? current : DEFAULT_FILTERS
+    return { ...previous, scope: filterScope, [key]: typeof value === 'function' ? value(previous[key]) : value }
+  })
+  const setQuery = (value) => {
+    const next = new URLSearchParams(searchParams)
+    if (value) next.set('busca', value)
+    else next.delete('busca')
+    setSearchParams(next, { replace: true })
+  }
+  const setCategory = (value) => {
+    const next = new URLSearchParams(searchParams)
+    if (value === 'todos') next.delete('categoria')
+    else next.set('categoria', value)
+    setSearchParams(next)
+  }
   const [groups, setGroups] = useState([])
   const [products, setProducts] = useState([])
-  const [query, setQuery] = useState('')
-  const [group, setGroup] = useState(defaultGroup)
-  const [category, setCategory] = useState('todos')
-  const [brand, setBrand] = useState('todos')
-  const [maxPrice, setMaxPrice] = useState('todos')
-  const [sortBy, setSortBy] = useState('relevancia')
-  const [visibleCount, setVisibleCount] = useState(20)
   const [likedProductIds, setLikedProductIds] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem('criabyteLikedProducts') || '[]').map(String)) } catch { return new Set() }
   })
@@ -212,12 +235,6 @@ export default function Store({ defaultGroup = 'todos' }) {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
-  const [searchParams, setSearchParams] = useSearchParams()
-  const requestedSectionId = searchParams.get('secao')
-  const sectionId = requestedSectionId && STORE_SECTION_FILTERS[requestedSectionId]
-    ? requestedSectionId
-    : ''
-  const lastSyncedSearchRef = useRef(null)
   const descriptionRequestsRef = useRef(new Set())
   const comparisonDialogRef = useAccessibleDialog(comparisonOpen, setComparisonOpen)
 
@@ -274,7 +291,6 @@ export default function Store({ defaultGroup = 'todos' }) {
       if (likedFromBackend.length) {
         setLikedProductIds((current) => new Set([...current, ...likedFromBackend]))
       }
-      setVisibleCount(20)
     }).catch((error) => {
       if (!active) return
       setGroups([])
@@ -286,39 +302,7 @@ export default function Store({ defaultGroup = 'todos' }) {
   }, [defaultGroup, reloadKey])
 
   useEffect(() => {
-    if (!groups.length) return
-
-    const searchKey = searchParams.toString()
-    if (lastSyncedSearchRef.current === searchKey) return
-
-    const requestedCategory = searchParams.get('categoria')
-    if (requestedCategory && !products.length) return
-
-    lastSyncedSearchRef.current = searchKey
-
-    const requestedGroup = searchParams.get('grupo')
-    const requestedSection = searchParams.get('secao')
-    const hasRequestedSection = Boolean(
-      requestedSection && STORE_SECTION_FILTERS[requestedSection],
-    )
-    const nextGroup = defaultGroup === 'hardwares'
-      ? 'hardwares'
-      : hasRequestedSection
-        ? 'todos'
-        : requestedGroup && groups.some((item) => item.id === requestedGroup)
-          ? requestedGroup
-          : defaultGroup
-
-    setGroup(nextGroup)
-    setQuery(searchParams.get('busca') || '')
-
-    if (requestedCategory) {
-      const foundCategory = products.find((item) => item.categoryKey === requestedCategory)?.category
-      setCategory(foundCategory || 'todos')
-    } else {
-      setCategory('todos')
-    }
-
+    if (!products.length) return
     const requestedCompare = searchParams.get('comparar')
     if (requestedCompare) {
       const found = products.find((item) => String(item.id) === String(requestedCompare) || String(item.slug) === String(requestedCompare))
@@ -330,7 +314,7 @@ export default function Store({ defaultGroup = 'todos' }) {
       next.delete('comparar')
       setSearchParams(next, { replace: true })
     }
-  }, [defaultGroup, groups, products, searchParams, setSearchParams])
+  }, [products, searchParams, setSearchParams])
 
   const visiblePool = useMemo(
     () => products.filter((product) => (
@@ -339,12 +323,18 @@ export default function Store({ defaultGroup = 'todos' }) {
     )),
     [products, group, sectionId],
   )
+  const activeCategoryLabel = category === 'todos' ? '' : STORE_CATEGORY_LABELS[category]
+    || products.find((product) => product.categoryKey === category)?.category
+    || humanizeSpecKey(category)
   const categories = useMemo(() => {
-    const values = new Set(visiblePool.map((product) => product.category).filter(Boolean))
-    if (defaultGroup === 'hardwares' || group === 'hardwares' || group === 'todos') values.add('Cooler')
-    return [...values].sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  }, [visiblePool, defaultGroup, group])
-  const brands = useMemo(() => [...new Set(visiblePool.map((product) => product.brand))].sort(), [visiblePool])
+    const values = new Map(visiblePool.filter((product) => product.categoryKey).map((product) => [product.categoryKey, product.category]))
+    if (defaultGroup === 'hardwares' || group === 'hardwares' || !sectionId && group === 'todos') values.set('cooler', 'Cooler')
+    if (category !== 'todos') values.set(category, activeCategoryLabel)
+    return [...values].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
+  }, [visiblePool, defaultGroup, group, sectionId, category, activeCategoryLabel])
+  const brands = useMemo(() => [...new Set(visiblePool
+    .filter((product) => category === 'todos' || product.categoryKey === category)
+    .map((product) => product.brand))].sort(), [visiblePool, category])
 
   const filtered = useMemo(() => {
     const text = normalize(query)
@@ -353,7 +343,7 @@ export default function Store({ defaultGroup = 'todos' }) {
       const haystack = normalize([product.name, product.brand, product.category, product.description, ...product.tags].join(' '))
       return (group === 'todos' || product.group === group)
         && matchesStoreSection(product, sectionId)
-        && (category === 'todos' || product.category === category)
+        && (category === 'todos' || product.categoryKey === category)
         && (brand === 'todos' || product.brand === brand)
         && product.price <= max
         && (!text || haystack.includes(text))
@@ -420,10 +410,6 @@ export default function Store({ defaultGroup = 'todos' }) {
   }
 
   const changeGroup = (nextGroup) => {
-    setVisibleCount(20)
-    setGroup(nextGroup)
-    setCategory('todos')
-    setBrand('todos')
     if (defaultGroup === 'hardwares') return
     const next = new URLSearchParams(searchParams)
     next.delete('categoria')
@@ -431,7 +417,7 @@ export default function Store({ defaultGroup = 'todos' }) {
     next.delete('secao')
     if (nextGroup === 'todos') next.delete('grupo')
     else next.set('grupo', nextGroup)
-    setSearchParams(next, { replace: true })
+    setSearchParams(next)
   }
 
   const toggleCompare = (product) => {
@@ -526,13 +512,7 @@ export default function Store({ defaultGroup = 'todos' }) {
   }
 
   const clearFilters = () => {
-    setQuery('')
-    setGroup(defaultGroup)
-    setCategory('todos')
-    setBrand('todos')
-    setMaxPrice('todos')
-    setSortBy('relevancia')
-    setVisibleCount(20)
+    setFilters(DEFAULT_FILTERS)
     setCompare([])
     setComparisonItems([])
     setComparisonOpen(false)
@@ -542,19 +522,22 @@ export default function Store({ defaultGroup = 'todos' }) {
     next.delete('comparar')
     next.delete('grupo')
     next.delete('secao')
-    setSearchParams(next, { replace: true })
+    next.delete('busca')
+    setSearchParams(next)
   }
 
   const activeGroupLabel = groups.find((item) => item.id === group)?.label
   const activeSectionLabel = sectionId ? STORE_SECTION_FILTERS[sectionId]?.label : ''
-  const pageTitle = defaultGroup === 'hardwares'
+  const pageTitle = activeCategoryLabel || (defaultGroup === 'hardwares'
     ? 'Peças para computador'
     : activeSectionLabel
       ? activeSectionLabel
       : group === 'todos'
         ? 'Todos os produtos'
-        : activeGroupLabel || 'Produtos'
-  const pageDescription = defaultGroup === 'hardwares'
+        : activeGroupLabel || 'Produtos')
+  const pageDescription = activeCategoryLabel
+    ? `Explore ${activeCategoryLabel.toLowerCase()} com especificações, comparação e ofertas disponíveis.`
+    : defaultGroup === 'hardwares'
     ? 'Encontre componentes para montar ou atualizar o computador e compare especificações antes de escolher.'
     : activeSectionLabel
       ? `Explore somente os produtos de ${activeSectionLabel.toLowerCase()} agrupados nesta seção da Loja.`
@@ -609,20 +592,20 @@ export default function Store({ defaultGroup = 'todos' }) {
 
           <label className="store-field">
             <span>Pesquisar</span>
-            <input value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(20) }} placeholder="Produto, marca, categoria..." />
+            <input value={query} onChange={(event) => { setQuery(event.target.value); setFilter('visibleCount', 20) }} placeholder="Produto, marca, categoria..." />
           </label>
 
           <label className="store-field">
             <span>Categoria</span>
-            <select value={category} onChange={(event) => { setCategory(event.target.value); setVisibleCount(20) }}>
+            <select aria-label="Categoria" value={category} onChange={(event) => { setCategory(event.target.value); setFilter('visibleCount', 20) }}>
               <option value="todos">Todas</option>
-              {categories.map((item) => <option key={item}>{item}</option>)}
+              {categories.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
             </select>
           </label>
 
           <label className="store-field">
             <span>Marca</span>
-            <select value={brand} onChange={(event) => { setBrand(event.target.value); setVisibleCount(20) }}>
+            <select aria-label="Marca" value={brand} onChange={(event) => { setFilter('brand', event.target.value); setFilter('visibleCount', 20) }}>
               <option value="todos">Todas</option>
               {brands.map((item) => <option key={item}>{item}</option>)}
             </select>
@@ -630,7 +613,7 @@ export default function Store({ defaultGroup = 'todos' }) {
 
           <label className="store-field">
             <span>Preço máximo</span>
-            <select value={maxPrice} onChange={(event) => { setMaxPrice(event.target.value); setVisibleCount(20) }}>
+            <select aria-label="Preço máximo" value={maxPrice} onChange={(event) => { setFilter('maxPrice', event.target.value); setFilter('visibleCount', 20) }}>
               <option value="todos">Qualquer preço</option>
               <option value="300">Até R$ 300</option>
               <option value="500">Até R$ 500</option>
@@ -648,7 +631,7 @@ export default function Store({ defaultGroup = 'todos' }) {
               <strong>{filtered.length} produto{filtered.length === 1 ? '' : 's'}</strong>
               <span>Compare especificações, avaliações e ofertas disponíveis.</span>
             </div>
-            <select aria-label="Ordenar produtos" value={sortBy} onChange={(event) => { setSortBy(event.target.value); setVisibleCount(20) }}>
+            <select aria-label="Ordenar produtos" value={sortBy} onChange={(event) => { setFilter('sortBy', event.target.value); setFilter('visibleCount', 20) }}>
               <option value="relevancia">Relevância</option>
               <option value="avaliacao">Melhor avaliação</option>
               <option value="ofertas">Mais ofertas</option>
@@ -670,7 +653,7 @@ export default function Store({ defaultGroup = 'todos' }) {
               </div>
               {remainingProducts > 0 && (
                 <div className="store-results__more">
-                  <button className="button button--secondary" type="button" onClick={() => setVisibleCount((count) => count + 20)}>
+                  <button className="button button--secondary" type="button" onClick={() => setFilter('visibleCount', (count) => count + 20)}>
                     Ver mais <span>({remainingProducts} restante{remainingProducts === 1 ? '' : 's'})</span>
                   </button>
                   <small>Exibindo {visibleProducts.length} de {filtered.length} produtos.</small>
@@ -678,7 +661,7 @@ export default function Store({ defaultGroup = 'todos' }) {
               )}
             </>
           ) : (
-            <div className="store-empty"><strong>Nenhum produto encontrado.</strong><p>Altere a busca ou remova algum filtro.</p><button className="button button--secondary" type="button" onClick={clearFilters}>Limpar filtros</button></div>
+            <div className="store-empty" role="status"><strong>Indisponível</strong><p>Nenhum produto disponível para esta seleção.</p><button className="button button--secondary" type="button" onClick={clearFilters}>Limpar filtros</button></div>
           )}
         </main>
       </section>

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { preview } from 'vite'
+import { verifyStoreTopics } from './store-topics-ui.mjs'
 
 const server = await preview({ preview: { host: '127.0.0.1', port: 0 }, logLevel: 'error' })
 const address = server.httpServer.address()
@@ -126,6 +127,8 @@ try {
       assert.equal(metrics.qualidade, 'baixa')
       console.log('3D em tela móvel:', JSON.stringify(metrics))
     }
+    await verifyStoreTopics(page, base)
+    console.log(`Loja: tópicos, categorias exatas, vazias, carregamento, histórico e falhas (${viewport.width}px): OK`)
     await context.close()
   }
   const context = await browser.newContext()

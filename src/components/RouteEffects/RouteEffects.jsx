@@ -1,15 +1,17 @@
 import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
+import { STORE_CATEGORY_LABELS, STORE_GROUP_LABELS, STORE_SECTION_LABELS } from '../../data/storeNavigation'
 
 const DEFAULT_DESCRIPTION = 'Monte seu PC, compare peças, notebooks e computadores montados, confira compatibilidade e encontre ofertas.'
 
 function storeMeta(search) {
-  const group = new URLSearchParams(search).get('grupo')
-  if (group === 'perifericos') return ['Periféricos — CriaByte', 'Compare periféricos, especificações, avaliações e ofertas em um só lugar.']
-  if (group === 'monitores') return ['Monitores — CriaByte', 'Compare monitores por resolução, taxa de atualização, painel, tamanho e ofertas disponíveis.']
-  if (group === 'setup') return ['Setup — CriaByte', 'Encontre itens para completar seu setup e compare ofertas disponíveis.']
-  if (group === 'hardwares') return ['Hardwares — CriaByte', 'Compare peças de computador por categoria, especificações, compatibilidade e ofertas.']
-  return ['Todos os produtos — CriaByte', 'Explore o catálogo de hardware, periféricos, monitores, notebooks e itens para setup.']
+  const params = new URLSearchParams(search)
+  const label = STORE_CATEGORY_LABELS[params.get('categoria')]
+    || STORE_SECTION_LABELS[params.get('secao')]
+    || STORE_GROUP_LABELS[params.get('grupo')]
+  return label
+    ? [`${label} — CriaByte`, `Compare ${label.toLowerCase()}, especificações e ofertas disponíveis.`]
+    : ['Todos os produtos — CriaByte', 'Explore o catálogo de hardware, periféricos, monitores, notebooks e itens para setup.']
 }
 
 const metas = [
@@ -58,7 +60,12 @@ function upsertLink(selector, attrs) {
 
 export default function RouteEffects() {
   const location = useLocation()
-  const previousPathRef = useRef(null)
+  const previousPageRef = useRef(null)
+  const params = new URLSearchParams(location.search)
+  const pageKey = JSON.stringify([location.pathname,
+    ...(['/loja', '/pecas'].includes(location.pathname)
+      ? ['secao', 'grupo', 'categoria'].map((key) => params.get(key)) : []),
+  ])
 
   useEffect(() => {
     let title
@@ -88,21 +95,21 @@ export default function RouteEffects() {
   }, [location.pathname, location.search])
 
   useEffect(() => {
-    const previousPath = previousPathRef.current
-    previousPathRef.current = location.pathname
+    const previousPage = previousPageRef.current
+    previousPageRef.current = pageKey
 
     const frame = window.requestAnimationFrame(() => {
       if (location.hash) {
         const target = document.getElementById(location.hash.slice(1))
         target?.scrollIntoView({ block: 'start' })
-      } else if (previousPath !== location.pathname) {
+      } else if (previousPage !== pageKey) {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
       }
       document.getElementById('conteudo-principal')?.focus({ preventScroll: true })
     })
 
     return () => window.cancelAnimationFrame(frame)
-  }, [location.pathname, location.hash])
+  }, [pageKey, location.hash])
 
   return null
 }
