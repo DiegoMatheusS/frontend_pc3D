@@ -1,3 +1,4 @@
+import { createOfferSearchQueue } from '../utils/offerSearchQueue.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { adminService } from '../services/adminService'
@@ -75,9 +76,10 @@ export default function AdminProducts() {
   const [status, setStatus] = useState('')
   const [category, setCategory] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-  const [findingOffersFor, setFindingOffersFor] = useState(null)
-  const findingOffersLock = useRef(false)
-  const [offersReport, setOffersReport] = useState(null)
+  const [findingOffersFor, setFindingOffersFor] = useState({})
+  const [offerSearchQueue] = useState(() => createOfferSearchQueue(3))
+  const findingOffersLock = useRef(new Set())
+  const [offersReports, setOffersReports] = useState({})
   const [permanentDeleting, setPermanentDeleting] = useState(null)
   const [searchingImageFor, setSearchingImageFor] = useState(null)
   const imageSearchLock = useRef(false)
@@ -143,29 +145,32 @@ export default function AdminProducts() {
   }
 
   async function findIdenticalOffers(item) {
-    if (!canWriteCatalog || item.ativo === false || findingOffersLock.current) return
+    if (!canWriteCatalog || item.ativo === false || findingOffersLock.current.has(item.id)) return
     const identity = [item.gtin, item.mpn, item.modelo].filter((value) => String(value || '').trim())
     if (!identity.length) {
       toast.show('Este Produto precisa ter GTIN/EAN, MPN ou modelo para confirmar que o item encontrado é idêntico.', 'erro')
       return
     }
 
-    findingOffersLock.current = true
-    setFindingOffersFor(item.id)
-    setOffersReport(null)
+    findingOffersLock.current.add(item.id)
+    setFindingOffersFor(current => ({ ...current, [item.id]: 'queued' }))
+    setOffersReports(current => { const next = { ...current }; delete next[item.id]; return next })
     try {
-      const result = await adminService.products.findAndRegisterIdenticalOffers(item.id)
-      const created = Number(result?.quantidadeCadastrada || 0)
-      setOffersReport({ productName: item.nome, result })
-      toast.show(identicalOffersFeedback(result, item.nome), identicalOffersHasFailures(result) ? 'alerta' : 'sucesso')
-      if (created > 0) await load()
+      await offerSearchQueue.run(async () => {
+        setFindingOffersFor(current => ({ ...current, [item.id]: 'running' }))
+        const result = await adminService.products.findAndRegisterIdenticalOffers(item.id)
+        const created = Number(result?.quantidadeCadastrada || 0)
+        setOffersReports(current => ({ ...current, [item.id]: { productName: item.nome, result } }))
+        toast.show(identicalOffersFeedback(result, item.nome), identicalOffersHasFailures(result) ? 'alerta' : 'sucesso')
+        if (created > 0) await load()
+      })
     } catch (err) {
       const message = err?.message || 'Não foi possível buscar ofertas idênticas.'
-      setOffersReport({ productName: item.nome, error: message })
+      setOffersReports(current => ({ ...current, [item.id]: { productName: item.nome, error: message } }))
       toast.show(message, 'erro')
     } finally {
-      findingOffersLock.current = false
-      setFindingOffersFor(null)
+      findingOffersLock.current.delete(item.id)
+      setFindingOffersFor(current => { const next = { ...current }; delete next[item.id]; return next })
     }
   }
 
@@ -212,7 +217,8 @@ export default function AdminProducts() {
       <AdminPageHeader title="Produtos" description="Catálogo comercial. Produtos podem ser criados a partir de Hardware existente e receber a oferta afiliada no mesmo cadastro.">
         {canWriteCatalog && <Link className="btn btn-primario" to="/admin/produtos/novo">+ Cadastrar produto</Link>}
       </AdminPageHeader>
-      <IdenticalOffersReport report={offersReport} onClose={() => setOffersReport(null)} />
+      <p className="admin-help">Você pode buscar ofertas de vários produtos ao mesmo tempo. Até três buscas rodam juntas.</p>
+      {Object.entries(offersReports).map(([id, report]) => <IdenticalOffersReport key={id} report={report} onClose={() => setOffersReports(current => { const next = { ...current }; delete next[id]; return next })} />)}
       <section className="admin-toolbar admin-toolbar--3">
         <label className="admin-toolbar-field"><span>Pesquisar</span><input className="admin-input" type="search" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE) }} placeholder="Nome, MPN, GTIN, marca ou modelo" /></label>
         <label className="admin-toolbar-field"><span>Categoria</span><select className="admin-select" value={category} onChange={(e) => { setCategory(e.target.value); setVisibleCount(PAGE_SIZE) }}><option value="">Todas</option>{categories.map((name) => <option key={name}>{name}</option>)}</select></label>
@@ -232,11 +238,11 @@ export default function AdminProducts() {
                 {canWriteCatalog && <button
                   className="admin-action-button admin-action-button--success"
                   type="button"
-                  disabled={findingOffersFor !== null || item.ativo === false}
+                  disabled={Boolean(findingOffersFor[item.id]) || item.ativo === false}
                   onClick={() => findIdenticalOffers(item)}
                   title="Procura o mesmo Produto no Mercado Livre, Magazine Luiza e Shopee e cadastra somente novas ofertas"
                 >
-                  {findingOffersFor === item.id ? 'Buscando lojas...' : 'Buscar em outras lojas'}
+                  {findingOffersFor[item.id] === 'running' ? 'Buscando lojas...' : findingOffersFor[item.id] === 'queued' ? 'Aguardando busca...' : 'Buscar em outras lojas'}
                 </button>}
                 {canWriteCatalog && <Link className="admin-action-button" to={`/admin/ofertas/novo?produtoId=${encodeURIComponent(item.id)}`}>+ Oferta manual</Link>}
                 {item.ativo === false

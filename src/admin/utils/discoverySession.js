@@ -9,7 +9,7 @@ function initialState(type) {
     metaAiBusyIds: new Set(), iaTecnicaBusyIds: new Set(),
   }
   if (type === 'offers') return {
-    query: '', onlyPromotions: false, limit: 24, results: [], searchWarnings: [],
+    store: 'SHOPEE', storeSearchUrl: '', query: '', onlyPromotions: false, limit: 24, results: [], searchWarnings: [],
     analyses: {}, catalogReviews: {}, error: '', loading: false,
     analyzingId: null, checkingId: null,
   }

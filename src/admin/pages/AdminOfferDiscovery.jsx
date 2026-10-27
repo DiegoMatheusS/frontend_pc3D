@@ -1,3 +1,4 @@
+import { OFFER_STORES, offerStore, affiliateUrl } from '../utils/offerSearchIntent.js'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AdminPageHeader } from '../components/AdminCommon'
@@ -113,7 +114,7 @@ function fallbackPreview(item, category) {
       precoAnterior: Number(item?.precoAnterior) || undefined,
       urlOriginal: clean(item?.urlOriginal || item?.urlAfiliada),
       urlAfiliada: clean(item?.urlAfiliada),
-      parceiroNome: 'Shopee',
+      parceiroNome: item.parceiroNome || OFFER_STORES[offerStore(item)],
       codigoMarketplace: clean(item?.itemId),
       vendedorNome: clean(item?.loja),
       vendedorIdentificador: clean(item?.shopId),
@@ -149,31 +150,31 @@ function previewFields(preview) {
   }
 }
 
-export default function AdminOfferDiscovery() {
+export default function AdminOfferDiscovery({ embedded = false }) {
   const navigate = useNavigate()
   const toast = useAdminToast()
   const { state, setters } = useDiscoverySession('offers')
   const {
-    query, onlyPromotions, limit, results, loading, error, searchWarnings,
+    store, storeSearchUrl, query, onlyPromotions, limit, results, loading, error, searchWarnings,
     analyzingId, analyses, checkingId, catalogReviews,
   } = state
   const {
-    setQuery, setOnlyPromotions, setLimit, setResults, setLoading, setError,
+    setStore, setStoreSearchUrl, setQuery, setOnlyPromotions, setLimit, setResults, setLoading, setError,
     setSearchWarnings, setAnalyzingId, setAnalyses, setCheckingId, setCatalogReviews,
   } = setters
   const [status, setStatus] = useState(null)
 
   useEffect(() => {
     let active = true
-    offerDiscoveryService.status()
+    offerDiscoveryService.status(store)
       .then((value) => { if (active) setStatus(value) })
       .catch(() => { if (active) setStatus(null) })
     return () => { active = false }
-  }, [])
+  }, [store])
 
   const normalizedResults = useMemo(() => results.map((item, index) => ({
     ...item,
-    _key: `${item?.shopId || 'shop'}-${item?.itemId || index}`,
+    _key: `${offerStore(item)}-${item?.shopId || 'shop'}-${item?.itemId || index}`,
     _category: inferCategory(item),
   })), [results])
 
@@ -188,18 +189,20 @@ export default function AdminOfferDiscovery() {
     setError('')
     try {
       const payload = await offerDiscoveryService.search({
+        loja: store,
         consulta: term,
         limite: Number(limit) || 24,
         somentePromocoes: onlyPromotions,
       })
       const items = Array.isArray(payload?.itens) ? payload.itens : []
+      setStoreSearchUrl(affiliateUrl(payload.urlBusca))
       setResults(items)
       setSearchWarnings(Array.isArray(payload?.avisos) ? payload.avisos : [])
       setAnalyses({})
       setCatalogReviews({})
       if (!items.length) toast.show('Nenhuma oferta encontrada para essa pesquisa.', 'alerta')
     } catch (cause) {
-      setError(cause?.message || 'Não foi possível consultar a Shopee.')
+      setError(cause?.message || 'Não foi possível consultar a loja.')
     } finally {
       setLoading(false)
     }
@@ -289,11 +292,13 @@ export default function AdminOfferDiscovery() {
   }
 
   async function register(item) {
+    if (!affiliateUrl(item.urlAfiliada)) { toast.show('Cole o seu link afiliado antes de cadastrar.', 'alerta'); return }
     setCheckingId(item._key)
     setError('')
     try {
       const analysis = analyses[item._key] || await analyze(item)
-      const latest = analysis?.preview || fallbackPreview(item, item._category)
+      const basePreview = analysis?.preview || fallbackPreview(item, item._category)
+      const latest = mergeAiImportPreview(basePreview, { ofertaColetada: { ...basePreview.ofertaColetada, urlAfiliada: item.urlAfiliada, parceiroNome: item.parceiroNome || OFFER_STORES[offerStore(item)] } })
       const destination = clean(latest?.destinoSugerido).toUpperCase() || expectedDestination(item._category)
       // A consulta também funciona quando a coleta/IA só conseguiu retornar o título.
       const productMatch = await resolveOfferRegistration(latest, destination, adminService)
@@ -320,20 +325,22 @@ export default function AdminOfferDiscovery() {
   }
 
   return <>
-    <AdminPageHeader
+    {!embedded && <AdminPageHeader
       title="Descobrir Ofertas"
-      description="Pesquise produtos de informática na Shopee, analise o anúncio e envie a prévia para o cadastro correto do CriaByte."
-    />
+      description="Pesquise na Shopee, Mercado Livre e Magazine Luiza e envie o produto correto para cadastro."
+    />}
 
     <section className="admin-discovery-search admin-card">
       <form onSubmit={search}>
-        <label className="admin-field admin-discovery-query"><span>Pesquisar na Shopee</span><input className="admin-input" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ex.: pc gamer, computador, kit upgrade, RTX 4060, Ryzen 5600G..." /></label>
+        <label className="admin-field"><span>Loja</span><select aria-label="Loja da busca" className="admin-select" value={store} disabled={loading || analyzingId !== null || checkingId !== null} onChange={event=>{setStore(event.target.value);setStoreSearchUrl('');setResults([]);setAnalyses({});setCatalogReviews({});setSearchWarnings([]);setError('')}}>{Object.entries(OFFER_STORES).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+        <label className="admin-field admin-discovery-query"><span>Pesquisar em {OFFER_STORES[store]}</span><input className="admin-input" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ex.: pc gamer, computador, kit upgrade, RTX 4060, Ryzen 5600G..." /></label>
         <label className="admin-field"><span>Resultados</span><select className="admin-select" value={limit} onChange={(event) => setLimit(Number(event.target.value))}><option value={12}>12</option><option value={24}>24</option><option value={40}>40</option><option value={60}>60</option></select></label>
         <label className="admin-discovery-check"><input type="checkbox" checked={onlyPromotions} onChange={(event) => setOnlyPromotions(event.target.checked)} /> Somente promoções</label>
         <button className="btn btn-primario" type="submit" disabled={loading}>{loading ? 'Pesquisando...' : 'Pesquisar'}</button>
       </form>
       <div className="admin-discovery-status">
-        <strong>Shopee Affiliate API</strong>
+        <strong>{OFFER_STORES[store]}</strong>
+        {storeSearchUrl && <a href={storeSearchUrl} target="_blank" rel="noopener noreferrer">Abrir busca na loja</a>}
         <span>{status?.projetoIaConfigurado ? 'Integração pronta para consulta.' : 'A busca precisa do ProjetoIA configurado no backend.'}</span>
       </div>
     </section>
@@ -359,12 +366,13 @@ export default function AdminOfferDiscovery() {
             {item.imagemUrl ? <img src={item.imagemUrl} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none' }} /> : <span>Sem imagem</span>}
           </div>
           <div className="admin-discovery-body">
-            <div className="admin-discovery-tags"><span>Shopee</span><span>{CATEGORY_LABELS[analyzedCategory] || 'Produto'}</span>{item.emPromocao && <span>Promoção</span>}</div>
+            <div className="admin-discovery-tags"><span>{OFFER_STORES[offerStore(item)]}</span><span>{CATEGORY_LABELS[analyzedCategory] || 'Produto'}</span>{item.emPromocao && <span>Promoção</span>}</div>
             <h2>{item.nome || 'Produto sem nome'}</h2>
             <p className="admin-discovery-store">{item.loja || 'Loja não informada'}{item.vendas != null ? ` · ${item.vendas} venda(s)` : ''}{item.avaliacao != null ? ` · ★ ${item.avaliacao}` : ''}</p>
             <strong className="admin-discovery-price">{money(item.preco ?? item.precoMin)}</strong>
+            {offerStore(item) !== 'SHOPEE' && <label className="admin-field"><span>Seu link afiliado</span><input className="admin-input" type="url" aria-label={`Link afiliado de ${item.nome}`} value={item.urlAfiliada || ''} placeholder="Cole o link gerado na sua conta" onChange={event=>setResults(current=>current.map((row,index)=> index===normalizedResults.indexOf(item) ? {...row,urlAfiliada:event.target.value} : row))} /></label>}
             <div className="admin-discovery-actions">
-              {(item.urlAfiliada || item.urlOriginal) && <a className="btn btn-secundario btn-pequeno" href={item.urlAfiliada || item.urlOriginal} target="_blank" rel="noopener noreferrer">Ver anúncio</a>}
+              {(item.urlAfiliada || item.urlOriginal) && <a className="btn btn-secundario btn-pequeno" href={affiliateUrl(item.urlAfiliada) || item.urlOriginal} target="_blank" rel="noopener noreferrer">Ver anúncio</a>}
               <button className="btn btn-secundario btn-pequeno" type="button" disabled={analyzingId !== null} onClick={() => analyze(item)}>{analyzingId === item._key ? 'Analisando...' : analysis ? 'Analisar novamente' : 'Analisar'}</button>
               <button className="btn btn-primario btn-pequeno" type="button" disabled={analyzingId !== null || checkingId !== null} onClick={() => register(item)}>{checkingId === item._key ? 'Verificando catálogo...' : 'Cadastrar'}</button>
             </div>

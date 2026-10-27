@@ -480,3 +480,6 @@
 .affiliate-offers-check-detail { min-width:210px; display:grid; gap:4px; color:var(--color-text-soft); line-height:1.35; }
 .affiliate-offers-check-detail a { color:var(--color-primary); font-weight:800; text-decoration:none; }
 .affiliate-offers-check-detail a:hover { text-decoration:underline; }
+
+.affiliate-offers-modes { display:flex; flex-wrap:wrap; gap:12px; margin:20px 0; }
+.affiliate-discovery-panel.admin-root { min-height:0; padding:0; background:transparent; }

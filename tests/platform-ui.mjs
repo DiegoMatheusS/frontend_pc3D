@@ -23,6 +23,9 @@ try {
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 393, height: 852 }]) {
     const context = await browser.newContext({ viewport })
     const page = await context.newPage()
+    page.setDefaultTimeout(25000)
+    let parallelStarted = [], releaseFirst
+    const firstSearch = new Promise(resolve => { releaseFirst = resolve })
     page.on('pageerror', error => errors.push(error.message))
     await context.route('**/api/**', async route => {
       const url = new URL(route.request().url()), path = url.pathname, method = route.request().method()
@@ -31,6 +34,18 @@ try {
       else if (path === '/api/auth/login') body = { requires2fa: true, desafio: 'challenge-qa-1234567890' }
       else if (path === '/api/auth/login-2fa') { logged = true; body = { usuario: user } }
       else if (path === '/api/auth/redefinir-senha') { assert.equal(route.request().postDataJSON().token, 'reset-token-qa-1234567890'); body = { mensagem: 'Senha redefinida. Entre novamente.' } }
+      else if (/\/api\/admin\/busca-ofertas\/produto\/(201|202)\/encontrar-e-cadastrar/.test(path)) {
+        const id = Number(path.split('/')[5]); parallelStarted.push(id)
+        if (parallelStarted.length === 1) await firstSearch
+        else releaseFirst()
+        body = { quantidadeCadastrada: 0, quantidadeEncontrada: 0, ignoradas: [], fontes: {} }
+      }
+      else if (path === '/api/admin/produtos') body = [201,202].map(id=>({id,nome:`Mouse QA ${id}`,modelo:`M${id}`,marca:'QA',categoriaId:5,categoria:{nome:'Mouses',slug:'mouses'},ativo:true,publicado:true}))
+      else if (path === '/api/admin/busca-ofertas/descobrir/status') body = { projetoIaConfigurado: true }
+      else if (path === '/api/admin/busca-ofertas/descobrir') {
+        const data = route.request().postDataJSON(); assert.ok(['MERCADO_LIVRE','MAGALU'].includes(data.loja))
+        body = { itens: ['Placa de vídeo ASUS RTX 4060 8GB','Suporte para RTX 4060','ASUS RTX 4060 Ti 8GB'].map((nome,index)=>({nome,preco:1999.9,itemId:String(index),urlOriginal:data.loja === 'MERCADO_LIVRE' ? 'https://produto.mercadolivre.com.br/MLB-123456-rtx-4060' : 'https://www.magazineluiza.com.br/placa-rtx-4060/p/abcd1234/in/pcvd/',urlAfiliada:null})),avisos:[] }
+      }
       else if (path === '/api/admin/busca-ofertas/shopee/status') body = { configurada: true }
       else if (path === '/api/admin/busca-ofertas/shopee/produtos') body = { itens: [{ nome: name, descricao: description, preco: 2399.9, urlOriginal: original, urlAfiliada: offer.urlAfiliada, itemId: '456', shopId: '123', loja: 'Loja PC' }] }
       else if (path === '/api/admin/ia/importar-link') body = { destinoSugerido: 'PC_MONTADO', categoriaDetectada: 'PC_MONTADO', normalizacao: { camposNormalizados: { nome: name, descricao: description } }, ofertaColetada: offer }
@@ -64,6 +79,29 @@ try {
     if (viewport.width === 1440) { await page.getByText('Falha de teste: dados preservados', { exact: false }).waitFor(); await save.click() }
     await page.waitForURL('**/admin/montados/10')
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2), 'Interface não pode exceder a largura da tela')
+    await page.goto(`${base}/admin/produtos`)
+    const firstRow = page.getByRole('row').filter({ hasText: 'Mouse QA 201' })
+    const secondRow = page.getByRole('row').filter({ hasText: 'Mouse QA 202' })
+    await firstRow.getByRole('button', {name:'Buscar em outras lojas',exact:true}).click()
+    await firstRow.getByRole('button', {name:'Buscando lojas...',exact:true}).waitFor()
+    assert.equal(await secondRow.getByRole('button', {name:'Buscar em outras lojas',exact:true}).isEnabled(),true)
+    await secondRow.getByRole('button', {name:'Buscar em outras lojas',exact:true}).click()
+    await page.waitForFunction(()=>document.querySelectorAll('[aria-label="Resultado da busca em outras lojas"]').length===2)
+    assert.deepEqual(parallelStarted.sort(),[201,202])
+    await page.goto(`${base}/busca-ofertas`)
+    await page.getByRole('button',{name:'Descobrir novas ofertas',exact:true}).click()
+    for (const loja of ['MERCADO_LIVRE','MAGALU']) {
+      await page.getByLabel('Loja da busca',{exact:true}).selectOption(loja)
+      await page.getByRole('searchbox').fill('RTX 4060')
+      await page.getByRole('button',{name:'Pesquisar',exact:true}).click()
+      await page.getByRole('heading',{name:'Placa de vídeo ASUS RTX 4060 8GB',exact:true}).waitFor()
+      assert.equal(await page.locator('.admin-discovery-card').count(),1)
+      await page.getByLabel('Link afiliado de Placa de vídeo ASUS RTX 4060 8GB').fill('https://loja.example/affiliate-qa')
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+2))
+    }
+    await page.goto(`${base}/admin/descobrir-ofertas`)
+    assert.equal(await page.getByLabel('Loja da busca',{exact:true}).inputValue(),'MAGALU')
+    await page.getByRole('heading',{name:'Placa de vídeo ASUS RTX 4060 8GB',exact:true}).waitFor()
     await page.goto(`${base}/admin/produtos/101`)
     const technicalName = page.getByLabel('Nome técnico', { exact: true })
     await technicalName.waitFor()
@@ -118,6 +156,6 @@ try {
   assert.equal(new URL(page.url()).hash, '')
   assert.deepEqual(errors, [])
   assert.equal(savedBodies.length, 3)
-  console.log('Fluxos desktop/móvel, PC com reenvio, nome e descrição técnica, 2FA e redefinição: OK')
+  console.log('Fluxos desktop/móvel, PC, buscas paralelas por produto, Mercado Livre/Magalu nas duas telas, ficha técnica e autenticação: OK')
   await context.close()
 } finally { await browser.close(); await new Promise(resolve => server.httpServer.close(resolve)) }
