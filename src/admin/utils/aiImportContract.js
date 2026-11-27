@@ -237,7 +237,7 @@ export function getAiPayload(response = {}) {
     ...merged,
     ...normalizedSpec,
     ...(typeof merged.nome === 'string' ? { nome: normalizarNomeTecnico(merged.nome, { ...merged, categoria: category }) } : {}),
-    descricao: !category || category === 'PC_MONTADO' ? listingDescription || merged.descricao || '' : merged.descricao || listingDescription || '',
+    descricao: !category || category === 'PC_MONTADO' ? listingDescription || merged.descricao || '' : merged.descricao || '',
   }
 }
 
@@ -270,7 +270,15 @@ export function getAiOffer(response = {}) {
 }
 
 export function mergeAiImportPreview(fallback, response) {
-  const payload = mergeFilledFields(getAiPayload(fallback), getAiPayload(response))
+  const previous = getAiPayload(fallback)
+  const collected = getAiPayload(response)
+  const payload = mergeFilledFields(previous, collected)
+  const specKey = SPEC_KEY_BY_CATEGORY[getAiCategory(response) || getAiCategory(fallback)]
+  if (specKey && (previous[specKey] || collected[specKey])) {
+    const filled = Object.fromEntries(Object.entries(object(collected[specKey]))
+      .filter(([, value]) => !Array.isArray(value) || value.length > 0))
+    payload[specKey] = mergeFilledFields(previous[specKey], filled)
+  }
   const offer = mergeFilledFields(getAiOffer(fallback), getAiOffer(response))
   return normalizeAiResponse({
     ...fallback,

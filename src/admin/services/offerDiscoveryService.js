@@ -21,6 +21,8 @@ export const offerDiscoveryService = {
       },
     })
     const response = asObject(payload)
-    return { ...response, itens: (Array.isArray(response.itens) ? response.itens : []).filter(item => matchesOfferSearch(consulta,item.nome)).map(item => ({...item, marketplace: loja, parceiroNome: OFFER_STORES[loja]})) }
+    const items = Array.isArray(response.itens) ? response.itens : []
+    const results = loja === 'SHOPEE' ? items.filter(item => matchesOfferSearch(consulta, item.nome)) : items
+    return { ...response, itens: results.map(item => ({ ...item, marketplace: loja, parceiroNome: OFFER_STORES[loja] })) }
   },
 }
