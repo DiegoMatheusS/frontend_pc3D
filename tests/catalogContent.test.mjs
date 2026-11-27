@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { normalizarNomeTecnico } from '../src/admin/utils/catalogContent.js'
-import { getAiPayload } from '../src/admin/utils/aiImportContract.js'
+import { getAiPayload, mergeAiImportPreview } from '../src/admin/utils/aiImportContract.js'
 import { specificationDescription } from '../src/admin/utils/productSpecifications.js'
 const cases = JSON.parse(await readFile(new URL('./fixtures/catalog-names.json', import.meta.url), 'utf8'))
 for (const item of cases) test(`nome técnico: ${item.nome.slice(0, 70)}`, () => {
@@ -20,4 +20,22 @@ test('descrição da ficha descarta identificação interna e história comercia
   assert.match(description, /Não/)
   assert.match(description, /0 g/)
   assert.doesNotMatch(description, /1989|legado|399|ID:/i)
+})
+
+test('a importação parcial preserva a ficha do anúncio sem copiar a descrição comercial', () => {
+  const preview = mergeAiImportPreview({
+    categoriaDetectada: 'MEMORIA_RAM',
+    cadastroSugerido: { payload: { nome: 'Kingston Fury Beast DDR4', especificacaoMemoriaRam: {
+      capacidadePorModuloGb: 16, frequenciaMhz: 3200, possuiEcc: false,
+    } } },
+  }, {
+    categoriaDetectada: 'MEMORIA_RAM', descricaoAnuncio: 'Conheça a história da marca. Frete grátis.',
+    cadastroSugerido: { payload: { especificacaoMemoriaRam: { frequenciaMhz: null, latenciaCl: 16 } } },
+  })
+  const payload = getAiPayload(preview)
+  assert.equal(payload.descricao, '')
+  assert.equal(payload.especificacaoMemoriaRam.capacidadePorModuloGb, 16)
+  assert.equal(payload.especificacaoMemoriaRam.frequenciaMhz, 3200)
+  assert.equal(payload.especificacaoMemoriaRam.latenciaCl, 16)
+  assert.equal(payload.especificacaoMemoriaRam.possuiEcc, false)
 })

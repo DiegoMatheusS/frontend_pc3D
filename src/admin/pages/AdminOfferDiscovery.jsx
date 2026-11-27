@@ -1,6 +1,6 @@
 import { OFFER_STORES, offerStore, affiliateUrl } from '../utils/offerSearchIntent.js'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AdminPageHeader } from '../components/AdminCommon'
 import { useAdminToast } from '../components/AdminToast'
 import { adminService } from '../services/adminService'
@@ -72,6 +72,8 @@ function looksLikeCompletePc(value) {
 }
 
 function inferCategory(item) {
+  const detected = clean(item?.categoriaDetectada).toUpperCase()
+  if (detected && detected !== 'PRODUTO' && Object.hasOwn(CATEGORY_LABELS, detected)) return detected
   const title = clean(item?.nome)
   if (looksLikeCompletePc(title)) return 'PC_MONTADO'
   return CATEGORY_RULES.find(([, pattern]) => pattern.test(title))?.[0] || 'PRODUTO'
@@ -102,10 +104,15 @@ function fallbackPreview(item, category) {
     urlOrigem: clean(item?.urlOriginal || item?.urlAfiliada),
     normalizacao: {
       camposNormalizados: {
+        ...item?.dadosTecnicos,
         nome: clean(item?.nome),
         ...(HARDWARE_CATEGORIES.has(category) ? { categoria: category } : {}),
+        marca: clean(item?.marca),
+        modelo: clean(item?.modelo),
+        mpn: clean(item?.mpn),
+        gtin: clean(item?.gtin),
         imagemUrl: clean(item?.imagemUrl),
-        descricao: clean(item?.descricao),
+        descricao: clean(item?.dadosTecnicos?.descricao || (category === 'PC_MONTADO' ? item?.descricao : '')),
       },
       alertas: ['Dados vieram da busca de ofertas. Revise a ficha antes de salvar.'],
     },
@@ -118,7 +125,7 @@ function fallbackPreview(item, category) {
       codigoMarketplace: clean(item?.itemId),
       vendedorNome: clean(item?.loja),
       vendedorIdentificador: clean(item?.shopId),
-      disponivel: true,
+      disponivel: item?.disponivel ?? undefined,
     },
   }
 }
@@ -200,7 +207,7 @@ export default function AdminOfferDiscovery({ embedded = false }) {
       setSearchWarnings(Array.isArray(payload?.avisos) ? payload.avisos : [])
       setAnalyses({})
       setCatalogReviews({})
-      if (!items.length) toast.show('Nenhuma oferta encontrada para essa pesquisa.', 'alerta')
+      if (!items.length && !payload.avisos?.length) toast.show('Nenhum anúncio compatível com essa pesquisa.', 'alerta')
     } catch (cause) {
       setError(cause?.message || 'Não foi possível consultar a loja.')
     } finally {
@@ -224,6 +231,7 @@ export default function AdminOfferDiscovery({ embedded = false }) {
         preview = url
           ? await adminService.ai.importLink(url, category !== 'PRODUTO' ? category : undefined)
           : fallbackPreview(item, category)
+        if (preview?.iaDisponivel === false) collectionWarning = 'A loja não confirmou todos os dados do anúncio. Revise o preço e as especificações antes de publicar.'
       } catch (cause) {
         collectionWarning = cause?.message || 'Não foi possível coletar os detalhes do anúncio.'
         preview = fallbackPreview(item, category)
@@ -238,7 +246,7 @@ export default function AdminOfferDiscovery({ embedded = false }) {
       let resolvedDestination = category === 'PC_MONTADO' ? 'PC_MONTADO' : previewDestination || expectedDestination(detectedCategory || category) || initialDestination
       const extracted = previewFields(preview)
       const listingTitle = extracted.nome || clean(item.nome)
-      const listingDescription = extracted.descricao || clean(item.descricao)
+      const listingDescription = clean(preview?.descricaoAnuncio || preview?.resultadoProdutoIa?.descricaoAnuncio || item.descricao)
 
       let buildAnalysis = preview?.analiseComputador || preview?.resultadoProdutoIa?.analiseComputador || null
       let buildWarning = ''
@@ -247,7 +255,7 @@ export default function AdminOfferDiscovery({ embedded = false }) {
           if (!buildAnalysis?.pesquisaTecnicaExecutada || !buildAnalysis?.componentesDetectados?.length) {
             buildAnalysis = await adminService.builds.analyzeListing({
               titulo: listingTitle,
-              descricao: listingDescription,
+              descricao: listingDescription || extracted.descricao,
               pesquisarEspecificacoes: true,
             })
           }
@@ -271,7 +279,7 @@ export default function AdminOfferDiscovery({ embedded = false }) {
       })
       mergedPreview = completed.preview
       collectionWarning = [collectionWarning, completed.descriptionWarning].filter(Boolean).join(' ')
-      const result = { preview: mergedPreview, buildAnalysis, buildWarning, collectionWarning, descriptionNotice: completed.descriptionNotice }
+      const result = { preview: mergedPreview, listingDescription, buildAnalysis, buildWarning, collectionWarning, descriptionNotice: completed.descriptionNotice }
       setAnalyses((current) => ({ ...current, [key]: result }))
       return result
     } catch (cause) {
@@ -307,7 +315,6 @@ export default function AdminOfferDiscovery({ embedded = false }) {
         openExistingProduct(latest, productMatch.product)
         return
       }
-      if (analysis?.collectionWarning) toast.show(analysis.collectionWarning, 'alerta')
       if (productMatch.ambiguous.length) {
         setCatalogReviews(current => ({ ...current, [item._key]: { preview: latest, products: productMatch.ambiguous, destination } }))
         return
@@ -327,7 +334,7 @@ export default function AdminOfferDiscovery({ embedded = false }) {
   return <>
     {!embedded && <AdminPageHeader
       title="Descobrir Ofertas"
-      description="Pesquise na Shopee, Mercado Livre e Magazine Luiza e envie o produto correto para cadastro."
+      description="Encontre anúncios na Shopee, no Mercado Livre, no Magalu e na Amazon e prepare o cadastro."
     />}
 
     <section className="admin-discovery-search admin-card">
@@ -358,7 +365,7 @@ export default function AdminOfferDiscovery({ embedded = false }) {
         const analysis = analyses[item._key]
         const review = catalogReviews[item._key]
         const suggestions = componentSuggestions(analysis?.buildAnalysis)
-        const listingDescription = analysis ? previewFields(analysis.preview).descricao : ''
+        const listingDescription = analysis?.listingDescription || ''
         const destination = clean(analysis?.preview?.destinoSugerido).toUpperCase() || expectedDestination(item._category)
         const analyzedCategory = clean(analysis?.preview?.categoriaDetectada).toUpperCase() || item._category
         return <article className="admin-discovery-card" key={item._key}>
@@ -369,7 +376,7 @@ export default function AdminOfferDiscovery({ embedded = false }) {
             <div className="admin-discovery-tags"><span>{OFFER_STORES[offerStore(item)]}</span><span>{CATEGORY_LABELS[analyzedCategory] || 'Produto'}</span>{item.emPromocao && <span>Promoção</span>}</div>
             <h2>{item.nome || 'Produto sem nome'}</h2>
             <p className="admin-discovery-store">{item.loja || 'Loja não informada'}{item.vendas != null ? ` · ${item.vendas} venda(s)` : ''}{item.avaliacao != null ? ` · ★ ${item.avaliacao}` : ''}</p>
-            <strong className="admin-discovery-price">{money(item.preco ?? item.precoMin)}</strong>
+            <strong className="admin-discovery-price">{item.precoConfirmado === false ? 'Preço a confirmar na loja' : money(item.preco ?? item.precoMin)}</strong>
             {offerStore(item) !== 'SHOPEE' && <label className="admin-field"><span>Seu link afiliado</span><input className="admin-input" type="url" aria-label={`Link afiliado de ${item.nome}`} value={item.urlAfiliada || ''} placeholder="Cole o link gerado na sua conta" onChange={event=>setResults(current=>current.map((row,index)=> index===normalizedResults.indexOf(item) ? {...row,urlAfiliada:event.target.value} : row))} /></label>}
             <div className="admin-discovery-actions">
               {(item.urlAfiliada || item.urlOriginal) && <a className="btn btn-secundario btn-pequeno" href={affiliateUrl(item.urlAfiliada) || item.urlOriginal} target="_blank" rel="noopener noreferrer">Ver anúncio</a>}
@@ -412,7 +419,11 @@ export default function AdminOfferDiscovery({ embedded = false }) {
           </div>
         </article>
       })}
-      {!loading && !normalizedResults.length && <div className="admin-discovery-empty"><strong>Pesquise qualquer produto de informática.</strong><span>“pc”, “computador”, “kit upgrade”, “RTX 4060”, “SSD NVMe”, “monitor” e outros termos podem ser usados.</span></div>}
+      {!loading && !normalizedResults.length && <div className="admin-discovery-empty">
+        <strong>{storeSearchUrl ? 'Nenhum anúncio disponível nesta busca.' : 'Pesquise pelo nome ou modelo do produto.'}</strong>
+        <span>Ex.: RTX 4060 Ti 16 GB, Ryzen 5 5600G ou SSD NVMe 1 TB.</span>
+        {(storeSearchUrl || error) && <Link to="/admin/produtos/novo">Importar anúncio pelo link</Link>}
+      </div>}
     </section>
   </>
 }
