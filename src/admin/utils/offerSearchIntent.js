@@ -1,7 +1,7 @@
 const accessories=/\b(adaptador|suporte|cabo|capa|pelicula|carcaca|waterblock|backplate|cooler|ventoinha|dissipador|fan|carregador|estojo|almofadas?|espumas?|earpads?|bolsa|protetor|parafuso|bracket|riser|extensor|teclado|mouse|refil|recarga|pecas?|reposicao|reparo|conector|bateria|fonte|placa\s+logica|kit\s+(?:de\s+)?upgrade)\b/
 const main=/placa\s+(?:de\s+video|mae)|processador|memoria(?:\s+ram)?|notebook|computador|pc\s+gamer|ssd|cartucho|toner|impressora|monitor|mouse|teclado|headset|celular|smartphone|fonte|rtx\s*\d|gtx\s*\d|radeon|ryzen|geforce|\brx\s*\d|\bb\d{3}/
 const stop=new Set(['de','do','da','para','com','e','um','uma','o','a','os','as','em','no','na','novo','nova','original','gamer','gaming','placa','video','memoria','ram','processador','computador','pc','desktop'])
-const normalized=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\b(rtx|gtx|rx|ddr)(?=\d)/g,'$1 ').replace(/\b((?:rtx|gtx|rx)\s*\d{3,4})\s*(ti|super|xtx|xt|gre)\b/g,'$1 $2').replace(/(\d)\s*(gb|tb|mhz|ghz)\b/g,'$1 $2').replace(/[^a-z0-9]+/g,' ').trim()
+const normalized=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\b(i[3579])\s*-?\s*(\d{4,5})(?:\s*(kf|ks|k|f|t|hx|hk|h|p|u))?\b/g,'$1 $2$3').replace(/\b(rtx|gtx|rx|ddr)(?=\d)/g,'$1 ').replace(/\b((?:rtx|gtx|rx)\s*\d{3,4})\s*(ti|super|xtx|xt|gre)\b/g,'$1 $2').replace(/(\d)\s*(gb|tb|mhz|ghz)\b/g,'$1 $2').replace(/[^a-z0-9]+/g,' ').trim()
 function kind(text){const a=accessories.exec(text),m=main.exec(text);return a&&(!m||a.index<=m.index)?a[1]:null}
 function category(text){
  const patterns={NOTEBOOK:/\b(?:notebook|laptop)\b/,PC:/\b(?:pc|computador|desktop)\b/,GPU:/placa de video|geforce|radeon|\b(?:rtx|gtx|rx)\s*\d/,CPU:/processador|\bryzen\b|\bcore\b/,RAM:/memoria ram|\bddr\s*[345]\b/,BOARD:/placa mae|motherboard|\b[abxz]\d{3}m?\b/,MOUSE:/\bmouse\b/,KEYBOARD:/\bteclado\b/,MONITOR:/\bmonitor\b/}
@@ -18,6 +18,6 @@ export function matchesOfferSearch(query,title){
  }
  return true
 }
-export const OFFER_STORES={SHOPEE:'Shopee',MERCADO_LIVRE:'Mercado Livre',MAGALU:'Magazine Luiza'}
+export const OFFER_STORES={SHOPEE:'Shopee',MERCADO_LIVRE:'Mercado Livre',MAGALU:'Magazine Luiza',AMAZON:'Amazon'}
 export function offerStore(item){return item?.marketplace||'SHOPEE'}
 export function affiliateUrl(value){try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password?u.href:''}catch{return ''}}
