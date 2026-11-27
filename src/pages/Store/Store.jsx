@@ -337,7 +337,7 @@ export default function Store({ defaultGroup = 'todos' }) {
     .map((product) => product.brand))].sort(), [visiblePool, category])
 
   const filtered = useMemo(() => {
-    const text = normalize(query)
+    const terms = normalize(query).trim().split(/\s+/).filter(Boolean)
     const max = maxPrice === 'todos' ? Infinity : Number(maxPrice)
     const result = products.filter((product) => {
       const haystack = normalize([product.name, product.brand, product.category, product.description, ...product.tags].join(' '))
@@ -346,7 +346,7 @@ export default function Store({ defaultGroup = 'todos' }) {
         && (category === 'todos' || product.categoryKey === category)
         && (brand === 'todos' || product.brand === brand)
         && product.price <= max
-        && (!text || haystack.includes(text))
+        && terms.every((term) => haystack.includes(term))
     })
 
     return [...result].sort((a, b) => {
