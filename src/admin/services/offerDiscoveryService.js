@@ -22,7 +22,11 @@ export const offerDiscoveryService = {
     })
     const response = asObject(payload)
     const items = Array.isArray(response.itens) ? response.itens : []
-    const results = loja === 'SHOPEE' ? items.filter(item => matchesOfferSearch(consulta, item.nome)) : items
+    const results = items.filter((item) => {
+      // O serviço novo valida o modelo antes de marcar se o preço foi confirmado.
+      if (loja !== 'SHOPEE' && typeof item?.precoConfirmado === 'boolean') return true
+      return matchesOfferSearch(consulta, item?.nome)
+    })
     return { ...response, itens: results.map(item => ({ ...item, marketplace: loja, parceiroNome: OFFER_STORES[loja] })) }
   },
 }
