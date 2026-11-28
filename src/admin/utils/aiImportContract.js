@@ -237,7 +237,8 @@ export function getAiPayload(response = {}) {
     ...merged,
     ...normalizedSpec,
     ...(typeof merged.nome === 'string' ? { nome: normalizarNomeTecnico(merged.nome, { ...merged, categoria: category }) } : {}),
-    descricao: !category || category === 'PC_MONTADO' ? listingDescription || merged.descricao || '' : merged.descricao || '',
+    descricao: typeof response?.descricaoParaCadastro === 'string' ? response.descricaoParaCadastro
+      : !category || category === 'PC_MONTADO' ? listingDescription || merged.descricao || '' : merged.descricao || '',
   }
 }
 
