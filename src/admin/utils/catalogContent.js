@@ -24,9 +24,10 @@ function texto(valor) {
 const ruidoDeAnuncio = /R\$\s*\d|https?:\/\/|\b(?:avalia[cç][oõ]es|customer\s*reviews?|classifica[cç][aã]o\s+dos|mais\s+vendidos|vendido\s+por|enviado\s+por|pol[ií]tica\s+de\s+devolu[cç][aã]o|prazo\s+de\s+entrega|estoque\b\s*:|P\.when\s*\(|(?:window|document)\.[\w$]+|function\s*\(|(?:var|let|const)\s+[\w$]+\s*=)/iu
 
 export function limparDescricaoImportada(valor) {
-    const trechos = texto(valor).split(/\n+|(?<=[.!?])\s+(?=[A-ZÀ-Ý])/u)
-        .map(trecho => trecho.trim()).filter(trecho => trecho && !narrativa.test(trecho)
-            && !comercial.test(trecho) && !ruidoDeAnuncio.test(trecho))
+    const trechos = texto(valor).split(/\n+/u).map(linha => linha.trim()
+        .split(/(?<=[.!?])\s+(?=[A-ZÀ-Ý])/u)
+        .filter(trecho => !narrativa.test(trecho) && !comercial.test(trecho) && !ruidoDeAnuncio.test(trecho))
+        .join(' ')).filter(Boolean)
     const linhas = []
     let total = 0
     for (const trecho of new Set(trechos)) {

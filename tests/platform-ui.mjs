@@ -12,6 +12,7 @@ const browser = await chromium.launch({ headless: true,
   args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-gl=angle', '--use-angle=swiftshader'] })
 const name = 'PC Gamer Ryzen 5 5600G 16GB SSD 512GB'
 const description = 'Ryzen 5 5600G, RAM 16 GB sem marca, SSD 512 GB. Acompanha teclado e mouse.\nGarantia de 12 meses.'
+const registrationDescription = 'Ryzen 5 5600G, RAM 16 GB sem marca, SSD 512 GB. Acompanha teclado e mouse.'
 const original = 'https://shopee.com.br/product/123/456'
 const offer = { parceiroNome: 'Shopee', parceiroId: 4, preco: 2399.9, urlOriginal: original, urlAfiliada: 'https://s.shopee.com.br/teste', vendedorNome: 'Loja PC', vendedorIdentificador: '123' }
 const user = { id: 1, nome: 'Administrador QA', email: 'qa@example.test', papel: 'ADMIN' }
@@ -61,7 +62,7 @@ try {
       }
       else if (path === '/api/admin/builds' && method === 'POST') {
         const data = route.request().postDataJSON(); savedBodies.push(data)
-        assert.equal(data.publicado, true); assert.equal(data.nome, name); assert.equal(data.descricao, description); assert.deepEqual(data.componentes, [])
+        assert.equal(data.publicado, true); assert.equal(data.nome, name); assert.equal(data.descricao, registrationDescription); assert.deepEqual(data.componentes, [])
         assert.equal(data.ofertas[0].preco, 2399.9); assert.equal(data.ofertas[0].urlAfiliada, offer.urlAfiliada)
         if (failSave) { failSave = false; status = 400; body = { message: 'Falha de teste: dados preservados para tentar novamente.' } }
         else { status = 201; body = { id: 10, produtoId: 101 } }
