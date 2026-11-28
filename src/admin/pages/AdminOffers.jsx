@@ -209,7 +209,8 @@ export default function AdminOffers() {
       const revisar = result?.revisar ?? result?.revisaoNecessaria ?? 0
       const bloqueadas = result?.bloqueadas ?? result?.bloqueados ?? 0
       const erros = result?.erros ?? result?.falharam ?? 0
-      const summary = `${result?.verificadas ?? 0} verificadas · ${result?.atualizadas ?? 0} atualizadas · ${result?.semAlteracao ?? 0} sem alteração · ${revisar} revisar · ${bloqueadas} bloqueadas · ${erros} erros`
+      const indisponiveis = result?.indisponiveis ?? 0
+      const summary = `${result?.verificadas ?? 0} verificadas · ${result?.atualizadas ?? 0} atualizadas · ${result?.semAlteracao ?? 0} sem alteração · ${indisponiveis} indisponíveis · ${revisar} revisar · ${bloqueadas} bloqueadas · ${erros} erros`
       toast.show(remaining > 0 ? `${summary}. Restam ${remaining} para outro lote.` : summary, (revisar || bloqueadas || erros) ? 'alerta' : 'sucesso')
     } catch (err) {
       toast.show(err?.message || 'Não foi possível verificar os preços.', 'erro')
@@ -234,6 +235,12 @@ export default function AdminOffers() {
       result.detalhe,
       result.mensagem,
       result.erro,
+      values.status === 'SEM_ALTERACAO' ? 'Preço igual ao salvo' : '',
+      result.reativada ? 'Estoque confirmado e oferta reativada' :
+        result.disponibilidadeVerificada === true ? 'Estoque confirmado' :
+          result.disponibilidadeVerificada === false ? 'Indisponível na loja' :
+            ['ATUALIZADO', 'SEM_ALTERACAO'].includes(values.status) && Object.hasOwn(result, 'disponibilidadeVerificada')
+              ? 'Estoque a confirmar' : '',
       values.source ? `Fonte: ${values.source}` : '',
       result.produtoIaUtilizada === true ? 'Projeto IA utilizada' : '',
       result.httpStatus ? `HTTP ${result.httpStatus}` : '',
@@ -274,7 +281,7 @@ export default function AdminOffers() {
     <AdminPageHeader title="Ofertas afiliadas" description="Gerencie múltiplas ofertas por Produto, com parceiro, preço e link afiliado independentes.">
       {priceReport && <button className="btn btn-secundario" type="button" onClick={() => setReportOpen((current) => !current)}>{reportOpen ? 'Fechar relatório' : 'Relatório'}</button>}
       {checkingPrices && <button className="btn btn-secundario" type="button" onClick={() => { stopPriceCheck.current = true }}>Parar após este lote</button>}
-      {canWriteCatalog && <button className="btn btn-secundario" type="button" onClick={verifyPrices} disabled={checkingPrices || checkingOfferId !== null}>{checkingPrices ? `Verificando: ${priceReport?.verificadas || 0}/50` : 'Verificar preços'}</button>}
+      {canWriteCatalog && <button className="btn btn-secundario" type="button" onClick={verifyPrices} disabled={checkingPrices || checkingOfferId !== null}>{checkingPrices ? `${priceReport?.verificadas || 0} verificadas` : 'Verificar preços e estoque'}</button>}
       {canWriteCatalog && <Link className="btn btn-primario" to="/admin/ofertas/novo">+ Nova oferta</Link>}
     </AdminPageHeader>
 

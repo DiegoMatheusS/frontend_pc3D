@@ -20,6 +20,22 @@ function texto(valor) {
     }).replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
         .replace(/<(?:br\s*\/?|\/p|\/div|\/h[1-6])\s*>/gi, '\n').replace(/<[^>]+>/g, '').trim();
 }
+
+const ruidoDeAnuncio = /R\$\s*\d|https?:\/\/|\b(?:avalia[cç][oõ]es|customer\s*reviews?|classifica[cç][aã]o\s+dos|mais\s+vendidos|vendido\s+por|enviado\s+por|pol[ií]tica\s+de\s+devolu[cç][aã]o|prazo\s+de\s+entrega|estoque\b\s*:|P\.when\s*\(|(?:window|document)\.[\w$]+|function\s*\(|(?:var|let|const)\s+[\w$]+\s*=)/iu
+
+export function limparDescricaoImportada(valor) {
+    const trechos = texto(valor).split(/\n+|(?<=[.!?])\s+(?=[A-ZÀ-Ý])/u)
+        .map(trecho => trecho.trim()).filter(trecho => trecho && !narrativa.test(trecho)
+            && !comercial.test(trecho) && !ruidoDeAnuncio.test(trecho))
+    const linhas = []
+    let total = 0
+    for (const trecho of new Set(trechos)) {
+        if (total + trecho.length > 4400) continue
+        linhas.push(trecho)
+        total += trecho.length + 1
+    }
+    return linhas.join('\n')
+}
 function titulo(valor) {
     return texto(valor)
         .replace(/^\s*(?:nome(?:\s+(?:t[eé]cnico|do\s+produto))?|produto|t[ií]tulo)\s*:\s*/i, '')

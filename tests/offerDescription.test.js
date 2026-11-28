@@ -37,7 +37,8 @@ test('a descrição usa dados já confirmados, incluindo false, sem alterar a of
   const description = getAiPayload(result.preview).descricao
   assert.match(description, /Núcleos: 6/)
   assert.match(description, /Suporta ECC: Não/)
-  assert.match(description, /Fontes técnicas:/)
+  assert.doesNotMatch(description, /https?:/)
+  assert.deepEqual(result.preview.descricaoPesquisa.fontes, [source(6).url])
   assert.equal(result.descriptionWarning, '')
   assert.ok(result.descriptionNotice)
   assert.deepEqual(getAiOffer(result.preview), getAiOffer(original))
@@ -113,10 +114,30 @@ test('origens diretas da importação também permitem montar a descrição sem 
   assert.match(getAiPayload(result.preview).descricao, /Núcleos: 6/)
 })
 
-test('resumo conserva URLs completas e respeita o limite do campo de descrição', async () => {
+test('evidências conservam URLs completas fora da descrição', async () => {
   const original = preview({ nome: 'A'.repeat(4400), especificacaoProcessador: { nucleos: 6 } }, { origemPorCampo: { nucleos: source(6) } })
   const result = await completeOfferDescription(original, { category: 'PROCESSADOR', schemaFor })
   const description = getAiPayload(result.preview).descricao
   assert.ok(description.length < 5000)
-  assert.ok(description.endsWith(source(6).url))
+  assert.doesNotMatch(description, /https?:/)
+  assert.deepEqual(result.preview.descricaoPesquisa.fontes, [source(6).url])
+})
+
+test('a ficha estruturada do anúncio substitui avaliações e texto comercial', async () => {
+  const original = preview({
+    descricao: '<script>window.bad = 1</script>Conheça o produto!\nAvaliações: 4,8\nFrete grátis',
+    especificacaoProcessador: { nucleos: 6, threads: 12, suportaEcc: false },
+  })
+  const result = await completeOfferDescription(original, { category: 'PROCESSADOR', schemaFor, listingVerified: true })
+  assert.equal(getAiPayload(result.preview).descricao, 'AMD Ryzen 5 5600G\nNúcleos: 6\nThreads: 12\nSuporta ECC: Não')
+  assert.deepEqual(getAiOffer(result.preview), getAiOffer(original))
+})
+
+test('a descrição de cadastro de um PC conserva a configuração e remove publicidade', async () => {
+  const original = { ...preview({ nome: 'PC Gamer Ryzen 5 5600G' }), categoriaDetectada: 'PC_MONTADO',
+    descricaoAnuncio: 'Processador Ryzen 5 5600G. Memória DDR4 de 16 GB.\nCompre agora por R$ 2500.' }
+  const result = await completeOfferDescription(original, { category: 'PC_MONTADO', schemaFor })
+  assert.match(getAiPayload(result.preview).descricao, /Memória DDR4 de 16 GB/)
+  assert.doesNotMatch(getAiPayload(result.preview).descricao, /Compre agora|R\$/)
+  assert.match(result.preview.descricaoAnuncio, /Compre agora/)
 })

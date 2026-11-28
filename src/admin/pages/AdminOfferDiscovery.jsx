@@ -6,10 +6,10 @@ import { useAdminToast } from '../components/AdminToast'
 import { adminService } from '../services/adminService'
 import { offerDiscoveryService } from '../services/offerDiscoveryService'
 import { storeAiImportPreview } from '../utils/aiImportTransfer'
-import { getAiPayload, mergeAiImportPreview } from '../utils/aiImportContract'
+import { getAiOffer, getAiPayload, mergeAiImportPreview } from '../utils/aiImportContract'
 import { resolveOfferRegistration } from '../utils/offerRegistration'
 import { useDiscoverySession } from '../hooks/useDiscoverySession'
-import { hardwareSchemaFor } from '../components/AdminTechnicalFields'
+import { hardwareSchemaFor, productSchemaFor } from '../components/AdminTechnicalFields'
 import { completeOfferDescription } from '../utils/offerDescription'
 import TechnicalResearchEvidence from '../components/TechnicalResearchEvidence'
 import './AdminOfferDiscovery.css'
@@ -38,6 +38,7 @@ const CATEGORY_LABELS = {
   PLACA_MAE: 'Placa-mãe', MEMORIA_RAM: 'Memória RAM', PLACA_VIDEO: 'Placa de vídeo',
   ARMAZENAMENTO: 'Armazenamento', FONTE: 'Fonte', GABINETE: 'Gabinete',
   COOLER: 'Cooler', VENTOINHA: 'Ventoinha', PRODUTO: 'Produto',
+  MONITOR: 'Monitor', MOUSE: 'Mouse', TECLADO: 'Teclado', HEADSET: 'Headset', CELULAR: 'Celular',
 }
 
 const COMPONENT_ONLY_START = /^\s*(?:kit\s+(?:de\s+)?upgrade|processador|cpu|placa\s*m[aã]e|motherboard|placa\s*(?:de\s*)?v[ií]deo|gpu|mem[oó]ria(?:\s+ram)?|ram|ssd|nvme|hdd|fonte|gabinete|cooler|ventoinha)\b/i
@@ -117,7 +118,7 @@ function fallbackPreview(item, category) {
       alertas: ['Dados vieram da busca de ofertas. Revise a ficha antes de salvar.'],
     },
     ofertaColetada: {
-      preco: Number(item?.preco ?? item?.precoMin) || undefined,
+      preco: item?.precoConfirmado === false ? undefined : Number(item?.preco ?? item?.precoMin) || undefined,
       precoAnterior: Number(item?.precoAnterior) || undefined,
       urlOriginal: clean(item?.urlOriginal || item?.urlAfiliada),
       urlAfiliada: clean(item?.urlAfiliada),
@@ -157,6 +158,14 @@ function previewFields(preview) {
   }
 }
 
+function availabilityOf(preview, item) {
+  return [
+    preview?.resultadoProdutoIa?.ofertaColetada?.disponivel,
+    preview?.ofertaColetada?.disponivel,
+    item?.disponivel,
+  ].find(value => typeof value === 'boolean') ?? null
+}
+
 export default function AdminOfferDiscovery({ embedded = false }) {
   const navigate = useNavigate()
   const toast = useAdminToast()
@@ -181,7 +190,7 @@ export default function AdminOfferDiscovery({ embedded = false }) {
 
   const normalizedResults = useMemo(() => results.map((item, index) => ({
     ...item,
-    _key: `${offerStore(item)}-${item?.shopId || 'shop'}-${item?.itemId || index}`,
+    _key: `${offerStore(item)}-${item?.shopId || 'shop'}-${item?.itemId || item?.urlOriginal || index}`,
     _category: inferCategory(item),
   })), [results])
 
@@ -266,20 +275,23 @@ export default function AdminOfferDiscovery({ embedded = false }) {
       }
 
       const fallback = fallbackPreview(item, category)
+      const availability = availabilityOf(preview, item)
       let mergedPreview = {
         ...mergeAiImportPreview(fallback, preview),
         categoriaDetectada: detectedCategory || category,
         destinoSugerido: resolvedDestination,
         ...(buildAnalysis ? { analiseComputador: buildAnalysis } : {}),
       }
+      const registrationCategory = resolvedDestination === 'PC_MONTADO' ? 'PC_MONTADO' : detectedCategory || category
       const completed = await completeOfferDescription(mergedPreview, {
-        category: resolvedDestination === 'PC_MONTADO' ? 'PC_MONTADO' : detectedCategory || category,
-        schemaFor: hardwareSchemaFor, buildAnalysis,
-        researchSpecifications: adminService.hardwares.researchSpecifications,
+        category: registrationCategory,
+        schemaFor: (value) => hardwareSchemaFor(value) || productSchemaFor(value), buildAnalysis,
+        listingVerified: Boolean(item.dadosTecnicos) || (preview?.iaDisponivel === true && !preview?.resultadoProdutoIa?.erro),
+        researchSpecifications: HARDWARE_CATEGORIES.has(registrationCategory) ? adminService.hardwares.researchSpecifications : null,
       })
       mergedPreview = completed.preview
       collectionWarning = [collectionWarning, completed.descriptionWarning].filter(Boolean).join(' ')
-      const result = { preview: mergedPreview, listingDescription, buildAnalysis, buildWarning, collectionWarning, descriptionNotice: completed.descriptionNotice }
+      const result = { preview: mergedPreview, availability, listingDescription, buildAnalysis, buildWarning, collectionWarning, descriptionNotice: completed.descriptionNotice }
       setAnalyses((current) => ({ ...current, [key]: result }))
       return result
     } catch (cause) {
@@ -305,6 +317,10 @@ export default function AdminOfferDiscovery({ embedded = false }) {
     setError('')
     try {
       const analysis = analyses[item._key] || await analyze(item)
+      if (analysis?.availability === false) {
+        toast.show('A loja informou que este anúncio está indisponível.', 'alerta')
+        return
+      }
       const basePreview = analysis?.preview || fallbackPreview(item, item._category)
       const latest = mergeAiImportPreview(basePreview, { ofertaColetada: { ...basePreview.ofertaColetada, urlAfiliada: item.urlAfiliada, parceiroNome: item.parceiroNome || OFFER_STORES[offerStore(item)] } })
       const destination = clean(latest?.destinoSugerido).toUpperCase() || expectedDestination(item._category)
@@ -368,6 +384,10 @@ export default function AdminOfferDiscovery({ embedded = false }) {
         const listingDescription = analysis?.listingDescription || ''
         const destination = clean(analysis?.preview?.destinoSugerido).toUpperCase() || expectedDestination(item._category)
         const analyzedCategory = clean(analysis?.preview?.categoriaDetectada).toUpperCase() || item._category
+        const availability = analysis?.availability ?? item.disponivel
+        const checkedPrice = Number(getAiOffer(analysis?.preview)?.preco)
+        const searchPrice = item.precoConfirmado === false ? null : item.preco ?? item.precoMin
+        const currentPrice = checkedPrice > 0 ? checkedPrice : searchPrice
         return <article className="admin-discovery-card" key={item._key}>
           <div className="admin-discovery-image">
             {item.imagemUrl ? <img src={item.imagemUrl} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none' }} /> : <span>Sem imagem</span>}
@@ -376,12 +396,13 @@ export default function AdminOfferDiscovery({ embedded = false }) {
             <div className="admin-discovery-tags"><span>{OFFER_STORES[offerStore(item)]}</span><span>{CATEGORY_LABELS[analyzedCategory] || 'Produto'}</span>{item.emPromocao && <span>Promoção</span>}</div>
             <h2>{item.nome || 'Produto sem nome'}</h2>
             <p className="admin-discovery-store">{item.loja || 'Loja não informada'}{item.vendas != null ? ` · ${item.vendas} venda(s)` : ''}{item.avaliacao != null ? ` · ★ ${item.avaliacao}` : ''}</p>
-            <strong className="admin-discovery-price">{item.precoConfirmado === false ? 'Preço a confirmar na loja' : money(item.preco ?? item.precoMin)}</strong>
+            <strong className="admin-discovery-price">{Number(currentPrice) > 0 ? money(currentPrice) : 'Preço a confirmar na loja'}</strong>
+            <small className={availability === false ? 'admin-inline-warning' : 'admin-muted'}>{availability === true ? 'Em estoque' : availability === false ? 'Indisponível na loja' : 'Estoque a confirmar'}</small>
             {offerStore(item) !== 'SHOPEE' && <label className="admin-field"><span>Seu link afiliado</span><input className="admin-input" type="url" aria-label={`Link afiliado de ${item.nome}`} value={item.urlAfiliada || ''} placeholder="Cole o link gerado na sua conta" onChange={event=>setResults(current=>current.map((row,index)=> index===normalizedResults.indexOf(item) ? {...row,urlAfiliada:event.target.value} : row))} /></label>}
             <div className="admin-discovery-actions">
               {(item.urlAfiliada || item.urlOriginal) && <a className="btn btn-secundario btn-pequeno" href={affiliateUrl(item.urlAfiliada) || item.urlOriginal} target="_blank" rel="noopener noreferrer">Ver anúncio</a>}
               <button className="btn btn-secundario btn-pequeno" type="button" disabled={analyzingId !== null} onClick={() => analyze(item)}>{analyzingId === item._key ? 'Analisando...' : analysis ? 'Analisar novamente' : 'Analisar'}</button>
-              <button className="btn btn-primario btn-pequeno" type="button" disabled={analyzingId !== null || checkingId !== null} onClick={() => register(item)}>{checkingId === item._key ? 'Verificando catálogo...' : 'Cadastrar'}</button>
+              <button className="btn btn-primario btn-pequeno" type="button" disabled={availability === false || analyzingId !== null || checkingId !== null} onClick={() => register(item)}>{checkingId === item._key ? 'Verificando catálogo...' : 'Cadastrar'}</button>
             </div>
 
             {review && <div className="admin-discovery-analysis">
